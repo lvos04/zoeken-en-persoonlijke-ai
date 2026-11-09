@@ -11,6 +11,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from . import CONNECTOR_PREFIX, SEARCH_PREFIX, VOICE_PREFIX
+
 log = logging.getLogger("search_ai")
 
 TRACE_HEADER = "X-Trace-Id"
@@ -97,6 +99,30 @@ _STATUS_CODES = {
 }
 
 
+# Routes waarop elke aanroep een geldige Hub-JWT vraagt (contract 1.2 §4.7); /healthz, /readyz en de statuspagina niet.
+AUTH_PREFIXES = (SEARCH_PREFIX, VOICE_PREFIX, CONNECTOR_PREFIX)
+
+
+def auth_error_first(request: Request) -> JSONResponse | None:
+    """Authenticatie gaat vóór fouten bij het lezen van de body (contract 1.2 §4.7: zonder geldige auth altijd 401).
+
+    FastAPI leest en ontleedt een JSON-body vóór de afhankelijkheden; een onleesbare body (``json_invalid`` → 422, of
+    een ontleedfout → 400) zou dan zonder geldige authenticatie een ander antwoord geven dan 401. Is er voor dit verzoek
+    nog geen principal vastgesteld, dan wordt hier eerst geauthenticeerd. Zonder methode-informatie: er wordt niets
+    uitgevoerd, dus de replaycache (``jti``) wordt hier niet verbruikt.
+    """
+    if getattr(request.state, "principal", None) is not None or not request.url.path.startswith(AUTH_PREFIXES):
+        return None
+    auth = getattr(request.app.state, "auth", None)
+    if auth is None:
+        return None
+    try:
+        auth.authenticate(request.headers.get("Authorization"), None)
+    except ApiError as exc:
+        return error_response(request, exc.status_code, exc.code, exc.message, exc.details, exc.headers)
+    return None
+
+
 def install_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
@@ -104,6 +130,9 @@ def install_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation(request: Request, exc: RequestValidationError) -> JSONResponse:
+        refused = auth_error_first(request)
+        if refused is not None:
+            return refused
         problems = []
         for err in exc.errors():
             loc = ".".join(str(p) for p in err.get("loc", ()) if p != "body")
@@ -113,6 +142,10 @@ def install_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def _http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        if exc.status_code == 400:  # o.a. een body die FastAPI niet kon ontleden: ook dan eerst authenticeren
+            refused = auth_error_first(request)
+            if refused is not None:
+                return refused
         code, message = _STATUS_CODES.get(exc.status_code, ("http_error", "Fout bij verwerken van het verzoek."))
         return error_response(request, exc.status_code, code, message, headers=getattr(exc, "headers", None))
 
