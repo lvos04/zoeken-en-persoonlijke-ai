@@ -3,7 +3,7 @@ PY ?= .venv/bin/python
 API := apps/api
 IMAGE ?= zoeken-en-persoonlijke-ai:dev
 
-.PHONY: venv lint test e2e ui interop openapi lock image smoke clean
+.PHONY: venv lint test e2e ui ui-echt interop openapi lock image smoke clean
 
 venv:
 	python3.12 -m venv .venv && .venv/bin/pip install -q -r $(API)/requirements.lock && .venv/bin/pip install -q -e '$(API)[dev]'
@@ -18,13 +18,23 @@ test:
 e2e:
 	$(PY) -m pytest -q tests/e2e -p no:cacheprovider
 
-# Statuspagina in Peil: axe-core, overloop op 320 px, CSP en de schermafdrukken (360/768/1440 × licht/donker).
+# Statuspagina in Peil, toestanden uit de renderer (zonder database): Peil-controles (axe-core, contrast in de DOM,
+# 44 px, 320 px, focus, vaste woorden), CSP en schermafdrukken (360/768/1440 × licht/donker) in build/.
 UI_OUT ?= build/statuspagina
-SHOTS ?= docs/screenshots/peil/statuspagina
 ui:
 	cd tests/ui && npm ci --no-audit --no-fund
 	$(PY) tests/ui/render_toestanden.py --out $(UI_OUT)
-	nice -n 10 node tests/ui/statuspagina.mjs --in $(UI_OUT) --rapport $(SHOTS)/CONTROLE.json --schermafdrukken $(SHOTS)
+	nice -n 10 node tests/ui/statuspagina.mjs --in $(UI_OUT) --rapport $(UI_OUT)/CONTROLE.json --schermafdrukken $(UI_OUT)/schermafdrukken
+
+# Ontwerpreview tegen de ECHTE dienst (lokale PostgreSQL met pgvector, Hub-simulators, testdata): alle toestanden van
+# GET / op 320/360/390/768/1440 × licht/donker. Rapport en schermafdrukken naar docs (zie docs/ontwerp/PEIL_REVIEW.md).
+SHOTS ?= docs/screenshots/peil/statuspagina
+ui-echt:
+	cd tests/ui && npm ci --no-audit --no-fund
+	rm -f $(SHOTS)/*.png
+	nice -n 10 $(PY) tests/ui/echte_dienst.py --out build/echte-dienst --rapport $(SHOTS)/CONTROLE.json --schermafdrukken $(SHOTS)
+	# kleiner in git: palet-PNG (tokenkleuren blijven exact; contrast is in de DOM gemeten, niet op de afbeeldingen)
+	if command -v pngquant >/dev/null; then pngquant --quality=90-100 --speed 1 --strip --force --ext .png $(SHOTS)/*.png; fi
 
 # ALLEEN lokaal: dienst tegen de ECHTE Hub (ai-server-manager) in een eigen venv; HUB_PY = Python van die venv.
 interop:

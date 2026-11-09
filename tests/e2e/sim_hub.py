@@ -2,7 +2,7 @@
 
 Dunne HTTP-schil om ``apps/api/tests/hubsim.py`` (dezelfde kern als in de integratietests), die platformcontract 1.2
 volgt: enroll exact volgens §3.3 (422/401/429/herhaling), ``services/self``, ``self/rotate``, ``events/inbox``,
-``key-rotations`` en ``jwks``. Testhulpmiddelen onder ``/sim/*`` (koppeltoken maken, JWT's uitgeven, intrekken,
+``key-rotations`` en ``jwks``. Testhulpmiddelen onder ``/sim/*`` (koppeltoken en koppelcode maken, JWT's uitgeven, intrekken,
 rotatie aanvragen, inbox en alle verzoeken lezen).
 """
 
@@ -31,6 +31,12 @@ def sim_fingerprint() -> dict[str, str]:
 @app.post("/sim/enrollment-token")
 def sim_enrollment_token() -> dict[str, str]:
     return {"token": SIM.add_enrollment_token()}
+
+
+@app.post("/sim/pairing-code")
+def sim_pairing_code() -> dict[str, str]:
+    """Koppelcode zoals de Hub-UI die maakt (voor de ontwerpreview met de echte statuspagina)."""
+    return {"code": SIM.add_pairing_code()}
 
 
 @app.post("/sim/token")

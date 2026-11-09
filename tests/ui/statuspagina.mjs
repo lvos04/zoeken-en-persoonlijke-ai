@@ -1,29 +1,25 @@
-// Browsercontrole van de Peil-statuspagina (ONTWERPTAAL §12/§13.2). Alleen ontwikkeling/CI.
+// Browsercontrole van de Peil-statuspagina (ONTWERPTAAL §12/§13.2) op toestanden uit de echte renderer. Alleen
+// ontwikkeling/CI; draait zonder database. De ontwerpreview tegen de echte dienst is echte_dienst.py/.mjs.
 //
 //   python tests/ui/render_toestanden.py --out <map>
 //   node tests/ui/statuspagina.mjs --in <map> [--rapport <bestand.json>] [--schermafdrukken <map>]
 //
 // Per toestand × breedte (320/360/390/768/1440) × thema (licht/donker), geserveerd met de echte beveiligingskoppen
-// van de dienst (CSP default-src 'none'):
+// van de dienst (CSP default-src 'none'), de controles van peilcontrole.mjs:
 //   - axe-core: 0 overtredingen op WCAG 2.0/2.1/2.2 A + AA (en best practices);
-//   - geen horizontale overloop (scrollWidth ≤ breedte), ook niet op 320 px;
-//   - geen JavaScript op de pagina (geen <script>, geen on…-attributen), geen CSP-schending, geen extern verzoek;
-//   - knoppen en invoervelden ≥ 44 px hoog (Peil: 44 px overal).
+//   - contrast gemeten in de DOM: tekst ≥ 4,5:1, iconen/randen/veldranden ≥ 3:1; tekst ≥ 14 px;
+//   - geen horizontale overloop (ook niet op 320 px), geen afkappen; doelen ≥ 44 × 44 px (behalve inline links);
+//   - focusdoorloop met Tab: skiplink eerst, tweekleurige ring ≥ 3:1, nooit bedekt;
+//   - status nooit alleen kleur, onbekend/niet gereed nooit groen, alleen woorden uit de Peil-woordenlijst;
+//   - geen JavaScript (geen <script>, geen on…-attributen), geen CSP-schending, geen extern verzoek.
 // Schermafdrukken (volledige pagina) voor 360/768/1440 × licht/donker van de toestanden met "schermafdruk": true.
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
+import { AXE_TAGS, AXE_VERSION, BREEDTES, THEMAS, controleer } from './peilcontrole.mjs';
 
-const require = createRequire(import.meta.url);
-const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
-const AXE_VERSION = require('axe-core/package.json').version;
-const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
-const BREEDTES = [320, 360, 390, 768, 1440];
 const SHOT_BREEDTES = new Set([360, 768, 1440]);
-const THEMAS = [['licht', 'light'], ['donker', 'dark']];
-
 const arg = (naam) => { const i = process.argv.indexOf(naam); return i > 0 ? process.argv[i + 1] : undefined; };
 const IN = arg('--in');
 if (!IN) { console.error('gebruik: node statuspagina.mjs --in <map> [--rapport <json>] [--schermafdrukken <map>]'); process.exit(2); }
@@ -39,7 +35,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...meta.headers });
   res.end(fs.readFileSync(bestand));
 });
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
+await new Promise((r) => { server.listen(0, '127.0.0.1', r); });
 const BASIS = `http://127.0.0.1:${server.address().port}`;
 
 const browser = await chromium.launch();
@@ -49,7 +45,7 @@ let fouten = 0;
 for (const { naam, schermafdruk } of meta.toestanden) {
   for (const breedte of BREEDTES) {
     for (const [thema, scheme] of THEMAS) {
-      const context = await browser.newContext({ viewport: { width: breedte, height: 900 }, colorScheme: scheme, deviceScaleFactor: 1 });
+      const context = await browser.newContext({ viewport: { width: breedte, height: 900 }, colorScheme: scheme, deviceScaleFactor: 1, hasTouch: breedte < 1024 });
       const page = await context.newPage();
       const console_ = [];
       const extern = [];
@@ -57,51 +53,18 @@ for (const { naam, schermafdruk } of meta.toestanden) {
       page.on('request', (r) => { if (!r.url().startsWith(`${BASIS}/${naam}`)) extern.push(r.url()); });
       const antwoord = await page.goto(`${BASIS}/${naam}`, { waitUntil: 'load' });
       const csp = antwoord.headers()['content-security-policy'] || '';
-      const dom = await page.evaluate(() => {
-        const knoppen = [...document.querySelectorAll('button, input:not([type=hidden]), .knop')]
-          .map((el) => ({ el: el.id || el.name || el.textContent.trim().slice(0, 30), h: el.getBoundingClientRect().height }))
-          .filter((k) => k.h < 44);
-        const handlers = [...document.querySelectorAll('*')].flatMap((el) => [...el.attributes].map((a) => a.name)).filter((n) => n.startsWith('on'));
-        return {
-          scrollWidth: document.documentElement.scrollWidth,
-          clientWidth: document.documentElement.clientWidth,
-          scripts: document.querySelectorAll('script').length,
-          handlers,
-          kleineDoelen: knoppen,
-          h1: document.querySelectorAll('h1').length,
-          lang: document.documentElement.lang,
-        };
-      });
-      await page.evaluate(AXE);
-      const axe = await page.evaluate(async (tags) => {
-        const r = await window.axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations', 'incomplete'] });
-        return {
-          violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => n.target.join(' ')) })),
-          incomplete: r.incomplete.map((v) => v.id),
-        };
-      }, TAGS);
-      const overloop = dom.scrollWidth > breedte;
-      const problemen = [];
-      if (axe.violations.length) problemen.push(`axe: ${axe.violations.map((v) => `${v.id} (${v.nodes.join(', ')})`).join('; ')}`);
-      if (overloop) problemen.push(`horizontale overloop: scrollWidth ${dom.scrollWidth} > ${breedte}`);
-      if (dom.scripts || dom.handlers.length) problemen.push(`JavaScript op de pagina: ${dom.scripts} script, ${dom.handlers.join(',')}`);
+      const { problemen, meting } = await controleer(page);
       if (console_.length) problemen.push(`console/CSP: ${console_.join(' | ')}`);
       if (extern.length) problemen.push(`externe verzoeken: ${extern.join(', ')}`);
       if (!csp.includes("default-src 'none'")) problemen.push(`CSP zonder default-src 'none': ${csp}`);
-      if (dom.kleineDoelen.length) problemen.push(`doelen < 44 px: ${JSON.stringify(dom.kleineDoelen)}`);
-      if (dom.h1 !== 1 || dom.lang !== 'nl') problemen.push(`structuur: ${dom.h1} h1, lang=${dom.lang}`);
       let afdruk = null;
       if (SHOTS && schermafdruk && SHOT_BREEDTES.has(breedte)) {
         afdruk = `${naam}-${breedte}-${thema}.png`;
         await page.screenshot({ path: path.join(SHOTS, afdruk), fullPage: true });
       }
       fouten += problemen.length ? 1 : 0;
-      resultaten.push({
-        toestand: naam, breedte, thema,
-        axe_overtredingen: axe.violations.length, axe_onvolledig: axe.incomplete,
-        overloop, scroll_breedte: dom.scrollWidth, problemen, schermafdruk: afdruk,
-      });
-      console.log(`${problemen.length ? 'FOUT' : 'ok  '} ${naam.padEnd(24)} ${String(breedte).padStart(4)} ${thema.padEnd(6)} axe ${axe.violations.length}${afdruk ? ` · ${afdruk}` : ''}${problemen.length ? `\n     ${problemen.join('\n     ')}` : ''}`);
+      resultaten.push({ toestand: naam, breedte, thema, problemen, ...meting, overloop: meting.scroll_breedte > breedte, schermafdruk: afdruk });
+      console.log(`${problemen.length ? 'FOUT' : 'ok  '} ${naam.padEnd(24)} ${String(breedte).padStart(4)} ${thema.padEnd(6)} axe ${meting.axe_overtredingen} · tekst ≥ ${meting.tekst_min} · ui ≥ ${meting.ui_min}${afdruk ? ` · ${afdruk}` : ''}${problemen.length ? `\n     ${problemen.join('\n     ')}` : ''}`);
       await context.close();
     }
   }
@@ -112,7 +75,7 @@ server.close();
 const rapport = {
   peil: meta.peil,
   axe_core: AXE_VERSION,
-  axe_tags: TAGS,
+  axe_tags: AXE_TAGS,
   browser: BROWSER,
   breedtes: BREEDTES,
   themas: THEMAS.map(([t]) => t),
