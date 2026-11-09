@@ -1,0 +1,137 @@
+"""Full-text zoeken (PostgreSQL ``tsvector``) met de gebruikers-ACL in de ``WHERE`` — dus vóór ranking.
+
+P0 levert alleen de full-text-route die de ACL bewijst; de hybride zoekmachine (B07-003: fuzzy + pgvector, filters
+op type/bron/datum/score) en de ingest die de index vult (B07-002) volgen in P5. Zolang de ingest er niet is, is de
+index leeg en zegt het antwoord dat eerlijk (``ingest: capability_unavailable``) in plaats van iets te verzinnen.
+Semantisch zoeken zonder geïnstalleerd lokaal embeddingmodel → ``501 capability_unavailable``.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import timedelta
+from typing import Any
+
+from sqlalchemy import Float, cast, func, select
+from sqlalchemy.orm import Session
+
+from ..errors import ApiError
+from ..pagination import decode_cursor, encode_cursor
+from ..security.auth import Principal
+from ..timeutil import iso, utcnow
+from . import acl
+from .models import Chunk, DocumentRef, IndexSource, SearchQuery
+from .retention import keep_days
+
+TS_CONFIG = "simple"
+HEADLINE_OPTS = "MaxFragments=1,MaxWords=30,MinWords=8,StartSel=«,StopSel=»,FragmentDelimiter= … "
+MAX_QUERY_LEN = 300
+
+
+def search(
+    session: Session,
+    principal: Principal,
+    q: str,
+    *,
+    source_id: uuid.UUID | None,
+    kind: str | None,
+    limit: int,
+    cursor: str | None,
+) -> dict[str, Any]:
+    query = q.strip()
+    if not query:
+        raise ApiError(422, "lege_zoekvraag", "Vul een zoekterm in.")
+    if len(query) > MAX_QUERY_LEN:
+        raise ApiError(422, "zoekvraag_te_lang", f"De zoekvraag is te lang (max. {MAX_QUERY_LEN} tekens).")
+    offset = decode_cursor(cursor) or 0
+    if not isinstance(offset, int) or offset < 0 or offset > 10_000:
+        raise ApiError(400, "invalid_cursor", "De cursor is ongeldig; begin opnieuw zonder cursor.")
+
+    tsq = func.websearch_to_tsquery(TS_CONFIG, query)
+    score = cast(func.ts_rank_cd(Chunk.tsv, tsq), Float).label("score")
+    stmt = (
+        select(
+            Chunk.id,
+            Chunk.document_id,
+            Chunk.source_id,
+            Chunk.ordinal,
+            Chunk.start_ms,
+            Chunk.end_ms,
+            DocumentRef.title,
+            DocumentRef.uri,
+            DocumentRef.mime_type,
+            DocumentRef.source_mtime,
+            IndexSource.kind,
+            IndexSource.name,
+            score,
+            func.ts_headline(TS_CONFIG, Chunk.text, tsq, HEADLINE_OPTS).label("snippet"),
+        )
+        .join(DocumentRef, DocumentRef.id == Chunk.document_id)
+        .join(IndexSource, IndexSource.id == Chunk.source_id)
+        # ACL vóór ranking: alleen rijen die deze gebruiker mag zien komen bij ts_rank/ORDER BY/LIMIT.
+        .where(acl.document_condition(principal))
+        .where(Chunk.tsv.op("@@")(tsq))
+    )
+    if source_id is not None:
+        stmt = stmt.where(Chunk.source_id == source_id)
+    if kind is not None:
+        stmt = stmt.where(IndexSource.kind == kind)
+    rows = session.execute(stmt.order_by(score.desc(), Chunk.id).offset(offset).limit(limit + 1)).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    readable_count = int(
+        session.scalar(select(func.count()).select_from(acl.readable_sources(principal).subquery())) or 0
+    )
+    items = []
+    for r in rows:
+        item: dict[str, Any] = {
+            "chunk_id": str(r.id),
+            "document_id": str(r.document_id),
+            "bron": {"id": str(r.source_id), "naam": r.name, "soort": r.kind},
+            "titel": r.title,
+            "uri": r.uri,
+            "mime_type": r.mime_type,
+            "bron_gewijzigd": iso(r.source_mtime),
+            "fragment": r.snippet,
+            "score": round(float(r.score), 6),
+        }
+        # Tijdcodes alleen als de bron ze heeft (B07-004): nooit verzinnen.
+        if r.start_ms is not None:
+            item["tijdcode"] = {"start_ms": r.start_ms, "eind_ms": r.end_ms}
+        items.append(item)
+
+    days = keep_days(session, "search_query")
+    if days > 0:
+        session.add(
+            SearchQuery(
+                principal_sub=principal.subject,
+                roles=sorted(principal.roles),
+                query_text=query,
+                mode="fulltext",
+                filters={"source_id": str(source_id) if source_id else None, "kind": kind},
+                result_count=len(items),
+                source_ids=sorted({i["bron"]["id"] for i in items}),
+                expires_at=utcnow() + timedelta(days=days),
+            )
+        )
+        session.commit()
+    return {
+        "mode": "fulltext",
+        "items": items,
+        "next_cursor": encode_cursor(offset + limit) if has_more else None,
+        "doorzochte_bronnen": readable_count,
+        "capabilities": {
+            "fulltext": "beschikbaar",
+            "semantic": "capability_unavailable",
+            "ingest": "capability_unavailable",
+        },
+        "melding_nl": (
+            None
+            if readable_count
+            else "Er zijn (nog) geen bronnen die jij mag doorzoeken. Een beheerder moet een bron selecteren, de "
+            "eigenaar moet toestemming geven en jou toegang geven."
+        ),
+        "zoekgeschiedenis_bewaard": days > 0,
+        "observed_at": iso(utcnow()),
+    }
