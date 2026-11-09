@@ -34,6 +34,12 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 - `06_TEMPLATES/PROMPTS_PER_APP/PROMPT_B07_PERSOONLIJKE_ZOEKMACHINE.md`
 - `06_TEMPLATES/PROMPTS_PER_APP/PROMPT_B15_SPRAAK_PERSOONLIJKE_AI.md`
 
+## Contract (bindend)
+
+- `PLATFORM_CONTRACTEN.md` — platformcontract `contracts 1.2`, byte-gelijke kopie van `lvos04/ai-server-manager`
+  (bron van waarheid; bij verschil wint die repo)
+- `CONTRACT_1.2_CONFORMITEIT.md` — wat elke repo voor 1.2 moet veranderen (hier: A1–A7, ZA1–ZA9; zie ADR-0011)
+
 ## Bewijs en inventaris (deze repo)
 
 - `EVIDENCE.json` — status/validatie per Excel-ID (contract §11; nooit 'Gereed'/'Geslaagd' zonder echte NAS-run)

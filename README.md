@@ -12,6 +12,12 @@ Na de onafhankelijke review van P0 (ADR-0008): samengestelde bron-sleutels (migr
 ACL vóór ranking (alleen intern en getest; de API voor semantisch zoeken blijft 501 zonder lokaal model), intrekken
 zonder restdata (ook zoekgeschiedenis en back-ups) en een verzoek- en tijdlimiet op zoeken.
 
+**Platformcontract 1.2** (kopie in [`docs/platform-v2/PLATFORM_CONTRACTEN.md`](docs/platform-v2/PLATFORM_CONTRACTEN.md),
+keuzes in [`docs/adr/ADR-0011-contract-1-2-conformiteit.md`](docs/adr/ADR-0011-contract-1-2-conformiteit.md)): koppeling
+in `/appdata/secrets/hub-link.json` met gepinde Hub-sleutels en vingerafdruk, alleen Hub-JWT's (`token_use`,
+`jti`-replaycache), ontkoppelen/opnieuw koppelen alleen via de Hub, geen root-proces in de container (ook PID 1 niet).
+Getest tegen een Hub-simulator, **niet** tegen de echte Hub.
+
 ## Installeren
 Uitsluitend als **standaard TrueNAS Custom App** — zie [`deploy/truenas/CUSTOM_APP.md`](deploy/truenas/CUSTOM_APP.md)
 (image `ghcr.io/lvos04/zoeken-en-persoonlijke-ai`, poort 30450, opslag `/appdata`, shares optioneel als Read Only Host

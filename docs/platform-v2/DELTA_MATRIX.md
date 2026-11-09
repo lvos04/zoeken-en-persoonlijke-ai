@@ -6,8 +6,8 @@ of images. Alles hieronder was dus **ontbrekend** bij de start van P0.
 | Onderdeel | Bij start | Na P0 | Waar |
 |---|---|---|---|
 | Scaffold (FastAPI, SQLAlchemy 2, Alembic, PostgreSQL) | ontbrekend | bestaand | `apps/api/src/search_ai` |
-| Auth (service-token + Hub-JWT via JWKS, fail-closed) | ontbrekend | bestaand | `security/auth.py`, `security/jwks.py` |
-| Enrollment-client + koppelcode op statuspagina | ontbrekend | bestaand | `enrollment.py`, `status_page.py` |
+| Auth (Hub-JWT met gepinde sleutels, `token_use`, `jti`-replaycache, fail-closed; contract 1.2) | ontbrekend | bestaand | `security/auth.py`, `security/pins.py` |
+| Enrollment-client (contract 1.2, `hub-link.json`) + koppelcode op statuspagina (alleen vóór de eerste koppeling) | ontbrekend | bestaand | `enrollment.py`, `hublink.py`, `status_page.py` |
 | Foutformaat, Idempotency-Key, ETag, healthz/readyz | ontbrekend | bestaand | `errors.py`, `idempotency.py`, `health.py` |
 | Connectorcontract §6 | ontbrekend | bestaand (read/stream; rest 501) | `connector.py` |
 | Outbox + events naar Hub | ontbrekend | bestaand | `events.py`, `worker.py` |
@@ -33,3 +33,10 @@ gedupliceerd.
 bron-sleutels), vectorzoeker met ACL vóór ranking (`search/semantic.py`, API blijft 501), opschonen van bewaarde
 zoekgeschiedenis en B15-context bij intrekken, back-up zonder indexinhoud, verzoek- en tijdlimiet op zoeken,
 database-socket 0700, uitgebreide rooktest. Zie `docs/adr/ADR-0008-review-p0-restdata-vector-acl-en-limieten.md`.
+
+**Contract 1.2 (2026-11-09, ADR-0011):** alleen de punten uit `CONTRACT_1.2_CONFORMITEIT.md` (A1–A7, ZA1–ZA8)
+gewijzigd: koppelbestand i.p.v. vault, pinning i.p.v. JWKS-cache (`security/jwks.py` verwijderd), dienst-JWT en
+replaycache (migratie 0003), `hub-link`-routes, statuspagina zonder ontkoppelcode, bodygrens als ASGI-laag
+(`bodylimit.py`), bewaker als PID 1 zonder `dumb-init`, manifest §9, CUSTOM_APP.md en `.env.example`. ZA9 (CSS uit
+de ontwerptaaltokens) staat open tot de ontwerptaal in `ai-server-manager` er is (§13). B07/B15-functionaliteit is
+niet aangeraakt.

@@ -1,6 +1,13 @@
 # ADR-0002 — Authenticatie, JWKS en koppelen met de Hub
 
-Status: aanvaard · Datum: 2026-11-09 · Fase: P0 · Contract: 1.1 §3, §4
+Status: aanvaard, **deels vervangen door ADR-0011** (platformcontract 1.2) · Datum: 2026-11-09 · Fase: P0 · Contract:
+1.1 §3, §4
+
+> **Vervangen in 1.2 (ADR-0011):** punt 1 (antwoordcontrole, opslag in `/appdata/secrets/hub-link.json` i.p.v. de
+> vault), punt 2 (formulier alleen zolang nooit gekoppeld, met verplichte vingerafdruk, 5/15 min per bron-IP; geen
+> lokale ontkoppelcode meer), punt 4 (geen JWKS-cache: gepinde sleutels), punt 5 (inkomend service-token geweigerd; de
+> Hub meldt zich met een dienst-JWT `token_use: hub_service`). Blijft geldig: punt 3 (aangevuld met `nbf`, `jti`,
+> `token_use`), 6 en 7 (aangevuld met de regels van §3.2). De open punten hieronder zijn in 1.2 opgelost.
 
 ## Besluit
 1. **Enroll-formaat = de echte Hub** (`ai-server-manager/apps/api/src/hub/routers/services.py`, `extra=forbid`):

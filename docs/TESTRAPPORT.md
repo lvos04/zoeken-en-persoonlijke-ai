@@ -82,13 +82,42 @@ tegen contract 1.1 en de acceptatie van B07-001 gelegd. Gevonden en gerepareerd 
 | `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:qa-na` (als uid 1000) | **39 geslaagd, 0 mislukt** (37 + 2 controles no-new-privileges) |
 | GitHub Actions `ci`, run 42622755067 (commit eb6854c, branch `ccr-c133d7a0-kuz1cv`) | **groen**: job `python` (107 + 4 geslaagd, pip-audit schoon) en job `image` (rooktest 39 geslaagd, 0 mislukt, ook de controle no-new-privileges zonder `--security-opt`) |
 
+## Contract 1.2 (2026-11-09, ADR-0011)
+Eigen Ubuntu 26.04-machine (22 CPU, 14,5 GiB RAM, gedeeld met andere bouwers), Python 3.12 (venv), gedeelde
+PostgreSQL 16 + pgvector 0.8.7 op 127.0.0.1:5432, Docker Engine met buildx; alles als gewone gebruiker (uid 1000).
+Geen echte NAS, Hub of accounts: de Hub is een simulator (`apps/api/tests/hubsim.py`) die §3.3–§3.8 en §4.5 exact
+volgt — in-proces voor de integratietests en als eigen proces voor de dienst-E2E. De echte Hub had H1–H4 op de
+peildatum nog niet gecommit; tegen de echte Hub is dus **niet** getest.
+
+| Commando | Uitkomst |
+|---|---|
+| `cmp` / `sha256sum` van `docs/platform-v2/PLATFORM_CONTRACTEN.md` tegen `ai-server-manager` 8b54f39 | byte-gelijk (`6a9d29bd…f424`); `CONTRACT_1.2_CONFORMITEIT.md` ook |
+| `cd apps/api && ruff check . && ruff format --check . && mypy` | geen bevindingen (43 bronbestanden) |
+| `ruff check tests/e2e deploy/allinone && ruff format --check tests/e2e deploy/allinone` · `shellcheck deploy/allinone/smoke-test.sh` · `actionlint .github/workflows/*.yml` | geen bevindingen |
+| `cd apps/api && pytest -q tests/unit` | **175 geslaagd** (o.a. testvectoren §4.5 `MEGG-8GFG-2E4Y-K2RQ`/`CYRC-JS8C-14AN-JR17`, elke `reason` van §4.7 en de controlevolgorde, exacte enroll-velden, antwoordcontroles, adresregels, rotatie-statements, koppelbestand, §11-controle van EVIDENCE.json) |
+| `cd apps/api && pytest -q tests/integration` | **83 geslaagd** (o.a. `test_contract_1_2.py`: herhaling na een verloren antwoord, 401/404/413/422 definitief, 429 + `Retry-After`, backoff en stop na 60 min, herstart halverwege, opnieuw koppelen, statuspagina-regels en rate-limit, `hub-link`/`unlink`, intrekking alleen na 401 op `services/self`, tokenrotatie ook na een onderbroken rotatie, sleutelrotatie, replaycache en 503, chunked > 1 MiB → 413, overzetting uit 1.1) |
+| `pytest -q tests/e2e -p no:cacheprovider` (API + worker als echte processen, Hub-simulator in eigen proces) | **7 geslaagd** (env-token + `HUB_KEY_FINGERPRINT`, B07-001-flow, dienst-JWT en replay, bodygrens over echte HTTP met chunked, tokenrotatie, Hub bevroren met SIGSTOP ≠ intrekking, intrekking fail-closed) |
+| `python -m search_ai migrate` → `--down 0002` → `--down base` → `migrate` (database `zoek_ci_mig`) | op/neer/op zonder fouten (revisie 0003, pgvector 0.8.7) |
+| `python -m search_ai openapi --out …` + `git diff --exit-code docs/openapi/` | geen drift; `/connector/v1/hub-link` en `/hub-link/unlink` nieuw, `/search/v1/enrollment*` weg |
+| `pip-audit -r apps/api/requirements.lock` | geen bekende kwetsbaarheden |
+| `jl-manifest validate [--strict]` met de **gecommitte** validator van `appstore-en-fork` 837fa61 (M1–M6; `git archive` naar een tijdelijke map, hun werkmap niet aangeraakt) | GELDIG — 0 fouten; alleen `digest_pending_release` (in `--strict` daardoor exit 1: er is bewust nog geen release). Met de oude velden gaf dezelfde validator 2× `deprecated_field` |
+| `nice -n 10 flock …/docker-build.lock docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:dev .` | gebouwd (zonder CA/proxy) |
+| `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:dev` (als uid 1000, zonder `--security-opt`/`--cap-drop`) | **43 geslaagd, 0 mislukt** |
+| negatieve controle: de nieuwe rooktestfuncties tegen een container met `python` als root-PID 1 | alle drie falen zoals bedoeld (`Uid 0`, `CapEff 00000000a80425fb`, `NoNewPrivs 0`; PID 1 geen bewaker; zombie blijft staan) |
+
+Wat de rooktest sinds 1.2 extra controleert: **elk** proces in de container, ook PID 1, heeft `Uid 568`,
+`CapEff 0000000000000000` en `NoNewPrivs 1` (alleen `docker exec`-sessies van buitenaf zoals de healthcheck tellen niet
+mee); PID 1 is de bewaker zelf; een verweesd proces wordt opgeruimd (geen zombie); `docker restart` stopt netjes via
+SIGTERM op PID 1; er staat **geen** ontkoppelcode meer in de log en zonder koppeling bestaat er geen `hub-link.json`.
+
 ## B07-001 — wat de tests aantonen (Sim-getest)
 - *Niet geselecteerde share indexeert niets*: de bronwizard ziet alleen share A; share B, symlinks naar B (ook een
   bronpad dat zelf via een symlink naar B loopt, ADR-0010), `.ssh`,
   `.zfs`-snapshots en sleutelbestanden komen nooit als kandidaat voor (`test_paths.py`,
   `test_unselected_share_indexes_nothing_and_never_leaves_nas`, E2E `test_02`). Een bron zonder toestemming levert
   geen zoekresultaten op, ook niet als er (gesimuleerd) toch indexdata zou staan; herindexeren weigert met 409.
-- *Verlaat NAS niet*: al het uitgaande verkeer gaat alleen naar de Hub (koppelen, JWKS, events) en bevat geen
+- *Verlaat NAS niet*: al het uitgaande verkeer gaat alleen naar de Hub (koppelen, bevestigen, sleutelrotaties, events)
+  en bevat geen
   bestandsnamen, paden of inhoud; `ai.external` kan niet worden aangevraagd (501) en bestaat niet in de database.
 - Consent-register: alleen de eigenaar zelf, gebonden aan een momentopname; scopes per bronsoort; verlopen toestemming
   wordt intrekking.
@@ -125,19 +154,22 @@ Start als root op een lege root-map met een **alleen-lezen share onder `/bronnen
 index bouwen, KNN-zoekvraag via de index, in een teruggedraaide transactie); migratie 0002 actief; database-socket
 0700/568 en een andere gebruiker krijgt `Permission denied`; databasegegevens blijven na herstart, harde kill en in een
 **nieuwe container op dezelfde `/appdata`** (geen nieuwe database); statuspagina *niet gekoppeld*; 401 zonder token;
-geen proces als root behalve dumb-init/bewaker; PostgreSQL, API en worker als 568, **met `NoNewPrivs: 1` door de
-image zelf** (start zonder `--security-opt`, zoals het TrueNAS-formulier; ADR-0010); geen TCP-poort voor PostgreSQL;
-`secrets/` 0700/568 en geheimen 0600/568 (bekeken via een alleen-lezen wegwerpcontainer, zodat de test als elke gebruiker werkt); ontkoppelcode in de log; share als alleen-lezen gemeld en **ongewijzigd** (eigenaar, rechten,
+geen enkel proces als root, **ook PID 1 niet** (de bewaker is PID 1; contract 1.2); elk proces met `Uid 568`,
+`CapEff 0` en `NoNewPrivs 1` door de image zelf (start zonder `--security-opt`/`--cap-drop`, zoals het
+TrueNAS-formulier; ADR-0010/0011); zombies opgeruimd; geen TCP-poort voor PostgreSQL;
+`secrets/` 0700/568 en geheimen 0600/568 (bekeken via een alleen-lezen wegwerpcontainer, zodat de test als elke gebruiker werkt); géén ontkoppelcode in de log; share als alleen-lezen gemeld en **ongewijzigd** (eigenaar, rechten,
 inhoud, tijden); geen setuid-bestanden; herstart met behoud van geheimen; harde kill en herstart; start als 568;
 duidelijke NL-fout bij verkeerde rechten (568 op een root-dataset, die onaangeroerd blijft) en bij een verkeerde
 gebruiker (*Custom User* 1000:1000 → NL-fout vóór `initdb`).
 
 ## Validatieniveau
-- **Sim-getest:** B07-001, koppelen (enrollment-token en koppelcode in het formaat van de echte Hub), fail-closed
-  bij uitval van de Hub (EX16-deel voor deze dienst), EX44 (opschonen bij intrekking) voor zover deze dienst.
-- **Unit-/integratiegetest:** datamodel B07/B15 en migratie, padenallowlist, auth/JWKS.
-- **NIET GEVALIDEERD (echte NAS):** installatie via het TrueNAS-formulier, echte shares als Read Only Host Path op
-  TrueNAS, echte Hub-koppeling, alle externe bronnen (Immich, Jellyfin), prestaties/resourcebudget.
+- **Sim-getest:** B07-001, koppelen volgens contract 1.2 (env-token met vingerafdruk en koppelcode op de statuspagina,
+  tegen de Hub-simulator; **niet** tegen de echte Hub), intrekking fail-closed (EX16-deel voor deze dienst), EX44
+  (opschonen bij intrekking) voor zover deze dienst.
+- **Unit-/integratiegetest:** datamodel B07/B15 en migraties, padenallowlist, auth met gepinde sleutels, vingerafdruk.
+- **NIET GEVALIDEERD (echte NAS):** installatie via het TrueNAS-formulier (ook of het formulier een tag met
+  `@sha256:` accepteert), echte shares als Read Only Host Path op TrueNAS, echte Hub-koppeling (de Hub had H1–H4 nog
+  niet uitgeleverd), alle externe bronnen (Immich, Jellyfin), prestaties/resourcebudget.
 - **Niet gebouwd:** ingest, semantisch/hybride zoeken, mediamomenten, vraag-en-antwoord, opschoonrapport/export en
   alle spraakfuncties (eerlijk `capability_unavailable`).
 - GitHub Actions: vóór *P0 afmaken* was de job `image` rood (zie boven); de runs na de reparatie staan in de

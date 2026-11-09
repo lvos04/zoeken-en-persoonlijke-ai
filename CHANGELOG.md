@@ -32,6 +32,19 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
   Hub-sleutels onbekend zijn; kinderprofiel nooit de beheerweergave; de image zet zelf no-new-privileges (het
   TrueNAS-formulier kan dat niet) en de rooktest start zonder die vlag.
 
+- **Platformcontract 1.2 (ADR-0011):** koppeling in `/appdata/secrets/hub-link.json` (0600, atomair, `flock`) in
+  plaats van de vault in de database, met eenmalige overzetting; enroll exact volgens §3.3 met volledige
+  antwoordcontrole, sleutelset-vingerafdruk (`HUB_KEY_FINGERPRINT` of op de statuspagina) en bevestiging met
+  `services/self`; herhaling na een herstart, `429` met `Retry-After`, nooit redirects volgen; gepinde Hub-sleutels
+  (geen JWKS-cache meer) met ondertekende sleutelrotatie; de Hub meldt zich met een dienst-JWT (`token_use:
+  hub_service`), het eigen service-token wordt inkomend geweigerd; vaste `reason`-waarden; `jti` verplicht met een
+  persistente replaycache (migratie 0003); intrekking pas na 401 op `services/self`; tokenrotatie op verzoek van de
+  Hub; `GET /connector/v1/hub-link` + `POST /connector/v1/hub-link/unlink` vervangen `/search/v1/enrollment*`;
+  statuspagina koppelt alleen zolang nooit gekoppeld (met vingerafdruk, 5 per 15 min per bron-IP), geen lokale
+  ontkoppelcode meer; bodygrens telt ook chunked verzoeken (`413`, `details.max_bytes`); geen root-PID 1 meer
+  (`dumb-init` weg, de bewaker is PID 1 en ruimt zombies op), rooktest controleert elk proces; manifest volgens §9;
+  Custom App-instructie met tag + digest en registry-login alleen als terugval.
+
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).
 Validatie op een echte NAS: **NIET GEVALIDEERD**.
