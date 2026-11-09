@@ -142,3 +142,100 @@ def test_gewijzigde_kopie_geeft_eerlijke_500_en_de_api_werkt_door(
     )
     assert "default-src 'none'" in r.headers["Content-Security-Policy"]
     assert client.get("/readyz").status_code == 200 and client.get("/healthz").status_code == 200
+
+
+# ------------------------------------------------------------------ QA statuspagina (ADR-0015)
+ENROLL = "/api/v1/services/enroll"
+
+
+def _enroll_calls(fake_hub: FakeHub) -> int:
+    return sum(1 for r in fake_hub.all_requests if r["path"] == ENROLL)
+
+
+def _melding(page: str) -> str | None:
+    m = re.search(r'<p id="melding-titel"><strong>([^<]+)</strong>', page)
+    return m.group(1) if m else None
+
+
+@pytest.mark.parametrize(
+    "code",
+    ["al_gekoppeld", "hub_weigerde", "hub_vingerafdruk_onjuist", "te_veel_pogingen", "koppelstatus_onleesbaar"],
+)
+def test_qa_foutmelding_uit_een_zelfgemaakte_link_verschijnt_niet(client: Any, code: str) -> None:
+    """Een foutmelding hoort bij een echte, recente poging (met haar Trace-ID). Een gedeelde of zelfgemaakte link
+    zonder geldige poging-sleutel laat de pagina niets beweren dat niet gebeurd is (bv. 'al eens gekoppeld')."""
+    for url in (f"/?melding={code}", f"/?melding={code}&poging={'A' * 22}"):
+        page = client.get(url).text
+        assert _melding(page) is None and 'class="selecteer"' not in page, url
+        assert 'action="/koppelen"' in page  # de dienst is nog nooit gekoppeld: het formulier blijft gewoon staan
+
+
+@pytest.mark.parametrize("site", ["same-site", "cross-site"])
+def test_qa_formulier_van_een_andere_app_op_hetzelfde_nas_adres_wordt_geweigerd(
+    client: Any, fake_hub: FakeHub, site: str
+) -> None:
+    """Andere poort op hetzelfde NAS-adres = zelfde site: SameSite-cookies gaan mee, en met Referrer-Policy
+    no-referrer is Origin 'null'. Sec-Fetch-Site verraadt dan de herkomst; zonder geldige herkomst gaat er niets weg."""
+    csrf = _csrf(client)
+    data = {"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": PAIR_CODE, "hub_vingerafdruk": fake_hub.fingerprint()}
+    r = client.post("/koppelen", data=data, headers={"Origin": "null", "Sec-Fetch-Site": site}, follow_redirects=False)
+    assert r.status_code == 303 and "melding=ongeldig_formulier" in r.headers["location"]
+    assert _enroll_calls(fake_hub) == 0 and client.app.state.hub_link.read()["state"] == "nooit_gekoppeld"
+    # dezelfde poging vanaf de eigen pagina (same-origin; Origin null door no-referrer) koppelt wél
+    r = client.post(
+        "/koppelen", data=data, headers={"Origin": "null", "Sec-Fetch-Site": "same-origin"}, follow_redirects=False
+    )
+    assert r.headers["location"] == "/?melding=gekoppeld" and _enroll_calls(fake_hub) == 1
+
+
+@pytest.mark.parametrize(
+    ("veld", "waarde", "melding"),
+    [
+        # het begin (32 tekens) is na normalisatie een geldige koppelcode; de hele invoer niet (§3.3: ≤ 32 tekens)
+        ("koppelcode", PAIR_CODE + "-" * (32 - len(PAIR_CODE)) + "ZZZZ", "koppelcode_ongeldig"),
+        ("hub_vingerafdruk", None, "vingerafdruk_ongeldig"),
+        ("hub_adres", HUB_URL + "0" * 10 + "/" + "a" * 500, "ongeldig_hub_adres"),
+    ],
+)
+def test_qa_te_lange_invoer_wordt_nooit_afgekapt_tot_iets_geldigs(
+    client: Any, fake_hub: FakeHub, veld: str, waarde: str | None, melding: str
+) -> None:
+    fp = fake_hub.fingerprint()
+    data = {"csrf": _csrf(client), "hub_adres": HUB_URL, "koppelcode": PAIR_CODE, "hub_vingerafdruk": fp}
+    data[veld] = waarde if waarde is not None else fp + " " * (64 - len(fp)) + "X"
+    r = client.post("/koppelen", data=data, follow_redirects=False)
+    assert parse_qs(urlsplit(r.headers["location"]).query)["melding"] == [melding]
+    assert _enroll_calls(fake_hub) == 0
+
+
+def test_qa_poging_op_een_onleesbaar_koppelbestand(client: Any, fake_hub: FakeHub) -> None:
+    """Formulier nog open in een oud tabblad, koppelbestand intussen onleesbaar: niets naar de Hub, niets
+    overschreven, en de melding zegt wat er is (niet 'al eens gekoppeld', want dat is onbekend)."""
+    csrf = _csrf(client)
+    store = client.app.state.hub_link
+    store.path.write_text("{kapot", encoding="utf-8")
+    data = {"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": PAIR_CODE, "hub_vingerafdruk": fake_hub.fingerprint()}
+    r = client.post("/koppelen", data=data, follow_redirects=False)
+    assert "melding=koppelstatus_onleesbaar" in r.headers["location"] and _enroll_calls(fake_hub) == 0
+    page = client.get(r.headers["location"]).text
+    assert _melding(page) == "Koppelstatus onleesbaar" and "al eens gekoppeld" not in page
+    assert f'<code class="selecteer">{r.headers["X-Trace-Id"]}</code>' in page
+    assert 'action="/koppelen"' not in page and "pil-storing" in _totaal(page)
+    assert store.path.read_text(encoding="utf-8") == "{kapot"  # nooit stil vervangen
+
+
+def test_qa_trace_id_van_een_poging_staat_ook_in_de_app_log(
+    client: Any, fake_hub: FakeHub, caplog: pytest.LogCaptureFixture
+) -> None:
+    """CUSTOM_APP.md belooft dat de Trace-ID van de pagina ook in de app-log (TrueNAS → Apps → Logs) staat; het
+    ingevulde Hub-adres van een mislukte poging staat er niet in (§3.7)."""
+    csrf = _csrf(client)
+    caplog.set_level("INFO", logger="search_ai")
+    data = {"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": PAIR_CODE, "hub_vingerafdruk": "MEGG-8GFG-2E4Y-K2RQ"}
+    r = client.post("/koppelen", data=data, follow_redirects=False)
+    trace = r.headers["X-Trace-Id"]
+    regels = [rec.getMessage() for rec in caplog.records if trace in rec.getMessage()]
+    assert regels == [f"statuspagina: koppelen niet gelukt (code hub_vingerafdruk_onjuist, Trace-ID {trace})"]
+    assert not any(HUB_URL in rec.getMessage() for rec in caplog.records)
+    r = client.post("/koppelen", data={**data, "hub_vingerafdruk": fake_hub.fingerprint()}, follow_redirects=False)
+    assert any(r.headers["X-Trace-Id"] in rec.getMessage() for rec in caplog.records)

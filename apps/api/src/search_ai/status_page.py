@@ -175,6 +175,14 @@ NOTICES: dict[str, Notice] = {
         _FAILED,
         "De Hub vraagt even te wachten (te veel pogingen). Probeer het over een paar minuten opnieuw.",
     ),
+    # Het sjabloon heeft geen koppelblok voor deze toestand (S-01); de melding legt hem uit. Ook na een koppelpoging op
+    # een onleesbaar koppelbestand: dan is onbekend of de dienst ooit gekoppeld was, dus nooit "al eens gekoppeld".
+    "koppelstatus_onleesbaar": Notice(
+        "fout",
+        "Koppelstatus onleesbaar",
+        "Het koppelbestand van deze dienst in /appdata/secrets is onleesbaar. Uit veiligheid weigert de dienst daarom "
+        "elke Hub-aanvraag. Koppel opnieuw via de Hub: Instellingen → Diensten.",
+    ),
 }
 FIELD_LINK = {
     "hub": ("hub", "Naar het veld Adres van de Hub", "Naar het Hub-adres (fout)"),
@@ -196,6 +204,8 @@ CHECK_FAILED = {
 STATUS_NL = {"draft": "concept", "active": "actief", "paused": "gepauzeerd", "revoked": "ingetrokken"}
 SEVERITY = {"gezond": 0, "onbekend": 1, "beperkt": 2, "storing": 3}
 TOTAL_LABEL = {"gezond": "Alles gezond", "onbekend": "Deels onbekend", "beperkt": "Beperkt", "storing": "Storing"}
+# Begin van de toelichting bij "Niet gereed": dezelfde toon als de pil (nooit "Deels onbekend" naast een amber pil).
+NOT_READY_PREFIX = {"onbekend": "Deels onbekend", "beperkt": "Beperkt", "storing": "Storing"}
 LABEL = {"gezond": "Gezond", "onbekend": "Onbekend", "beperkt": "Beperkt", "storing": "Storing"}
 
 
@@ -462,8 +472,14 @@ def page_data(inp: PageInput) -> dict[str, Any]:
 
     linked = state == "gekoppeld" and not corrupt
     notice = NOTICES.get(inp.melding or "")
-    if notice is not None and notice.toon == "info" and not linked:
-        notice = None  # een succesmelding uit de URL mag nooit iets beweren dat de koppelstatus tegenspreekt
+    # Een melding uit de URL mag nooit iets beweren dat de koppelstatus nu tegenspreekt: "gekoppeld" alleen als de
+    # koppeling echt bestaat, "al eens gekoppeld" nooit naast het formulier, "onleesbaar" alleen als het zo is.
+    if notice is not None and (
+        (notice.toon == "info" and not linked)
+        or (inp.melding == "al_gekoppeld" and form)
+        or (inp.melding == "koppelstatus_onleesbaar" and not corrupt)
+    ):
+        notice = None
     shown = inp.melding if notice is not None and notice.toon == "fout" else None
 
     rows = _readiness_rows(inp.checks, tijd_kort, iso_)
@@ -483,6 +499,8 @@ def page_data(inp: PageInput) -> dict[str, Any]:
             worst = "onbekend"
     else:
         label = TOTAL_LABEL[worst]
+    # bij "Niet gereed" begint de toelichting met hetzelfde woord als de toon van de pil (Peil §11.1)
+    prefix = NOT_READY_PREFIX.get(worst, "Deels onbekend")
     if failing:
         uitleg = f"Storing in: {', '.join(failing)}."
         if not linked:
@@ -490,13 +508,15 @@ def page_data(inp: PageInput) -> dict[str, Any]:
     elif corrupt:
         uitleg = "Storing — de koppelstatus is onleesbaar."
     elif not inp.ready:
-        uitleg = "Deels onbekend — de eigen controles zijn niet compleet."
+        uitleg = f"{prefix} — de eigen controles zijn niet compleet."
     elif state == "nooit_gekoppeld":
-        uitleg = "Deels onbekend — wacht op koppeling met de Hub."
+        uitleg = f"{prefix} — wacht op koppeling met de Hub."
     elif state == "ontkoppeld":
-        uitleg = "Deels onbekend — ontkoppeld door de Hub."
+        uitleg = f"{prefix} — ontkoppeld door de Hub."
     elif state == "ingetrokken":
-        uitleg = "Deels onbekend — de Hub heeft de koppeling ingetrokken."
+        uitleg = f"{prefix} — de Hub heeft de koppeling ingetrokken."
+    elif not linked:  # onbekende toestand in het koppelbestand (vangnet): nooit "Gereed en gekoppeld"
+        uitleg = f"{prefix} — koppelstatus onbekend."
     elif worst == "gezond":
         uitleg = "Gereed en gekoppeld met de Hub."
     else:
@@ -550,14 +570,11 @@ def page_data(inp: PageInput) -> dict[str, Any]:
         )
 
     if notice is None and corrupt:
-        # Het sjabloon heeft geen koppelblok voor deze toestand; de melding legt hem uit (zie PEIL_REVIEW.md). De code
-        # staat bij de controle "Koppeling met de Hub": hier, in het smalle meldingvak, liep hij zonder breekpunt bij
-        # ruimere tekstafstand (WCAG 1.4.12) op 320 px buiten het vak.
-        tekst = (
-            "Het koppelbestand van deze dienst in /appdata/secrets is onleesbaar. Uit veiligheid weigert de dienst daarom "
-            "elke Hub-aanvraag. Koppel opnieuw via de Hub: Instellingen → Diensten."
-        )
-        notice = Notice("fout", "Koppelstatus onleesbaar", tekst)
+        # Het sjabloon heeft geen koppelblok voor deze toestand; de melding legt hem uit (zie PEIL_REVIEW.md). Zonder
+        # koppelpoging staat de code niet in de melding maar bij de controle "Koppeling met de Hub": als lopende tekst in
+        # het smalle meldingvak liep hij zonder breekpunt bij ruimere tekstafstand (WCAG 1.4.12) op 320 px buiten het
+        # vak (P-14). Na een poging staat hij in het <code>-blok met Trace-ID, dat wel mag afbreken.
+        notice = NOTICES["koppelstatus_onleesbaar"]
     if notice is not None:
         data.update(
             melding=True,
@@ -652,8 +669,16 @@ def _with_headers(resp: Response, csrf: str | None = None) -> Response:
 
 
 def _form_ok(request: Request, token: str) -> bool:
+    """CSRF (double-submit) + herkomst. ``Origin: null`` laat de eigen pagina zelf ontstaan (``Referrer-Policy:
+    no-referrer`` maakt de Origin van een formulier-POST ``null``), dus daarop alleen kan het niet weigeren.
+    ``Sec-Fetch-Site`` (moderne browsers) sluit het gat: een andere app op hetzelfde NAS-adres (andere poort = zelfde
+    site, dus SameSite-cookies gaan mee en cookies van die app gelden ook voor deze poort) of een sandbox-iframe geeft
+    ``same-site``/``cross-site`` en wordt geweigerd. Zonder die header (oude browser, curl) blijft de CSRF-controle."""
     cookie = request.cookies.get(CSRF_COOKIE, "")
     if not cookie or not token or not hmac.compare_digest(cookie, token):
+        return False
+    site = request.headers.get("sec-fetch-site")
+    if site is not None and site not in ("same-origin", "none"):
         return False
     origin = request.headers.get("origin")
     if origin and origin != "null":
@@ -664,9 +689,14 @@ def _form_ok(request: Request, token: str) -> bool:
 
 
 def _redirect(request: Request, notice: str) -> Response:
+    tid = trace_id_for(request)
     url = f"/?melding={notice}"
     if NOTICES[notice].toon == "fout":
-        url += f"&poging={request.app.state.pair_attempts.put(notice, trace_id_for(request))}"
+        url += f"&poging={request.app.state.pair_attempts.put(notice, tid)}"
+        # dezelfde Trace-ID als op de pagina, in X-Trace-Id en in het auditspoor; nooit het ingevulde Hub-adres (§3.7)
+        log.warning("statuspagina: koppelen niet gelukt (code %s, Trace-ID %s)", notice, tid)
+    else:
+        log.info("statuspagina: %s (Trace-ID %s)", notice, tid)
     return _with_headers(RedirectResponse(url, status_code=303))
 
 
@@ -699,6 +729,12 @@ def status_page(request: Request, melding: str | None = None, poging: str | None
     ready, checks = readiness(request)
     roots, root_warnings = validate_read_roots(state.settings.read_roots, state.settings.data_dir)
     code = melding if melding in NOTICES else None
+    trace_id = state.pair_attempts.get(poging, code) if code else None
+    if code and NOTICES[code].toon == "fout" and trace_id is None:
+        # Een foutmelding hoort bij een echte, recente poging van dit proces (met haar Trace-ID). Een zelfgemaakte of
+        # verlopen link (zonder geldige poging-sleutel) toont geen melding: de pagina beweert nooit een mislukking
+        # die niet gebeurd is.
+        code = None
     per_status, health = _db_facts(request)
     inp = PageInput(
         ready=ready,
@@ -710,7 +746,7 @@ def status_page(request: Request, melding: str | None = None, poging: str | None
         csrf=csrf,
         now=utcnow(),
         melding=code,
-        trace_id=state.pair_attempts.get(poging, code) if code else None,
+        trace_id=trace_id if code else None,
         health=health,
     )
     return _with_headers(HTMLResponse(render_page(tpl, inp)), csrf)
@@ -766,17 +802,24 @@ def pair(
     client_ip = request.client.host if request.client else "onbekend"
     if not state.pair_throttle.allow(client_ip):
         return _redirect(request, "te_veel_pogingen")
-    if not may_pair(state.hub_link.read_safe()):
+    doc = state.hub_link.read_safe()
+    if doc.get("corrupt"):
+        return _redirect(request, "koppelstatus_onleesbaar")
+    if not may_pair(doc):
         return _redirect(request, "al_gekoppeld")
+    # Invoer als geheel controleren, nooit eerst afkappen: een te lange invoer is ongeldig (§3.3: koppelcode ≤ 32
+    # tekens), ook als het begin ervan toevallig een geldige waarde is. De lengte is begrensd door de bodygrens (§5).
     try:
-        url = validate_hub_url(hub_adres[:500], state.settings.allow_loopback_hub)
+        url = validate_hub_url(hub_adres, state.settings.allow_loopback_hub)
     except HubUrlError:
         return _redirect(request, "ongeldig_hub_adres")
-    if normalize_pairing_code(koppelcode[:32]) is None:
+    code = normalize_pairing_code(koppelcode)
+    if code is None:
         return _redirect(request, "koppelcode_ongeldig")
-    if normalize_fingerprint(hub_vingerafdruk[:64]) is None:
+    fingerprint = normalize_fingerprint(hub_vingerafdruk)
+    if fingerprint is None:
         return _redirect(request, "vingerafdruk_ongeldig")
-    outcome = state.enrollment.enroll_with_code(url, koppelcode[:32], hub_vingerafdruk[:64])
+    outcome = state.enrollment.enroll_with_code(url, code, fingerprint)
     _audit_pair(request, outcome.ok, outcome.code)
     if outcome.ok:
         confirmed = bool(outcome.detail.get("confirmed"))

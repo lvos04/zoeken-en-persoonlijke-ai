@@ -114,6 +114,19 @@ def toestanden() -> dict[str, tuple[PageInput, bool]]:
             ),
             False,
         ),
+        # QA (ADR-0015): koppelpoging uit een oud tabblad op een onleesbaar koppelbestand → melding met code in het
+        # <code>-blok + Trace-ID (P-14: geen overloop op 320 px, ook niet met ruimere tekstafstand)
+        "koppelen-op-onleesbaar": (
+            PageInput(
+                ready=True,
+                checks=OK,
+                doc={**_never(), "state": "ontkoppeld", "corrupt": True},
+                melding="koppelstatus_onleesbaar",
+                trace_id=TRACE,
+                **base,
+            ),
+            False,
+        ),
     }
 
 

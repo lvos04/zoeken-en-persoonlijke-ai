@@ -238,10 +238,21 @@ def test_hub_adres_wordt_geescaped_en_alleen_http_s_is_een_link() -> None:
     assert "javascript:" not in page
 
 
+def _doc_voor(code: str) -> dict[str, Any]:
+    """Een koppelstatus waarbij de melding past (een melding spreekt de koppelstatus nooit tegen)."""
+    if NOTICES[code].toon == "info":
+        return _fixtures()._linked()
+    if code == "al_gekoppeld":
+        return {"state": "ontkoppeld", "first_linked_at": "2026-11-08T19:14:00+00:00"}
+    if code == "koppelstatus_onleesbaar":
+        return {"state": "nooit_gekoppeld", "corrupt": True}
+    return {"state": "nooit_gekoppeld"}
+
+
 @pytest.mark.parametrize("code", sorted(NOTICES))
 def test_elke_melding_rendert_met_vaste_tekst(code: str) -> None:
     notice = NOTICES[code]
-    doc = _fixtures()._linked() if notice.toon == "info" else {"state": "nooit_gekoppeld"}
+    doc = _doc_voor(code)
     page = render_page(load_template(), _inp(doc=doc, melding=code, trace_id="0f0e0d0c-0000-4000-8000-000000000000"))
     assert f"<strong>{notice.titel}</strong>" in page
     assert ("0f0e0d0c-0000-4000-8000-000000000000" in page) is (notice.toon == "fout")
@@ -313,6 +324,54 @@ def test_review_paginatitel_herhaalt_niets() -> None:
 def test_review_geen_share_is_niet_ingesteld_en_nooit_groen() -> None:
     rij = next(r for r in page_data(_inp(roots=0))["dienst_blok"] if r["naam"] == "Gekoppelde shares")
     assert (rij["toon"], rij["label"]) == ("onbekend", "Niet ingesteld") and "Host Path met Read Only" in rij["reden"]
+
+
+# ------------------------------------------------------------------ QA statuspagina (ADR-0015)
+def test_qa_al_gekoppeld_nooit_naast_het_koppelformulier() -> None:
+    """'Deze dienst is al eens gekoppeld' is onwaar zolang het formulier er staat (nog nooit gekoppeld)."""
+    data = page_data(_inp(melding="al_gekoppeld", trace_id="t-1"))
+    assert data["koppelformulier"] and "melding" not in data and "trace_id" not in data
+    data = page_data(_inp(doc={"state": "ontkoppeld", "first_linked_at": "x"}, melding="al_gekoppeld", trace_id="t"))
+    assert data["melding_titel"] == "Koppelen kan hier niet" and data["trace_id"] == "t"
+
+
+def test_qa_koppelstatus_onleesbaar_alleen_als_het_zo_is() -> None:
+    # na een poging op een onleesbaar koppelbestand: eigen melding met code + Trace-ID, nooit "al eens gekoppeld"
+    data = page_data(
+        _inp(doc={"state": "nooit_gekoppeld", "corrupt": True}, melding="koppelstatus_onleesbaar", trace_id="t")
+    )
+    assert data["melding_titel"] == "Koppelstatus onleesbaar" and data["melding_code"] == "koppelstatus_onleesbaar"
+    assert "al eens gekoppeld" not in data["melding_tekst"] and not data["koppelformulier"]
+    # zonder poging dezelfde vaste tekst, zonder code in het smalle meldingvak (P-14: de code staat bij de controle)
+    zonder = page_data(_inp(doc={"state": "nooit_gekoppeld", "corrupt": True}))
+    assert zonder["melding_tekst"] == data["melding_tekst"] and "melding_code" not in zonder
+    # is het bestand weer leesbaar, dan beweert een oude link niets meer
+    assert "melding" not in page_data(_inp(melding="koppelstatus_onleesbaar", trace_id="t"))
+
+
+@pytest.mark.parametrize(
+    ("doc", "eind"),
+    [
+        ({"state": "ontkoppeld", "first_linked_at": "x"}, "ontkoppeld door de Hub."),
+        ({"state": "ingetrokken", "first_linked_at": "x"}, "de Hub heeft de koppeling ingetrokken."),
+        ({"state": "nooit_gekoppeld"}, "wacht op koppeling met de Hub."),
+    ],
+)
+def test_qa_toelichting_bij_niet_gereed_volgt_de_toon(doc: dict[str, Any], eind: str) -> None:
+    """Ontkoppeld met vastgelopen gebeurtenissen: pil 'beperkt', dus ook de toelichting 'Beperkt', niet 'Deels onbekend'."""
+    vast = [{"name": "outbox", "status": "degraded", "reason_code": "dead_letter"}]
+    data = page_data(_inp(doc=doc, health=vast))
+    assert (data["totaal_toon"], data["totaal_label"]) == ("beperkt", "Niet gereed")
+    assert data["totaal_toelichting"] == f"Beperkt — {eind}"
+    data = page_data(_inp(doc=doc))
+    assert (data["totaal_toon"], data["totaal_toelichting"]) == ("onbekend", f"Deels onbekend — {eind}")
+
+
+def test_qa_onbekende_koppeltoestand_is_nooit_gereed_en_gekoppeld() -> None:
+    data = page_data(_inp(doc={"state": "iets_anders", "first_linked_at": "x"}))
+    assert data["totaal_label"] == "Niet gereed" and data["totaal_toon"] == "onbekend"
+    # vangnet: nooit "Gereed en gekoppeld" of "Gereed; …" bij een toestand die de dienst niet kent
+    assert data["totaal_toelichting"] == "Deels onbekend — koppelstatus onbekend." and data["gereed"].startswith("Nee")
 
 
 # ------------------------------------------------------------------ poging-sleutel voor de Trace-ID
