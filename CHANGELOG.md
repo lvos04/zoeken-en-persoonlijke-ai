@@ -15,6 +15,13 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
 - **Installatie:** één alles-in-één image als standaard TrueNAS Custom App (`deploy/truenas/CUSTOM_APP.md`), manifest
   v1, CI met rooktest van de image, release met SBOM en digest.
 
+- **Review P0 (onafhankelijk):** migratie 0002 met samengestelde bron-sleutels (chunk/transcript/embedding kunnen
+  niet aan een andere bron hangen dan hun ouder); vectorzoeker met gebruikers-ACL vóór de afstands-ranking (intern en
+  getest, ook met HNSW; de API voor semantisch zoeken blijft 501); intrekken wist ook bewaarde zoekgeschiedenis en
+  trekt spraakcontext op de bron in; de back-up vóór een upgrade bevat geen indexinhoud, zoekgeschiedenis of
+  transcripten meer; verzoeklimiet (429) en tijdlimiet (503) op zoeken; database-socket alleen voor 568; rooktest
+  toetst pgvector echt en databehoud na herstart, harde kill en nieuwe container (ADR-0008).
+
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).
 Validatie op een echte NAS: **NIET GEVALIDEERD**.

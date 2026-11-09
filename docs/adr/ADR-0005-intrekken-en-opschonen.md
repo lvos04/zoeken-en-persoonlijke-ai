@@ -15,3 +15,7 @@ Status: aanvaard · Datum: 2026-11-09 · Fase: P0 · Excel: B07-001, (voorbereid
 5. **Originelen**: de dienst heeft alleen leesrechten (Read Only Host Path) en schrijft nooit in `/bronnen`; tests
    vergelijken checksums en mtimes vóór/na.
 6. Checksum-gebaseerde purge-verificatie, privacyrapport en export (B07-006) volgen in P5.
+7. **Aanvulling na review (ADR-0008):** opschonen verwijdert ook bewaarde zoekgeschiedenis die naar de bron verwijst
+   (alleen ja/nee in het bewijs) en trekt B15-context op de bron in; de back-up vóór een upgrade bevat geen inhoud van
+   de afgeleide index, de zoekgeschiedenis of transcripten; migratie 0002 houdt afgeleide rijen bij de bron van hun
+   ouder. Fysiek wissen uit databasepagina's en ZFS-snapshots valt buiten de app (zie ADR-0008, *Grenzen*).

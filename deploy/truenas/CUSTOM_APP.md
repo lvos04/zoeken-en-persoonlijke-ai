@@ -106,10 +106,18 @@ nooit audio op.
   app eerst een back-up (`/appdata/backups/voor-upgrade-*.dump`, de nieuwste 3 blijven) en voert dan de migraties uit.
   Mislukt een migratie, dan blijft de oude database ongewijzigd en meldt de log dat. Een ZFS-snapshot vooraf blijft
   verstandig.
+- **Wat staat er in die back-up?** Bronnen, toestemmingen, toegangslijsten, koppeling en auditspoor. **Niet** de inhoud
+  van de zoekindex (tekstfragmenten, embeddings, documentverwijzingen), de zoekgeschiedenis of spraaktranscripten:
+  zo blijft een ingetrokken bron ook niet in een back-up achter. Na een herstel uit deze back-up is de index leeg en
+  moet hij opnieuw worden opgebouwd.
 - **Terugdraaien:** zolang een release geen databasewijziging heeft (zie de releasenotes, veld
   `tag_only_rollback_safe`), kun je de Tag terugzetten. Bij een schemawijziging: zet de ZFS-snapshot van vóór de
   update terug, of gebruik de back-up uit `/appdata/backups`. De index is afgeleide data en kan altijd opnieuw worden
   opgebouwd uit de bronnen; originele bestanden worden nooit door deze app gewijzigd.
+- **Privacy en snapshots:** intrekken wist de indexdata van een bron in de database van de app. **ZFS-snapshots** van
+  de `/appdata`-dataset die jij of TrueNAS eerder maakte, bevatten de index nog zoals hij toen was; die kan de app niet
+  wissen. Bewaar zulke snapshots niet langer dan nodig als je een bron om privacyredenen intrekt. Een herstelde oude
+  snapshot zet ook oude toestemmingen terug: controleer daarna in de Hub de bronnen en toestemmingen.
 
 ## Problemen
 

@@ -8,6 +8,9 @@ staan in de Hub-UI van `ai-server-manager`.
 (lees-padenallowlist, consent-register met scopes, gebruikers-ACL vóór ranking, kinderprofiel-beperkingen, intrekken
 met gecontroleerde purge). Datamodel B07 + B15 staat in migratie 0001; de logica van B07-002…006 en B15 volgt in P5.
 Niet-gebouwde functies geven eerlijk `501 capability_unavailable`. **Niet gevalideerd op een echte NAS.**
+Na de onafhankelijke review van P0 (ADR-0008): samengestelde bron-sleutels (migratie 0002), een vectorzoeker met
+ACL vóór ranking (alleen intern en getest; de API voor semantisch zoeken blijft 501 zonder lokaal model), intrekken
+zonder restdata (ook zoekgeschiedenis en back-ups) en een verzoek- en tijdlimiet op zoeken.
 
 ## Installeren
 Uitsluitend als **standaard TrueNAS Custom App** — zie [`deploy/truenas/CUSTOM_APP.md`](deploy/truenas/CUSTOM_APP.md)
