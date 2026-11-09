@@ -1,11 +1,14 @@
-"""Bewaakt de installatieregels (contract §1/§2/§9/§10): standaard Custom App, gepinde images, geen geheimen."""
+"""Bewaakt de installatieregels (contract 1.2 §1/§2/§9/§10): standaard Custom App, gepinde images, geen geheimen, geen
+root-proces na de eigenaarschapsstap (ook PID 1 niet)."""
 
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import subprocess
 import sys
+import time
 import types
 
 import pytest
@@ -44,9 +47,20 @@ def test_manifest_is_custom_app_without_compose() -> None:
     m = yaml.safe_load(MANIFEST.read_text())
     assert m["install"]["method"] == "custom_app"
     assert "compose" not in m and "custom_compose_config" not in MANIFEST.read_text()
-    assert m["image"]["tag"] != "latest" and m["custom_app"]["ports"][0]["container_port"] == 30450
+    assert m["image"]["tag"] != "latest" and m["network"]["ports"][0]["container_port"] == 30450
     assert m["privileges"]["privileged"] is False and m["network"]["host_network"] is False
     assert m["custom_app"]["env"] == []
+
+
+def test_manifest_follows_contract_1_2_section_9() -> None:
+    m = yaml.safe_load(MANIFEST.read_text())
+    assert "platformcontract 1.2" in MANIFEST.read_text()
+    assert "ports" not in m["custom_app"]  # vervallen: network.ports is de enige bron
+    assert "joins_platform_network" not in m["network"]  # vervallen: apps delen nooit een Docker-netwerk
+    names = {p["name"] for p in m["network"]["ports"]}
+    assert m["custom_app"]["portal"]["port"] in names
+    assert m["custom_app"]["gpu"] == "none" and m["privileges"]["gpu"] == "none"
+    assert m["app_id"] == "zoeken-en-persoonlijke-ai"
 
 
 def test_custom_app_doc_is_form_only() -> None:
@@ -56,6 +70,16 @@ def test_custom_app_doc_is_form_only() -> None:
     assert "```yaml" not in doc and "custom_compose_config" not in doc
     assert "geen *Install via YAML*" in doc
     assert "NIET GEVALIDEERD" in doc
+
+
+def test_custom_app_doc_contract_1_2() -> None:
+    doc = CUSTOM_APP.read_text()
+    assert "@sha256:" in doc and "release/digests.json" in doc  # tag met digest (§2.2)
+    assert "HUB_KEY_FINGERPRINT" in doc and "HUB_ENROLLMENT_TOKEN" in doc and "HUB_URL" in doc
+    assert "terugval" in doc and "registry" in doc.lower()  # publieke image, registry-login alleen als terugval (§2.1)
+    assert "alleen via de Hub" in doc and "ontkoppelcode uit de app-log" not in doc  # §3.7
+    env = ENV_EXAMPLE.read_text()
+    assert "HUB_KEY_FINGERPRINT=" in env and "JWKS_TTL" not in env and "JWKS_MAX_STALE" not in env
 
 
 def test_compose_is_dev_only() -> None:
@@ -123,7 +147,7 @@ def test_smoke_test_inspects_secrets_via_container_not_as_host_user() -> None:
 
 
 def test_supervisor_sets_no_new_privs_for_itself_and_children() -> None:
-    """Contract §10 'no-new-privileges': het TrueNAS Custom App-formulier zet die vlag niet, dus de image zelf (ADR-0010)."""
+    """Contract 1.2 §2.2: het TrueNAS Custom App-formulier zet geen no-new-privileges, dus de image zelf (ADR-0010)."""
     sup = _load_supervisor()
     out = subprocess.run(
         [sys.executable, "-c", "print(open('/proc/self/status').read())"],
@@ -138,5 +162,55 @@ def test_supervisor_sets_no_new_privs_for_itself_and_children() -> None:
     assert main_src.index("if not no_new_privs_active():") > main_src.index("demote()  # vanaf hier")
     smoke = (REPO_ROOT / "deploy/allinone/smoke-test.sh").read_text()
     run_fn = smoke[smoke.index("run() {") : smoke.index("}", smoke.index("run() {"))]
-    assert "no-new-privileges" not in run_fn.split("\n", 1)[1]  # rooktest start zoals het formulier: zonder de vlag
-    assert 'check "no-new-privileges door de image zelf gezet' in smoke
+    body = run_fn.split("\n", 1)[1]
+    assert "no-new-privileges" not in body and "cap-drop" not in body  # zoals het formulier
+    assert "--security-opt" not in smoke.split("== 4.")[1].split("== 5.")[0]  # ook 'Custom User 568' zonder vlag
+
+
+def test_no_root_init_supervisor_is_pid_1() -> None:
+    """Contract 1.2 §2.2/R11: geen dumb-init/tini die als root PID 1 blijft; de bewaker is PID 1 en wisselt zelf."""
+    text = DOCKERFILE.read_text()
+    assert "dumb-init" not in text.replace("Geen ENTRYPOINT-init", "") and "tini" not in text
+    assert not re.search(r"^ENTRYPOINT", text, flags=re.M)
+    assert 'CMD ["python", "/usr/local/lib/search-ai/supervisor.py"]' in text
+    sup = (REPO_ROOT / "deploy/allinone/supervisor.py").read_text()
+    main = sup[sup.index("def main() -> None:") :]
+    # PID 1 vangt SIGTERM zelf af, en wel vóór de (soms lange) eigenaarschapsstap
+    assert main.index("signal.signal(signal.SIGTERM, shutdown)") < main.index("prepare_dirs()")
+    assert "reap_orphans(" in main
+    smoke = (REPO_ROOT / "deploy/allinone/smoke-test.sh").read_text()
+    for needle in (
+        "privs_all_568",
+        "pid1_is_supervisor",
+        "no_zombies_after_orphan",
+        'CapEff") == ["0000000000000000"]',
+    ):
+        assert needle in smoke
+    assert "! log_has $NAME 'ontkoppelcode'" in smoke
+
+
+def test_reap_orphans_only_reaps_unknown_zombies() -> None:
+    sup = _load_supervisor()
+    known, orphan = os.fork(), None
+    if known == 0:
+        os._exit(0)
+    orphan = os.fork()
+    if orphan == 0:
+        os._exit(0)
+    deadline = time.monotonic() + 5
+    reaped = 0
+    while time.monotonic() < deadline and reaped == 0:
+        reaped = sup.reap_orphans({known})
+        time.sleep(0.05)
+    assert reaped == 1
+    try:  # het onbekende kind is opgeruimd …
+        os.waitpid(orphan, os.WNOHANG)
+        raise AssertionError("verweesd kind niet opgeruimd")
+    except ChildProcessError:
+        pass
+    assert os.waitpid(known, 0)[0] == known  # … het bekende kind niet (zijn exitstatus blijft voor de bewaker)
+
+
+def test_healthcheck_drops_root_first() -> None:
+    hc = (REPO_ROOT / "deploy/allinone/healthcheck.py").read_text()
+    assert hc.index("os.setuid(UID)") < hc.index("urlopen") and "prctl(38, 1" in hc

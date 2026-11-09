@@ -8,7 +8,8 @@
 # Geen YAML, geen wachtwoorden, geen verplichte variabelen.
 # PostgreSQL draait binnen de container op een unix-socket (geen netwerkpoort, geen wachtwoord) met pgvector 0.8.7
 # uit de officiële pgvector-image (exacte versie + sha256-digest, contract §1).
-# Start als root alleen om /appdata aan 568:568 te geven; daarna draait alles als 568 (TrueNAS 'apps').
+# Start als root alleen om /appdata aan 568:568 te geven; daarna draait alles als 568 (TrueNAS 'apps'), ook PID 1:
+# de procesbewaker is zelf PID 1 (geen root-init), zet PR_SET_NO_NEW_PRIVS en ruimt zombies op (contract 1.2 §2.2).
 # /bronnen wordt NOOIT gewijzigd (geen chown/chmod): de dienst leest daar alleen.
 # De optionele BuildKit-secret 'ca_bundle' is alleen voor bouwomgevingen achter een TLS-proxy; zonder die secret
 # bouwt de image schoon (bv. in GitHub Actions).
@@ -38,7 +39,7 @@ COPY apps/api/src ./src
 RUN --mount=type=secret,id=ca_bundle,required=false \
     if [ -s /run/secrets/ca_bundle ]; then export PIP_CERT=/run/secrets/ca_bundle; fi; \
     pip install --no-cache-dir --disable-pip-version-check --root-user-action=ignore --prefix=/install \
-        -r requirements.lock dumb-init==1.2.5.post1 \
+        -r requirements.lock \
     && pip install --no-cache-dir --disable-pip-version-check --root-user-action=ignore --prefix=/install \
         --no-deps .
 
@@ -75,5 +76,5 @@ VOLUME ["/appdata"]
 EXPOSE 30450
 HEALTHCHECK --interval=30s --timeout=8s --start-period=90s --retries=3 \
   CMD ["python", "/usr/local/lib/search-ai/healthcheck.py"]
-ENTRYPOINT ["/usr/local/bin/dumb-init", "--"]
+# Geen ENTRYPOINT-init: de bewaker is PID 1 en wisselt zelf naar 568 (zie supervisor.py).
 CMD ["python", "/usr/local/lib/search-ai/supervisor.py"]

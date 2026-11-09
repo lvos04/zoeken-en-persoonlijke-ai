@@ -1,6 +1,12 @@
-# Manifest (manifeststandaard v1 van appstore-en-fork, platformcontract 1.1 §9) van zoeken-en-persoonlijke-ai.
+# Manifest (manifeststandaard v1 van appstore-en-fork, platformcontract 1.2 §9) van zoeken-en-persoonlijke-ai.
 # Installatie uitsluitend als standaard TrueNAS Custom App (één image + formulierwaarden); nooit compose/YAML.
 # De digest van de eigen GHCR-image vult de release-CI in (release/digests.json); tot dan is installeren niet gereed.
+# De vertaling naar het formulier zet de tag als '<tag>@<digest>' (§2.2; of het formulier '@' accepteert is NIET
+# GEVALIDEERD op een echte NAS). Bij installatie via de API geeft de Hub alleen HUB_URL, HUB_KEY_FINGERPRINT en het
+# eenmalige HUB_ENROLLMENT_TOKEN mee (§3.2); dit manifest bevat geen omgevingsvariabelen en geen geheimen.
+# Contract 1.2 §9: 'custom_app.ports' en 'network.joins_platform_network' zijn vervallen; 'network.ports' is de enige
+# bron voor de poorten van het formulier. Gevalideerd met de validator van appstore-en-fork (M1–M6, commit 837fa61) in
+# --strict (zie docs/TESTRAPPORT.md).
 # Shares die doorzoekbaar worden, voegt de Hub later toe als extra Host Path met read_only=true onder /bronnen/<naam>
 # (app.update via de executor, R2, alleen na bronwizard + toestemming; zie docs/adr/ADR-0004). Base-images van de
 # alles-in-één image (op digest): python:3.12.16-slim-bookworm en pgvector/pgvector:0.8.7-pg16-bookworm.
@@ -22,12 +28,6 @@ image:
   tag: "0.1.0"
   digest: null
 custom_app:
-  ports:
-    - name: api
-      container_port: 30450
-      host_port: {param: host_port}
-      protocol: tcp
-      purpose_nl: Zoek-API, connectorcontract en statuspagina
   storage:
     - name: appdata
       type: host_path
@@ -92,7 +92,6 @@ network:
       purpose_nl: Zoek-API, connectorcontract en statuspagina
   host_network: false
   host_network_reason: null
-  joins_platform_network: false
 privileges:
   privileged: false
   cap_add: []

@@ -8,7 +8,8 @@ wachtwoorden. Alle schermen (bronnen kiezen, toestemming, zoeken) staan in de Hu
 
 > **Normaal installeer je deze app niet zelf.** Na de eerste installatie van de Hub (`ai-server-manager`) en de
 > executor installeert het platform deze app via de TrueNAS-API met precies dezelfde formulierwaarden, en geeft het
-> `HUB_URL` en een eenmalig koppeltoken mee. Dit document is voor handmatige installatie en voor controle.
+> alleen `HUB_URL`, `HUB_KEY_FINGERPRINT` en een eenmalig koppeltoken (`HUB_ENROLLMENT_TOKEN`) mee
+> (platformcontract 1.2 §3.2). Dit document is voor handmatige installatie en voor controle.
 
 > **Verificatiestatus: NIET GEVALIDEERD (echte NAS).** De image is in een Linux/Docker-bouwomgeving gebouwd en met een
 > rooktest gestart (zie `docs/TESTRAPPORT.md`). Het TrueNAS-formulier zelf is niet op echte TrueNAS-hardware
@@ -20,8 +21,8 @@ wachtwoorden. Alle schermen (bronnen kiezen, toestemming, zoeken) staan in de Hu
 
 | Wat | Waarde |
 |---|---|
-| Image | `ghcr.io/lvos04/zoeken-en-persoonlijke-ai` |
-| Tag | de vaste versie uit de release, bv. `0.1.0` (**nooit** `latest`) |
+| Image | `ghcr.io/lvos04/zoeken-en-persoonlijke-ai` (publiek pakket; geen registry-login nodig, zie *Image ophalen*) |
+| Tag | versie **met digest** uit de release: `<versie>@sha256:<64 hex>` uit `release/digests.json`, bv. `0.1.0@sha256:…` (**nooit** `latest`) |
 | Poort | container `30450` → host `30450` (voorstel; de Hub controleert vooraf op conflicten) |
 | Opslag | één dataset → `/appdata` (database, geheimen, back-ups, afgeleide index) |
 | Shares om te doorzoeken | optioneel: per share een extra Host Path **met Read Only** → `/bronnen/<naam>` |
@@ -45,14 +46,14 @@ en van zijn eigen submappen (`postgres`, `secrets`, `backups`). Shares onder `/b
 |---|---|---|
 | Application Name | | `zoeken-en-persoonlijke-ai` |
 | Image Configuration | Repository | `ghcr.io/lvos04/zoeken-en-persoonlijke-ai` |
-| | Tag | de releaseversie, bv. `0.1.0` |
+| | Tag | `<versie>@sha256:<digest>` uit `release/digests.json` van de release (zie hieronder) |
 | | Pull Policy | *Pull the image if it is not already present on host* |
 | Container Configuration | Timezone | jouw tijdzone |
 | | Restart Policy | *Unless Stopped* |
 | | Environment Variables | leeg laten (zie *Optioneel*) |
 | Security Context | Privileged | **uit** |
 | | Capabilities | geen toevoegen |
-| | Custom User | **uit** (de app start als root alleen om de rechten van `/appdata` te regelen en draait daarna als 568) |
+| | Custom User | **uit** (aanbevolen: de app start als root alleen om de rechten van `/appdata` te regelen en draait daarna als 568, ook het hoofdproces) — of **aan met User ID en Group ID `568`** als de dataset al van 568 is |
 | Network Configuration | Host Network | **uit** |
 | | Ports → Add | Container Port `30450`, Host Port `30450`, Protocol TCP |
 | Storage Configuration | Add → Type | **Host Path** (of ixVolume) |
@@ -64,6 +65,26 @@ en van zijn eigen submappen (`postgres`, `secrets`, `backups`). Shares onder `/b
 | | **Read Only** | **aan** (verplicht: zonder alleen-lezen weigert de app toestemming voor die map) |
 | Resources (optioneel) | CPUs / Memory | 1 CPU / 768 MiB voor P0 (niet gemeten op een echte NAS) |
 | GPU | | geen |
+
+### Tag met digest
+
+Vul bij **Tag** de versie mét digest in, precies zoals in `release/digests.json` van de GitHub-release staat:
+`<versie>@sha256:<64 hex>` (bijvoorbeeld `0.1.0@sha256:` gevolgd door 64 tekens). Het formulier maakt daar
+`ghcr.io/lvos04/zoeken-en-persoonlijke-ai:<versie>@sha256:<digest>` van: TrueNAS haalt dan precies die image op, ook als
+iemand de versietag later zou verplaatsen.
+
+> **NIET GEVALIDEERD (echte NAS):** of het TrueNAS-formulier een tag met `@` accepteert en of TrueNAS daarmee nog
+> updates herkent, is niet op een echte NAS getest (contract 1.2 §2.2). Weigert het formulier de tag, vul dan alleen
+> de versie in (`0.1.0`); het platform controleert na installatie de digest (readback via de TrueNAS-API) en stopt bij
+> een afwijking. Er is in deze bouwronde nog geen release gemaakt; tot dan bestaat er geen digest om in te vullen.
+
+### Image ophalen (publiek; registry-login alleen als terugval)
+
+De GHCR-pakketten worden publiek (besluit 3 van de gebruiker, na een scan van de volledige historie). Dan is er
+**geen** registry-login nodig. Zolang het pakket nog privé is, lukt ophalen niet (`denied`). Alleen als terugval: stel in
+TrueNAS (**Apps** → **Configuration** → **Manage Container Image Registries**) een registry `ghcr.io` in met een token dat
+alleen pakketten mag **lezen**. Dat token is een geheim van jou in TrueNAS: nooit in dit formulier, een
+omgevingsvariabele, een manifest of een repo. Het gedrag van TrueNAS met GHCR-tokens is **NIET GEVALIDEERD**.
 
 Kies **Install**. De eerste start duurt ongeveer 10–30 seconden (database aanmaken, pgvector installeren, migraties).
 Daarna staat de app op *Running* en na de healthcheck (`/readyz`) op *Healthy*.
@@ -79,21 +100,30 @@ Network*, geen *Privileged*, geen schrijfbare share-koppelingen. Er is geen enke
 
 ## 3. Koppelen met de Hub
 
-- **Geïnstalleerd door het platform:** de Hub geeft `HUB_URL` en een eenmalig koppeltoken mee; de app koppelt
-  zichzelf bij de eerste start. Het token is daarna waardeloos.
-- **Handmatig geïnstalleerd:** open `http://<NAS-adres>:30450`. De statuspagina toont *niet gekoppeld*. Maak in de
-  Hub-UI een koppelcode voor `zoeken-en-persoonlijke-ai` en vul op de statuspagina het Hub-adres
-  (`http://<NAS-adres>:<Hub-poort>`, geen `localhost`) en de koppelcode in.
+- **Geïnstalleerd door het platform:** de Hub geeft `HUB_URL`, `HUB_KEY_FINGERPRINT` en een eenmalig koppeltoken mee;
+  de app koppelt zichzelf bij de eerste start, controleert de vingerafdruk van de Hub en bewaart de koppeling in
+  `/appdata/secrets/hub-link.json` (alleen leesbaar voor 568, niet in de database). Het token is daarna waardeloos.
+- **Handmatig geïnstalleerd, aanbevolen:** maak in de Hub-UI (Diensten) een koppeltoken voor
+  `zoeken-en-persoonlijke-ai` en vul bij **Environment Variables** `HUB_URL` (`http://<NAS-adres>:<Hub-poort>`, geen
+  `localhost`, geen pad), `HUB_ENROLLMENT_TOKEN` en `HUB_KEY_FINGERPRINT` (de vingerafdruk die de Hub naast het token
+  toont) in. Het token vervalt na 60 minuten of na gebruik.
+- **Handmatig, zonder formulierwijziging:** open `http://<NAS-adres>:30450`. Zolang de app **nog nooit** gekoppeld is,
+  toont de statuspagina een formulier met Hub-adres, koppelcode en Hub-vingerafdruk (alle drie verplicht; de Hub-UI
+  toont koppelcode en vingerafdruk samen). Hooguit 5 pogingen per kwartier per apparaat.
 
-Ontkoppelen (alleen nodig als de Hub opnieuw is geïnstalleerd): in de Hub, of op de statuspagina met de **lokale
-ontkoppelcode** die bij elke start in de app-log staat (**Apps** → `zoeken-en-persoonlijke-ai` → **Logs**).
+**Ontkoppelen of opnieuw koppelen gaat alleen via de Hub** (of met een nieuw `HUB_ENROLLMENT_TOKEN` in dit formulier:
+wie het formulier kan wijzigen is TrueNAS-beheerder). Op de statuspagina kan dat niet meer, en er is geen lokale
+ontkoppelcode meer in de app-log: zo kan niemand op het netwerk een gekoppelde dienst aan een andere "Hub" hangen.
+Vergelijk na het koppelen de vingerafdruk op de statuspagina met die in de Hub-UI.
 
 ## Optioneel (omgevingsvariabelen)
 
 | Variabele | Wanneer |
 |---|---|
-| `HUB_URL` | Hub-adres als je het koppeltoken handmatig meegeeft (normaal zet het platform dit) |
-| `HUB_ENROLLMENT_TOKEN` | eenmalig koppeltoken uit de Hub (vervalt na 60 min of na gebruik; geen blijvend geheim) |
+| `HUB_URL` | Hub-adres als je het koppeltoken handmatig meegeeft (normaal zet het platform dit): `http(s)://<host>[:<poort>]` zonder pad |
+| `HUB_ENROLLMENT_TOKEN` | eenmalig koppeltoken uit de Hub (`enr_…`, vervalt na 60 min of na gebruik; geen blijvend geheim) |
+| `HUB_KEY_FINGERPRINT` | vingerafdruk van de Hub-sleutels (`XXXX-XXXX-XXXX-XXXX`, niet geheim); ingevuld ⇒ de app koppelt alleen als hij klopt. Zonder deze waarde vertrouwt de app de eerste Hub (*trust on first use*) en toont hij de vingerafdruk ter vergelijking |
+| `ENROLLMENT_TOKEN` | **verouderd** (oude naam van `HUB_ENROLLMENT_TOKEN`): wordt in deze release nog gelezen met een waarschuwing in de log |
 | `SEARCH_AI_PUBLIC_URL` | adres waarop de Hub deze app bereikt, als dat afwijkt van wat de Hub zelf weet |
 
 Zet hier **nooit** wachtwoorden of API-sleutels. Credentials van Immich/Jellyfin voer je later in de Hub-UI in; de app
@@ -133,4 +163,8 @@ nooit audio op.
 | `oude postmaster.pid ... verwijderd` | Geen fout: de vorige stop was onverwacht (stroom/kill). |
 | Poort bezet bij opslaan | Kies een andere vrije **Host Port**; de Container Port blijft `30450`. |
 | Statuspagina: *Loopback-adressen ... wijzen naar deze container zelf* | Gebruik het LAN-adres van de NAS i.p.v. `localhost`. |
-| Image kan niet worden opgehaald (`denied`) | Het GHCR-pakket staat nog op privé (eenmalig openbaar maken in GitHub → Packages). |
+| Image kan niet worden opgehaald (`denied`) | Het GHCR-pakket staat nog op privé (wordt publiek na de scan; tot dan alleen de registry-terugval hierboven). |
+| Formulier weigert de tag met `@sha256:` | Vul alleen de versie in; het platform controleert de digest na installatie (NIET GEVALIDEERD op een echte NAS). |
+| Statuspagina: *De vingerafdruk van de Hub klopt niet* | Er is niets opgeslagen. Vergelijk de vingerafdruk met de Hub-UI; bij twijfel niet koppelen. |
+| Statuspagina: *ingetrokken* of *ontkoppeld* | De Hub heeft de koppeling beëindigd. Opnieuw koppelen gaat via de Hub (nieuw koppeltoken). |
+| `HUB_KEY_FINGERPRINT heeft geen geldig formaat` | Vul de vingerafdruk exact over uit de Hub-UI (16 tekens in groepen van 4). |

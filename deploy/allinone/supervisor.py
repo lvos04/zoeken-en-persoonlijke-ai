@@ -1,4 +1,4 @@
-"""Zoeken en persoonlijke AI — procesbewaker van de alles-in-één image (kind van dumb-init).
+"""Zoeken en persoonlijke AI — procesbewaker van de alles-in-één image (PID 1 van de container).
 
 Eén container draait alles: PostgreSQL 16 met pgvector (alleen unix-socket, geen netwerk, geen wachtwoord),
 migraties, de API met statuspagina en de worker. Eén datamap (/appdata) en één poort (30450): zo installeert de app
@@ -7,8 +7,11 @@ als gewone TrueNAS Custom App zonder YAML. Shares worden als Host Path met 'Read
 Regels (gebaseerd op het werkende MSO-voorbeeld):
 - Start als root alleen om /appdata (en alleen de eigen submappen) aan 568:568 te geven; daarna draait elk proces
   als 568 (PostgreSQL weigert root). **/bronnen wordt nooit aangeraakt** (geen chown/chmod: alleen lezen).
-- Na de gebruikerswissel zet de bewaker zelf ``no_new_privs`` (prctl) voor zichzelf en elk kindproces (contract §10
-  'no-new-privileges'): het standaard Custom App-formulier van TrueNAS kan die vlag niet zetten (ADR-0010).
+- Na de gebruikerswissel zet de bewaker zelf ``no_new_privs`` (prctl) voor zichzelf en elk kindproces (contract 1.2
+  §2.2): het standaard Custom App-formulier van TrueNAS zet geen no-new-privileges en geen cap_drop (ADR-0010).
+- De bewaker is zelf **PID 1** (geen root-init zoals dumb-init): na de eigenaarschapsstap draait ook PID 1 als 568, met
+  ``CapEff 0`` en ``NoNewPrivs 1`` (contract 1.2 §2.2/§10, R11). Als PID 1 ruimt hij verweesde processen (zombies) op
+  en vangt hij SIGTERM/SIGINT zelf af (PID 1 krijgt anders geen standaard-signaalafhandeling).
 - First-start-init: ontbrekende geheimen in /appdata/secrets (0600, nooit overschrijven).
 - Duidelijke Nederlandse fout (en even wachten) als /appdata ontbreekt of niet schrijfbaar is, i.p.v. een crashloop.
 - Oude postmaster.pid na een harde stop wordt opgeruimd.
@@ -76,8 +79,36 @@ def demote() -> None:
     if os.getuid() == 0:
         os.setgroups([])
         os.setgid(GID)
-        os.setuid(UID)
+        os.setuid(UID)  # van 0 naar 568: permitted/effective capabilities vervallen (geen ambient caps)
     set_no_new_privs()
+
+
+def reap_orphans(known: set[int]) -> int:
+    """PID 1: verweesde zombie-kinderen opruimen, zonder de exitstatus van eigen kinderen (``known``) weg te nemen.
+
+    Leest ``/proc`` en wacht alleen op processen die zombie zijn, ons als ouder hebben en niet in ``known`` staan.
+    """
+    me, reaped = os.getpid(), 0
+    try:
+        entries = [e for e in os.listdir("/proc") if e.isdigit()]
+    except OSError:
+        return 0
+    for entry in entries:
+        pid = int(entry)
+        if pid in known:
+            continue
+        try:
+            with open(f"/proc/{entry}/stat", encoding="ascii", errors="replace") as fh:
+                rest = fh.read().rsplit(")", 1)[1].split()
+        except (OSError, IndexError):
+            continue
+        if len(rest) >= 2 and rest[0] == "Z" and rest[1] == str(me):
+            try:
+                if os.waitpid(pid, os.WNOHANG)[0] == pid:
+                    reaped += 1
+            except ChildProcessError:
+                pass
+    return reaped
 
 
 def _chown_tree(path: Path) -> None:
@@ -343,9 +374,17 @@ def wait_for_db(pg: Child, timeout: float = 90) -> None:
         fail(f"database '{DB_NAME}' aanmaken mislukt")
 
 
+def shutdown(signum: int, _frame: object) -> None:
+    log(f"signaal {signum}: netjes stoppen")
+    STOP.set()
+
+
 def main() -> None:
+    # als PID 1 eerst zelf de stopsignalen afvangen (anders negeert de kernel SIGTERM van 'docker stop')
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
     version = os.environ.get("SEARCH_AI_VERSION", "?")
-    log(f"Zoeken en persoonlijke AI (alles-in-één) · versie {version} · data {DATA} · poort {PORT}")
+    log(f"Zoeken en persoonlijke AI (alles-in-één) · versie {version} · data {DATA} · poort {PORT} · pid {os.getpid()}")
     check_run_user()
     prepare_dirs()
     demote()  # vanaf hier draait niets meer als root, en met no_new_privs (erft over op alle kinderen)
@@ -373,17 +412,12 @@ def main() -> None:
         Child("worker", [py, "-m", "search_ai", "worker"]),
     ]
     for c in children:
-        c.start()
-
-    def shutdown(signum: int, _frame: object) -> None:
-        log(f"signaal {signum}: netjes stoppen")
-        STOP.set()
-
-    signal.signal(signal.SIGTERM, shutdown)
-    signal.signal(signal.SIGINT, shutdown)
+        if not STOP.is_set():
+            c.start()
 
     backoff: dict[str, float] = {}
     while not STOP.is_set():
+        reap_orphans({c.proc.pid for c in [pg, *children] if c.proc is not None})
         if not pg.alive():
             log("database gestopt; opnieuw starten")
             for c in children:

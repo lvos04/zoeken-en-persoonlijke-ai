@@ -6,8 +6,10 @@
 # netwerkpoort en socket alleen voor 568, geheimen 0600/568, databasegegevens en geheimen blijven na herstart, harde
 # kill én een nieuwe container op dezelfde /appdata (zoals bij een update), start als 568, duidelijke fouten bij
 # verkeerde maprechten en een verkeerde gebruiker, en dat een alleen-lezen share onder /bronnen NIET wordt aangeraakt.
-# Zoals het standaard TrueNAS Custom App-formulier start de test standaard ZONDER '--security-opt no-new-privileges':
-# de image moet die vlag zelf zetten voor elk proces van 568 (ADR-0010).
+# Zoals het standaard TrueNAS Custom App-formulier start de test ZONDER '--security-opt no-new-privileges' en ZONDER
+# '--cap-drop': de image moet zelf naar 568 wisselen en no_new_privs zetten. Voor ELK proces in de container, ook
+# PID 1, geldt daarna Uid 568, CapEff 0000000000000000 en NoNewPrivs 1 (contract 1.2 §2.2/§10, ADR-0011). Alleen
+# 'docker exec'-sessies van buitenaf (PPid 0, zoals deze controle zelf en de Docker-healthcheck) tellen niet mee.
 # De test werkt met elke host-gebruiker (ook de niet-root 'runner' van GitHub Actions): /appdata/secrets is bewust
 # 0700/568, dus alles daaronder wordt bekeken via een wegwerpcontainer met een alleen-lezen mount (ADR-0009).
 set -euo pipefail
@@ -77,21 +79,56 @@ SQL
     && grep -qx 'dims=3' "$WORK/vec.txt"
 }
 
-# no_new_privs (contract §10) zelf gezet door de image: elk proces van 568 in de container heeft NoNewPrivs 1
-nnp_all_568() {
+# Contract 1.2 §2.2: elk proces van de container (ook PID 1) als 568 (echte én effectieve uid), zonder effectieve
+# capabilities en met no_new_privs. Uitgezonderd: 'docker exec'-sessies (PPid 0, behalve PID 1) en hun kinderen.
+privs_all_568() {
   docker exec "$1" python -c '
 import os
-n = bad = 0
+me = os.getpid()
+ok = bad = 0
 for p in filter(str.isdigit, os.listdir("/proc")):
     try:
         lines = open(f"/proc/{p}/status").read().splitlines()
     except OSError:
         continue
     f = {k: v.split() for k, _, v in (ln.partition(":") for ln in lines)}
-    if f.get("Uid", [""])[0] == "568":
-        n += 1
-        bad += f.get("NoNewPrivs") != ["1"]
-raise SystemExit(0 if n >= 3 and bad == 0 else 1)
+    ppid = f.get("PPid", ["0"])[0]
+    if int(p) == me or int(ppid) == me or (ppid == "0" and p != "1"):
+        continue
+    good = (f.get("Uid", [""])[:2] == ["568", "568"] and f.get("CapEff") == ["0000000000000000"]
+            and f.get("NoNewPrivs") == ["1"])
+    ok += good
+    bad += not good
+    if not good:
+        print("FOUT proces", p, f.get("Name"), f.get("Uid"), f.get("CapEff"), f.get("NoNewPrivs"))
+raise SystemExit(0 if ok >= 4 and bad == 0 else 1)
+'
+}
+
+# PID 1 is de bewaker zelf (geen dumb-init/tini die als root blijft draaien)
+pid1_is_supervisor() {
+  docker exec "$1" python -c '
+cmd = open("/proc/1/cmdline", "rb").read().split(b"\0")
+st = {k: v.split() for k, _, v in (ln.partition(":") for ln in open("/proc/1/status").read().splitlines())}
+ok = any(c.endswith(b"supervisor.py") for c in cmd) and st["Uid"][0] == "568" and st["CapEff"] == ["0000000000000000"]
+raise SystemExit(0 if ok else 1)
+'
+}
+
+# PID 1 ruimt verweesde processen op: een achtergrondproces van een exec-sessie wordt kind van PID 1
+no_zombies_after_orphan() {
+  docker exec -u 568 "$1" sh -c 'sleep 1 & exit 0'
+  sleep 6
+  docker exec "$1" python -c '
+import os
+z = []
+for p in filter(str.isdigit, os.listdir("/proc")):
+    try:
+        if open(f"/proc/{p}/stat").read().rsplit(")", 1)[1].split()[0] == "Z":
+            z.append(p)
+    except OSError:
+        pass
+raise SystemExit(1 if z else 0)
 '
 }
 
@@ -130,12 +167,14 @@ check "API zonder token geeft 401 unauthorized" \
   "[ \"\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$PORT/search/v1/sources)\" = 401 ]"
 docker top "$NAME" -eo pid,user,args > "$WORK/ps.txt"
 check "procestabel is leesbaar" "[ \"\$(wc -l < $WORK/ps.txt)\" -ge 5 ]"
-check "geen proces draait als root (behalve init/bewaker)" \
-  "[ -z \"\$(awk 'NR>1 && \$2!=\"568\" && \$2!=\"apps\" && \$0 !~ /dumb-init|supervisor.py/' $WORK/ps.txt)\" ]"
+check "geen enkel proces draait als root, ook PID 1 niet (alleen de Docker-healthcheck start even als root)" \
+  "[ -z \"\$(awk 'NR>1 && \$2!=\"568\" && \$2!=\"apps\" && \$0 !~ /healthcheck.py/' $WORK/ps.txt)\" ]"
+check "PID 1 is de bewaker zelf, als 568 zonder capabilities (geen root-init)" "pid1_is_supervisor $NAME"
 check "postgres, api en worker draaien als 568" \
   "[ \"\$(awk '(\$2==\"568\" || \$2==\"apps\") && /postgres -D|search_ai api|search_ai worker/' $WORK/ps.txt | wc -l)\" -ge 3 ]"
-check "no-new-privileges door de image zelf gezet voor postgres, api en worker (zonder --security-opt)" \
-  "nnp_all_568 $NAME"
+check "elk proces (ook PID 1): Uid 568, CapEff 0 en NoNewPrivs 1, zonder --security-opt/--cap-drop" \
+  "privs_all_568 $NAME"
+check "PID 1 ruimt verweesde processen (zombies) op" "no_zombies_after_orphan $NAME"
 check "geen netwerkpoort voor PostgreSQL (alleen unix-socket)" \
   "! docker exec $NAME python -c 'import socket;s=socket.socket();s.settimeout(1);s.connect((\"127.0.0.1\",5432))' 2>/dev/null"
 check "database-socket alleen voor gebruiker 568 (rechten 0700)" \
@@ -145,7 +184,8 @@ check "andere gebruiker in de container kan de database niet bereiken" \
 check "secrets-map 0700 en eigenaar 568" "[ \"\$(disk_mode root/secrets)\" = '700 568' ]"
 check "geheimen 0600 en eigenaar 568" \
   "[ \"\$(disk_mode root/secrets/vault.key)\" = '600 568' ] && [ \"\$(disk_mode root/secrets/identity.ed25519)\" = '600 568' ]"
-check "ontkoppelcode staat in de app-log" "log_has $NAME 'Lokale ontkoppelcode'"
+check "geen lokale ontkoppelcode meer in de app-log (contract 1.2 §3.7)" "! log_has $NAME 'ontkoppelcode'"
+check "nog niet gekoppeld: geen hub-link.json" "! on_disk test -e /w/root/secrets/hub-link.json"
 check "share wordt als alleen-lezen gemeld" "log_has $NAME 'documenten: alleen-lezen'"
 check "share ongewijzigd (eigenaar, rechten, inhoud, tijden)" \
   "[ \"\$(cd $WORK/share && find . -printf '%p %u %g %m %s %T@\n' | sort | sha256sum)\" = '$SHARE_BEFORE' ]"
@@ -156,7 +196,8 @@ check "vault.key leesbaar voor de controle (via container)" "[ \${#SUM1} -eq 64 
 check "markering in de database geschreven" "marker_set $NAME && marker_ok $NAME"
 
 echo "== 2. herstart: data en geheimen blijven"
-docker restart "$NAME" >/dev/null
+docker restart -t 30 "$NAME" >/dev/null
+check "SIGTERM komt aan bij PID 1: netjes gestopt" "log_has $NAME 'netjes stoppen' && log_has $NAME 'gestopt'"
 check "na herstart weer healthy" "wait_healthy $NAME"
 check "vault.key ongewijzigd na herstart" "[ -n '$SUM1' ] && [ \"\$(disk_sum root/secrets/vault.key)\" = '$SUM1' ]"
 check "databasegegevens behouden na herstart" "marker_ok $NAME"
@@ -178,9 +219,9 @@ docker rm -f "$NAME" >/dev/null
 
 echo "== 4. start direct als 568 op een 568-map"
 docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c 'chown 568:568 /w/u568' >/dev/null
-run "$NAME-568" "$WORK/u568" --user 568:568 --security-opt no-new-privileges:true
-check "als 568 gestart (ook met --security-opt no-new-privileges) en healthy" "wait_healthy $NAME-568"
-check "ook dan no-new-privileges voor alle processen van 568" "nnp_all_568 $NAME-568"
+run "$NAME-568" "$WORK/u568" --user 568:568
+check "als 568 gestart ('Custom User' 568 in het formulier) en healthy" "wait_healthy $NAME-568"
+check "ook dan elk proces: Uid 568, CapEff 0, NoNewPrivs 1" "privs_all_568 $NAME-568"
 docker rm -f "$NAME-568" >/dev/null
 
 echo "== 5. verkeerde rechten (568 op een root-dataset) geven een duidelijke Nederlandse fout"
