@@ -550,10 +550,12 @@ def page_data(inp: PageInput) -> dict[str, Any]:
         )
 
     if notice is None and corrupt:
-        # Het sjabloon heeft geen koppelblok voor deze toestand; de melding legt hem uit (zie PEIL_REVIEW.md).
+        # Het sjabloon heeft geen koppelblok voor deze toestand; de melding legt hem uit (zie PEIL_REVIEW.md). De code
+        # staat bij de controle "Koppeling met de Hub": hier, in het smalle meldingvak, liep hij zonder breekpunt bij
+        # ruimere tekstafstand (WCAG 1.4.12) op 320 px buiten het vak.
         tekst = (
             "Het koppelbestand van deze dienst in /appdata/secrets is onleesbaar. Uit veiligheid weigert de dienst daarom "
-            "elke Hub-aanvraag. Koppel opnieuw via de Hub: Instellingen → Diensten (code koppelstatus_onleesbaar)."
+            "elke Hub-aanvraag. Koppel opnieuw via de Hub: Instellingen → Diensten."
         )
         notice = Notice("fout", "Koppelstatus onleesbaar", tekst)
     if notice is not None:

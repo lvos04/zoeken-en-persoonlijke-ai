@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
-import { AXE_TAGS, AXE_VERSION, BREEDTES, THEMAS, controleer } from './peilcontrole.mjs';
+import { AXE_TAGS, AXE_VERSION, BREEDTES, OVERLOOP_BINNEN, THEMAS, controleer } from './peilcontrole.mjs';
 
 const arg = (naam) => { const i = process.argv.indexOf(naam); return i > 0 ? process.argv[i + 1] : undefined; };
 const cfg = JSON.parse(fs.readFileSync(arg('--config'), 'utf8'));
@@ -66,8 +66,11 @@ async function meet(naam, url, { status = 200, bevat = [], bevatNiet = [] } = {}
         // WCAG 1.4.12 tekstafstand: geen overloop en geen afgesneden tekst bij ruimere afstanden
         await page.addStyleTag({ content: '*{line-height:1.5!important;letter-spacing:.12em!important;word-spacing:.16em!important}p{margin-bottom:2em!important}' });
         const o = await page.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth);
+        const vak = await page.evaluate(OVERLOOP_BINNEN);
         meting.tekstafstand_overloop = o;
+        meting.tekstafstand_buiten_vak = vak;
         if (o > 0) problemen.push(`overloop bij tekstafstand (1.4.12): ${o}px`);
+        if (vak.length) problemen.push(`inhoud buiten zijn vak bij tekstafstand (1.4.12): ${vak.join(', ')}`);
         await page.reload({ waitUntil: 'load' });
       }
       const bestand = `${naam}-${breedte}-${thema}.png`;

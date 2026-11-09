@@ -29,6 +29,15 @@ const VERBODEN = [
 ];
 
 // ------------------------------------------------------------------------------------------- in de pagina
+// Inhoud die buiten zijn eigen vak loopt (bv. een lange code zonder breekpunt in een melding), ook als de pagina zelf
+// niet horizontaal scrollt. Alleen blokken met overflow: visible; tekst die netjes omloopt telt niet.
+export const OVERLOOP_BINNEN = () => [...document.querySelectorAll('body *')].filter((el) => {
+  if (el.closest('svg') || ['SCRIPT', 'STYLE', 'INPUT'].includes(el.tagName)) return false;
+  const cs = getComputedStyle(el);
+  if (cs.display === 'inline' || cs.overflowX !== 'visible' || !el.getClientRects().length) return false;
+  return el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 1;
+}).map((el) => `${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).split(' ').join('.')}` : ''} +${el.scrollWidth - el.clientWidth}px`).slice(0, 5);
+
 const IN_PAGINA = () => {
   const cvs = document.createElement('canvas'); cvs.width = cvs.height = 1;
   const ctx = cvs.getContext('2d', { willReadFrequently: true });
@@ -141,6 +150,7 @@ const FOCUS = () => {
 export async function controleer(page, { metFocus = true } = {}) {
   const problemen = [];
   const m = await page.evaluate(IN_PAGINA);
+  m.buitenVak = await page.evaluate(OVERLOOP_BINNEN);
   const tekstFout = m.tekst.filter((x) => x.r < x.eis);
   if (tekstFout.length) problemen.push(`tekstcontrast < 4,5:1: ${tekstFout.slice(0, 5).map((x) => `${x.el} "${x.t}" ${x.r} (${x.fg} op ${x.bg})`).join('; ')}`);
   const uiFout = m.ui.filter((x) => x.r < 3);
@@ -149,6 +159,7 @@ export async function controleer(page, { metFocus = true } = {}) {
   if (m.doelen.length) problemen.push(`doelen < 44 × 44 px: ${JSON.stringify(m.doelen)}`);
   if (m.scrollWidth > m.clientWidth) problemen.push(`horizontale overloop: ${m.scrollWidth} > ${m.clientWidth} (${m.uitstekend.join(', ')})`);
   if (m.afgekapt.length) problemen.push(`afgekapt met ellips: ${m.afgekapt.join(', ')}`);
+  if (m.buitenVak.length) problemen.push(`inhoud loopt buiten zijn vak: ${m.buitenVak.join(', ')}`);
   const s = m.structuur;
   if (s.h1 !== 1 || s.main !== 1 || s.lang !== 'nl' || s.sprong.length || s.dubbel.length || s.kapot.length) problemen.push(`structuur: ${JSON.stringify(s)}`);
   if (m.scripts || m.handlers.length) problemen.push(`JavaScript op de pagina: ${m.scripts} script, ${m.handlers.join(',')}`);

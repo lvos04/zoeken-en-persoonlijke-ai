@@ -8,7 +8,8 @@
 // van de dienst (CSP default-src 'none'), de controles van peilcontrole.mjs:
 //   - axe-core: 0 overtredingen op WCAG 2.0/2.1/2.2 A + AA (en best practices);
 //   - contrast gemeten in de DOM: tekst ≥ 4,5:1, iconen/randen/veldranden ≥ 3:1; tekst ≥ 14 px;
-//   - geen horizontale overloop (ook niet op 320 px), geen afkappen; doelen ≥ 44 × 44 px (behalve inline links);
+//   - geen horizontale overloop (ook niet op 320 px), geen inhoud buiten zijn vak, geen afkappen, ook met
+//     tekstafstand (WCAG 1.4.12) op 320 px; doelen ≥ 44 × 44 px (behalve inline links);
 //   - focusdoorloop met Tab: skiplink eerst, tweekleurige ring ≥ 3:1, nooit bedekt;
 //   - status nooit alleen kleur, onbekend/niet gereed nooit groen, alleen woorden uit de Peil-woordenlijst;
 //   - geen JavaScript (geen <script>, geen on…-attributen), geen CSP-schending, geen extern verzoek.
@@ -17,7 +18,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { AXE_TAGS, AXE_VERSION, BREEDTES, THEMAS, controleer } from './peilcontrole.mjs';
+import { AXE_TAGS, AXE_VERSION, BREEDTES, OVERLOOP_BINNEN, THEMAS, controleer } from './peilcontrole.mjs';
 
 const SHOT_BREEDTES = new Set([360, 768, 1440]);
 const arg = (naam) => { const i = process.argv.indexOf(naam); return i > 0 ? process.argv[i + 1] : undefined; };
@@ -57,6 +58,15 @@ for (const { naam, schermafdruk } of meta.toestanden) {
       if (console_.length) problemen.push(`console/CSP: ${console_.join(' | ')}`);
       if (extern.length) problemen.push(`externe verzoeken: ${extern.join(', ')}`);
       if (!csp.includes("default-src 'none'")) problemen.push(`CSP zonder default-src 'none': ${csp}`);
+      if (breedte === 320 && thema === 'licht') {
+        // WCAG 1.4.12 tekstafstand: geen overloop van de pagina en geen inhoud buiten zijn vak
+        await page.addStyleTag({ content: '*{line-height:1.5!important;letter-spacing:.12em!important;word-spacing:.16em!important}p{margin-bottom:2em!important}' });
+        const o = await page.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth);
+        const vak = await page.evaluate(OVERLOOP_BINNEN);
+        if (o > 0) problemen.push(`overloop bij tekstafstand (1.4.12): ${o}px`);
+        if (vak.length) problemen.push(`inhoud buiten zijn vak bij tekstafstand (1.4.12): ${vak.join(', ')}`);
+        await page.reload({ waitUntil: 'load' });
+      }
       let afdruk = null;
       if (SHOTS && schermafdruk && SHOT_BREEDTES.has(breedte)) {
         afdruk = `${naam}-${breedte}-${thema}.png`;

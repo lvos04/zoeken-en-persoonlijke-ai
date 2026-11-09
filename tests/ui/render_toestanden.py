@@ -57,6 +57,10 @@ def toestanden() -> dict[str, tuple[PageInput, bool]]:
             PageInput(ready=True, checks=OK, doc=_never(), melding="hub_weigerde", trace_id=TRACE, **base),
             True,
         ),
+        "veldfout-hub-adres": (
+            PageInput(ready=True, checks=OK, doc=_never(), melding="ongeldig_hub_adres", trace_id=TRACE, **base),
+            False,
+        ),
         "gekoppeld": (
             PageInput(
                 ready=True,
