@@ -327,3 +327,42 @@ Playwright 1.65.0, axe-core 4.14.0). **Verslag:** `docs/ontwerp/PEIL_REVIEW.md`.
 **Niet gedaan:** een echte schermlezer (NVDA/TalkBack), een echte telefoon of tv en de echte NAS. Die zijn **NIET
 GEVALIDEERD**. Forced colors is alleen als mediaquery geëmuleerd.
 
+
+## QA statuspagina (onafhankelijke review, 2026-11-09, ADR-0015)
+
+**Machine:** Ubuntu 26.04 van de gebruiker (22 CPU's, 14,5 GiB RAM, gedeeld met andere bouwers), Python 3.12 (venv),
+gedeelde PostgreSQL 16 + pgvector op 127.0.0.1 (`PATH=/usr/lib/postgresql/16/bin:$PATH`), Node 22, Chromium 158 uit
+Playwright 1.65.0, axe-core 4.14.0, Docker met buildx (image-bouw met `flock` op het gedeelde slot).
+
+**Eerst alles opnieuw zoals CI, vóór de reparaties (commit `fecfe91`):** alles groen.
+
+- `make lint`;
+- `pytest`: 391 geslaagd;
+- drift van de Peil-kopie: 9 geslaagd, met de bron opgehaald van `raw.githubusercontent.com` op de gepinde commit;
+- E2E: 7;
+- `make ui`: 90/0;
+- review tegen de echte dienst: 132/0;
+- image + rooktest: 55/55;
+- `actionlint`, `shellcheck` en de OpenAPI-drift: geen bevindingen.
+
+Daarna zijn de code en de documenten gelezen; zeven bevindingen (Q-01 t/m Q-07, ADR-0015) zijn hersteld.
+
+| Commando | Uitkomst |
+|---|---|
+| `make lint` (ruff + format + mypy; ook `tests/e2e tests/interop tests/ui deploy/allinone`) | geen bevindingen (mypy: 44 bronbestanden) |
+| `cd apps/api && PATH=/usr/lib/postgresql/16/bin:$PATH pytest -q -p no:cacheprovider` | **414 geslaagd**: 391 + 18 nieuwe QA-tests + 1 melding (`koppelstatus_onleesbaar`) + 4 voor de nieuwe UI-toestand. De vergelijking met de referentie-renderer draaide lokaal mee. |
+| dezelfde 18 QA-tests op de **oude** `status_page.py` (negatieve controle) | **15 mislukt**, 3 geslaagd (grenzen die al klopten): de tests vangen de bevindingen echt |
+| `test_evidence_contract.py` op de **oude** `EVIDENCE.json` | **5 mislukt** (B07-005, B15-001, B15-003, B15-004, B15-007: lege `validatie`); op de nieuwe: 47 geslaagd |
+| `PEIL_BRON_DIR=<bron @ 172ee87…> PEIL_BRON_VERPLICHT=1 pytest -q tests/unit/test_peil_kopie.py` | **9 geslaagd** (Peil in `ai-server-manager` is nog 1.1.0 op deze commit) |
+| `pytest -q tests/e2e -p no:cacheprovider` | **7 geslaagd** |
+| `render_toestanden.py` + `node tests/ui/statuspagina.mjs` (nu **10** toestanden, nieuw: `koppelen-op-onleesbaar` met code + Trace-ID in de melding) | **100 controles, 0 mislukt**: axe 0, tekst ≥ 8,34:1, geen overloop op 320 px, ook niet met tekstafstand |
+| `tests/ui/echte_dienst.py` (echte API/worker + PostgreSQL + 2 Hub-simulators; formulier via Chromium, dus met `Sec-Fetch-Site: same-origin`) | **132 controles in 12 toestanden, 0 mislukt** |
+| `python -m search_ai migrate` → `--down base` → `migrate` (eigen database `zoek_qa_mig`) | op/neer/op zonder fouten (revisie 0003, pgvector 0.8.7) |
+| `pip-audit -r apps/api/requirements.lock` | geen bekende kwetsbaarheden |
+| OpenAPI-export + `git diff --exit-code docs/openapi/` | geen drift (de statuspagina staat bewust niet in het schema) |
+| `actionlint .github/workflows/*.yml` · `shellcheck deploy/allinone/smoke-test.sh` | geen bevindingen |
+| alle routes uit de OpenAPI zonder authenticatie aangeroepen (losse controle) | elke route behalve `/healthz` en `/readyz` geeft `401 unauthorized` (`not_linked`); niets staat open bij een fout |
+| `flock … docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:qa .` + `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:qa` (na de reparaties) | gebouwd; **55 geslaagd, 0 mislukt** (lege `/appdata`, healthy, elk proces 568 / CapEff 0 / NoNewPrivs 1, gegevens behouden na herstart, harde kill en nieuwe container) |
+
+**Niet gedaan:** een echte NAS (welk bron-IP de dienst achter de poortdoorsturing ziet), een echte schermlezer, een
+echte telefoon of tv. Die blijven **NIET GEVALIDEERD**.

@@ -165,12 +165,13 @@ nooit audio op.
 | `geen shares gekoppeld onder /bronnen` | Geen fout: zonder shares is er niets te doorzoeken. |
 | `oude postmaster.pid ... verwijderd` | Geen fout: de vorige stop was onverwacht (stroom/kill). |
 | Poort bezet bij opslaan | Kies een andere vrije **Host Port**; de Container Port blijft `30450`. |
-| Statuspagina: *Loopback-adressen ... wijzen naar deze container zelf* | Gebruik het LAN-adres van de NAS i.p.v. `localhost`. |
+| Statuspagina: *Het adres van de Hub is ongeldig* (bij het veld: *Gebruik http(s)://<NAS-adres>:<poort>, zonder pad en geen localhost*) | Vul het LAN-adres van de NAS met de poort van de Hub in, zonder pad. `localhost` en `127.0.0.1` wijzen naar deze container zelf. |
+| Statuspagina: *Koppelstatus onleesbaar* | Het koppelbestand in `/appdata/secrets` is beschadigd; de app weigert uit veiligheid elke Hub-aanvraag. Koppel opnieuw via de Hub: die geeft een nieuw koppeltoken mee (of vul het zelf in bij `HUB_ENROLLMENT_TOKEN` in dit formulier). |
 | Image kan niet worden opgehaald (`denied`) | Het GHCR-pakket staat nog op privé (wordt publiek na de scan; tot dan alleen de registry-terugval hierboven). |
 | Formulier weigert de tag met `@sha256:` | Vul alleen de versie in; het platform controleert de digest na installatie (NIET GEVALIDEERD op een echte NAS). |
 | Statuspagina: *De vingerafdruk van de Hub klopt niet* | Er is niets opgeslagen. Vergelijk de vingerafdruk met de Hub-UI; bij twijfel niet koppelen. |
 | Statuspagina: *ingetrokken* of *ontkoppeld* | De Hub heeft de koppeling beëindigd. Opnieuw koppelen gaat via de Hub (nieuw koppeltoken). |
-| Statuspagina: melding met **Code** en **Trace-ID** | Selecteer en kopieer de Trace-ID; dezelfde ID staat in de app-log en het auditspoor van die poging. |
+| Statuspagina: melding met **Code** en **Trace-ID** | Selecteer en kopieer de Trace-ID; dezelfde ID staat in de app-log (regel *statuspagina: koppelen niet gelukt (code …, Trace-ID …)*) en in het auditspoor van die poging. Een foutmelding verschijnt alleen bij een echte poging van het afgelopen kwartier; een oude of gedeelde link toont geen melding. |
 | Statuspagina: *Niet gereed — Deels onbekend, wacht op koppeling* | Geen storing: de app werkt, maar doet niets tot hij gekoppeld is. `/readyz` geeft dan gewoon 200, zodat TrueNAS de app niet herstart. |
 | Statuspagina: code `peil_sjabloon_ongeldig` (HTTP 500) | Het sjabloon in de image ontbreekt of is gewijzigd. De API werkt door. Installeer dezelfde versie opnieuw (tag + digest). |
 | `HUB_KEY_FINGERPRINT heeft geen geldig formaat` | Vul de vingerafdruk exact over uit de Hub-UI (16 tekens in groepen van 4). |

@@ -26,6 +26,9 @@ herkomstkop in [`design/ontwerptaal/`](design/ontwerptaal/HERKOMST.md); CI faalt
 Ontwerpreview tegen de echte dienst ([`docs/ontwerp/PEIL_REVIEW.md`](docs/ontwerp/PEIL_REVIEW.md), ADR-0014): 12
 toestanden × 320/360/390/768/1440 × licht/donker, axe-core 0 overtredingen, tekst ≥ 7:1, focus ≥ 3:1, doelen ≥ 44 px,
 geen overloop op 320 px; schermafdrukken in [`docs/screenshots/peil/statuspagina/`](docs/screenshots/peil/statuspagina/).
+QA na de ombouw ([`docs/adr/ADR-0015-qa-statuspagina-contract-1-2.md`](docs/adr/ADR-0015-qa-statuspagina-contract-1-2.md)):
+een foutmelding verschijnt alleen bij een echte poging, een formulier van een andere app op hetzelfde NAS-adres wordt
+geweigerd (`Sec-Fetch-Site`), en invoer wordt nooit eerst afgekapt.
 
 ## Installeren
 Uitsluitend als **standaard TrueNAS Custom App** — zie [`deploy/truenas/CUSTOM_APP.md`](deploy/truenas/CUSTOM_APP.md)

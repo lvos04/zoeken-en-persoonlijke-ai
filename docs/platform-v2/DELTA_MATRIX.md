@@ -51,3 +51,8 @@ blijven; de veldnamen van `POST /koppelen` volgen het sjabloon. Nieuw: Trace-ID 
 dienst, in 12 toestanden. Hersteld zijn alleen teksten en weergave (`docs/ontwerp/PEIL_REVIEW.md`, P-01 t/m P-13).
 Nieuw zijn twee hulpmiddelen: `tests/ui/peilcontrole.mjs` en `make ui-echt`; die laatste draait ook in CI. Er is geen
 functie gewijzigd. Bevindingen in het Peil-sjabloon zelf (S-01 t/m S-08) liggen bij `ai-server-manager`.
+
+**QA statuspagina (2026-11-09, ADR-0015):** onafhankelijke controle van ZA9 tegen contract 1.2 §3.7 en Peil. Zeven
+bevindingen (Q-01 t/m Q-07) zijn hersteld: meldingen alleen bij een echte poging, `Sec-Fetch-Site`, geen afkappen
+van invoer, een onleesbaar koppelbestand, de toelichting volgens de toon, de Trace-ID in de app-log en de
+lijstwaarden in `EVIDENCE.json` (A4). Het sjabloon zelf is niet gewijzigd; voorstel S-09 gaat naar `ai-server-manager`.

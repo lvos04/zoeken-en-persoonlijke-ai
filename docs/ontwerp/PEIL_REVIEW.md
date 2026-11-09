@@ -170,6 +170,7 @@ bij drift (O-14). Voorstel voor Peil 1.1.x/1.2.0:
 | S-06 | De vaste tekst "Bron: /readyz en /healthz van deze dienst" is smaller dan wat het totaal meeneemt (ook de connector-gezondheid). | Laag | Plek `{{bron}}`. |
 | S-07 | "Hub openen" is een actie, maar staat als inline link van 22 px aan het eind van een zin. Dat mag (WCAG 2.5.8), maar het is klein voor een duim. | Laag | Losse secundaire knop of link van 44 px (zoals de voetlinks). |
 | S-08 | In forced colors krijgt ook de Gezond-pil een rand (`CanvasText`). Dat is aanvaardbaar: vorm en woord blijven, en Onbekend houdt zijn stippel. | Info | Geen. |
+| S-09 | De referentie-renderer (`bouw/sjabloon.mjs`) vult plekken ook binnen een waarde die al is ingevuld: een waarde met `{{x}}` erin wordt nog een keer vervangen. In deze dienst komt elke waarde uit een vaste tekst of uit gecontroleerde data (QA, ADR-0015). | Laag | Accolades in waarden escapen (`&#123;`) of in één doorgang vullen; daarna de Python-renderers van de vijf diensten gelijk trekken. |
 
 ## 7. Wat goed is (behouden)
 

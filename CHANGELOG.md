@@ -78,6 +78,18 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
       CI).
   - Nieuw: `tests/ui/peilcontrole.mjs` toetst contrast in de DOM, 44 px, focus, vaste woorden en "nooit groen";
     `make ui-echt` en een CI-stap draaien de review tegen de echte dienst.
+- **QA statuspagina (ADR-0015):** onafhankelijke controle na ZA9 en de ontwerpreview. Alle CI-stappen waren groen;
+  zeven bevindingen in code en documenten zijn hersteld.
+  - Een foutmelding verschijnt alleen bij een echte poging van het afgelopen kwartier (geldige poging-sleutel). Een
+    zelfgemaakte link toont niets meer, dus ook geen *al eens gekoppeld* naast het formulier.
+  - Een formulier-POST met `Sec-Fetch-Site` anders dan `same-origin` wordt geweigerd. Zo kan een andere app op
+    hetzelfde NAS-adres niet posten (zelfde site, `Origin: null`).
+  - De invoer wordt als geheel gecontroleerd en nooit eerst afgekapt (koppelcode > 32 tekens is ongeldig).
+  - Een poging op een onleesbaar koppelbestand krijgt een eigen melding met code en Trace-ID en gaat niet naar de Hub.
+  - De toelichting bij *Niet gereed* volgt de toon van de pil.
+  - Code en Trace-ID van elke poging staan in de app-log.
+  - `CUSTOM_APP.md` noemt de echte meldingen.
+  - `EVIDENCE.json`: `validatie` is altijd een lijstwaarde (A4); de bewakende test controleert per Excel-blad.
   - Acht punten in het Peil-sjabloon zelf gaan als voorstel naar `ai-server-manager`.
 
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
