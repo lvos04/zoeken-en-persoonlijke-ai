@@ -30,7 +30,7 @@ Gemeten op de **echte dienst** in 12 toestanden, op 320/360/390/768/1440 px, in 
 - doelen ≥ 44 px;
 - de skiplink is de eerste tabstop en de focus is nooit bedekt.
 
-De review vond **13 punten in deze repo**. Alle 13 zijn hersteld (§5). Het ging vooral om tekst en eerlijkheid:
+De review vond **14 punten in deze repo**. Alle 14 zijn hersteld (§5). Het ging vooral om tekst en eerlijkheid:
 
 - interne taak-ID's stonden op de pagina;
 - er stonden woorden die Peil vervangen heeft;
@@ -72,7 +72,7 @@ NAS (§8).
    | Contrast | in de DOM, met alle vlakken samengesteld: tekst ≥ 4,5:1, iconen/randen/veldranden/knopvlakken ≥ 3:1 |
    | Tekst | ≥ 14 px |
    | Doelen | ≥ 44 × 44 px; inline links in lopende tekst zijn uitgezonderd (WCAG 2.5.8) |
-   | Overloop | geen overloop, geen ellips, ook met tekstafstand (WCAG 1.4.12) op 320 px |
+   | Overloop | geen overloop van de pagina, geen inhoud buiten zijn eigen vak, geen ellips; ook met tekstafstand (WCAG 1.4.12) op 320 px |
    | Toetsenbord | Tab-doorloop: skiplink eerst, tweekleurige ring ≥ 3:1, element zichtbaar en niet bedekt |
    | Structuur | één h1, één main, geen kopsprongen, geen dubbele id's, geen kapotte `aria-*`/`href="#…"`/`use` |
    | Status | nooit alleen kleur (icoon + woord), niet-gezonde woorden nooit in de groene stijl |
@@ -101,7 +101,7 @@ NAS (§8).
 | Laagste niet-tekstcontrast | 4,86:1 (stippelrand Trace-ID-blok op het foutvlak) | 5,69:1 | ≥ 3:1 |
 | Laagste focusring | 7,79:1 | 8,04:1 (noodpagina 7,84:1) | ≥ 3:1, 3 px + halo |
 | Kleinste lettermaat | 14 px | 14 px | ≥ 14 px |
-| Horizontale overloop (ook 320 px en met tekstafstand) | 0 | 0 | 0 |
+| Horizontale overloop en inhoud buiten zijn vak (ook 320 px en met tekstafstand) | 0 | 0 | 0 |
 | Forced colors: stippelrand van Onbekend | blijft gestippeld (12 van 12) | | |
 
 **Toetsenbord na een fout:**
@@ -153,6 +153,7 @@ gewijzigd.
 | P-11 | Koppelstatus onleesbaar: de melding zei niet *waarom* de dienst weigert of *waar* je opnieuw koppelt; de paginatitel herhaalde "koppelstatus onleesbaar". | Laag | §11.2, C-14 | De melding legt de fail-closed-weigering uit + "Instellingen → Diensten"; een korte reden bij de controle; de titel zonder herhaling | `test_review_paginatitel_herhaalt_niets` |
 | P-12 | De noodpagina zonder sjabloon (500 `peil_sjabloon_ongeldig`) had geen kleurschema, code van 13 px, geen selecteerbaar Trace-ID-blok en geen 44 px-links. | Middel | §5 (≥ 14 px), §13.2 (Trace-ID in een selecteerbaar blok), §6 | Alleen systeemkleuren (`Canvas`/`CanvasText`/`LinkText`, licht en donker, geen eigen hex), systeemfont, code ≥ 14 px, Trace-ID-blok, links van 44 px, tweekleurige focus. Tekst volgens wat/waarom/wat je kunt doen. | `test_gewijzigde_kopie_geeft_eerlijke_500_en_de_api_werkt_door`; live: 0 axe, licht 9,4:1 / donker 7,84:1 |
 | P-13 | De browsercontrole mat alleen de hoogte van knoppen en velden. Er was geen gemeten contrast, focus, woordcontrole of "nooit groen", en ze draaide niet tegen de echte dienst. | Middel | §12 testmatrix | `peilcontrole.mjs` voor beide routes; `make ui-echt`; CI-job `statuspagina-ui` draait ook de review tegen de echte dienst (met PostgreSQL) | negatieve controle (§2) |
+| P-14 | Bij een onleesbare koppelstatus stond "(code koppelstatus_onleesbaar)" in de melding. Met ruimere tekstafstand op 320 px liep die code buiten het meldingvak: lokaal 25 px, maar nog binnen de pagina; op de CI-runner, met een ander lettertype, ook 4 px buiten de pagina. Gevonden in de eerste CI-run van de review (run 42662368284). | Middel | WCAG 1.4.12, §6 (geen overloop op 320 px) | De code staat alleen nog bij de controle "Koppeling met de Hub" (breder vak). De controle meldt nu ook inhoud buiten zijn eigen vak, in beide routes. Ook getoetst met DejaVu Sans en Liberation Sans: geen overloop. | `make ui` (90 controles) en `make ui-echt` (132); CI |
 
 ## 6. Bevindingen in het sjabloon (bron: `ai-server-manager/design/ontwerptaal/statuspagina.html`)
 

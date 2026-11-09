@@ -73,7 +73,9 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
     - de melding `hub_weigerde` noemt alleen de koppelcode, en een fout staat niet meer drie keer op de pagina;
     - meldingen volgen wat, waarom en wat je kunt doen;
     - de paginatitel herhaalt niets;
-    - de noodpagina zonder sjabloon heeft systeemkleuren (licht en donker), ≥ 14 px en een selecteerbare Trace-ID.
+    - de noodpagina zonder sjabloon heeft systeemkleuren (licht en donker), ≥ 14 px en een selecteerbare Trace-ID;
+    - geen code zonder breekpunt meer in de melding; die liep bij ruimere tekstafstand buiten het vak (gevonden door
+      CI).
   - Nieuw: `tests/ui/peilcontrole.mjs` toetst contrast in de DOM, 44 px, focus, vaste woorden en "nooit groen";
     `make ui-echt` en een CI-stap draaien de review tegen de echte dienst.
   - Acht punten in het Peil-sjabloon zelf gaan als voorstel naar `ai-server-manager`.

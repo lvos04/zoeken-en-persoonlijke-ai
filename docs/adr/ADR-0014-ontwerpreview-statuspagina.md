@@ -35,8 +35,10 @@ De ontwerpreview achteraf stond nog open.
    - status nooit alleen kleur, en niet-gezonde woorden nooit groen;
    - alleen woorden uit de Peil-woordenlijst.
 
-   Een negatieve controle bewijst dat de controles werkelijk falen.
-3. **Alleen weergave en tekst repareren, het sjabloon niet aanraken.** De dertien bevindingen in deze repo zijn
+   Een negatieve controle bewijst dat de controles werkelijk falen. Sinds de eerste CI-run (P-14) toetsen ze ook
+   inhoud die buiten zijn eigen vak loopt. Dat zie je niet aan de paginabreedte, en het lettertype van de runner
+   maakte het daar wel zichtbaar.
+3. **Alleen weergave en tekst repareren, het sjabloon niet aanraken.** De veertien bevindingen in deze repo zijn
    hersteld in `status_page.py`. Dat zijn de teksten, de namen in het dienstblok, het feit *Gereed* per toestand, de
    telling van functies die nog niet beschikbaar zijn (§4.3) en de noodpagina. Er is geen functie, route, veldnaam of
    contractgedrag gewijzigd.

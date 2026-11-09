@@ -278,7 +278,9 @@ Playwright 1.65.0, axe-core 4.14.0). **Verslag:** `docs/ontwerp/PEIL_REVIEW.md`.
 | Commando | Uitkomst |
 |---|---|
 | `make ui-echt` | **132 controles in 12 toestanden, 0 mislukt.** Zie de opsomming onder de tabel. |
-| `make ui` (renderer, zonder database, 8 toestanden × 5 breedtes × 2 thema's, nu met dezelfde Peil-controles) | **80 controles, 0 mislukt** (rapport en afdrukken in `build/statuspagina/`) |
+| `make ui` (renderer, zonder database, 9 toestanden × 5 breedtes × 2 thema's, nu met dezelfde Peil-controles en tekstafstand op 320 px) | **90 controles, 0 mislukt** (rapport en afdrukken in `build/statuspagina/`) |
+| GitHub Actions `ci`, run 42662368284 (eerste push van de review) | **mislukt in `statuspagina-ui`**: `koppelstatus-onleesbaar` 320 px licht, overloop van 4 px bij tekstafstand. Oorzaak: de code in de melding had geen breekpunt; het lettertype van de runner is breder. `python` en `image` waren groen. Hersteld als P-14; zie de volgende run hieronder. |
+| zelfde 9 toestanden op 320 px met `system-ui`, `DejaVu Sans` en `Liberation Sans`, normaal en met tekstafstand (losse controle) | na P-14: geen overloop en geen inhoud buiten zijn vak |
 | negatieve controle: `statuspagina.mjs` op een opzettelijk foute pagina | **FOUT** gemeld, zie de opsomming onder de tabel |
 | `cd apps/api && PATH=/usr/lib/postgresql/16/bin:$PATH pytest -q` | **387 geslaagd** (371 + 16 nieuw; de vergelijking met de referentie-renderer draaide lokaal mee) |
 | `pytest -q tests/e2e -p no:cacheprovider` | **7 geslaagd** (simulator met de nieuwe `/sim/pairing-code`) |
@@ -303,7 +305,7 @@ Playwright 1.65.0, axe-core 4.14.0). **Verslag:** `docs/ontwerp/PEIL_REVIEW.md`.
   - niet-tekst ≥ 4,86:1;
   - focusring ≥ 7,79:1;
   - lettermaat ≥ 14 px;
-  - geen overloop, ook niet met tekstafstand;
+  - geen overloop en geen inhoud buiten zijn vak, ook niet met tekstafstand;
   - de skiplink is de eerste tabstop; na een fout wijst hij naar het veld (`aria-invalid` + `aria-describedby`);
   - de velden zijn na een fout leeg;
   - de stippelrand van Onbekend blijft in forced colors.

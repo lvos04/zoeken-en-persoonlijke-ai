@@ -38,7 +38,7 @@
  "stappen": [
   {
    "naam": "veldfout-koppelcode",
-   "url": "http://127.0.0.1:47915/?melding=koppelcode_ongeldig&poging=…",
+   "url": "http://127.0.0.1:40133/?melding=koppelcode_ongeldig&poging=…",
    "velden_leeg_na_fout": true,
    "skiplink": {
     "tekst": "Naar de koppelcode (fout)",
@@ -52,7 +52,7 @@
   },
   {
    "naam": "koppelen-mislukt",
-   "url": "http://127.0.0.1:47915/?melding=hub_weigerde&poging=…",
+   "url": "http://127.0.0.1:40133/?melding=hub_weigerde&poging=…",
    "velden_leeg_na_fout": true,
    "skiplink": {
     "tekst": "Naar de koppelcode (fout)",
@@ -66,7 +66,7 @@
   },
   {
    "naam": "koppelen-gelukt",
-   "url": "http://127.0.0.1:47915/?melding=gekoppeld",
+   "url": "http://127.0.0.1:40133/?melding=gekoppeld",
    "velden_leeg_na_fout": true,
    "skiplink": {
     "tekst": "Naar de inhoud",
@@ -140,6 +140,7 @@
     "ringMin": 8.34
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": "niet-gekoppeld-320-licht.png"
   },
   {
@@ -526,6 +527,7 @@
     "ringMin": 7.79
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": null
   },
   {
@@ -930,6 +932,7 @@
     "ringMin": 7.79
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": "koppelen-mislukt-320-licht.png"
   },
   {
@@ -1333,6 +1336,7 @@
     "ringMin": 8.34
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": null
   },
   {
@@ -1724,6 +1728,7 @@
     "ringMin": 8.34
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": "gekoppeld-320-licht.png"
   },
   {
@@ -2114,6 +2119,7 @@
     "ringMin": 8.34
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": null
   },
   {
@@ -2498,6 +2504,7 @@
     "ringMin": 8.34
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": "ingetrokken-320-licht.png"
   },
   {
@@ -2882,6 +2889,7 @@
     "ringMin": 8.34
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": "niet-gereed-320-licht.png"
   },
   {
@@ -3267,6 +3275,7 @@
     "ringMin": 8.34
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": null
   },
   {
@@ -3652,6 +3661,7 @@
     "ringMin": 8.34
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": null
   },
   {
@@ -4036,6 +4046,7 @@
     "ringMin": 8.34
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": null
   },
   {
@@ -4396,6 +4407,7 @@
     "ringMin": 9.4
    },
    "tekstafstand_overloop": 0,
+   "tekstafstand_buiten_vak": [],
    "schermafdruk": null
   },
   {
