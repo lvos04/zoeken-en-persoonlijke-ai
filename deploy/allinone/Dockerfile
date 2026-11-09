@@ -57,6 +57,8 @@ COPY --from=core /install /usr/local
 COPY apps/api/alembic /usr/local/lib/search-ai/alembic
 COPY deploy/allinone/supervisor.py /usr/local/lib/search-ai/supervisor.py
 COPY deploy/allinone/healthcheck.py /usr/local/lib/search-ai/healthcheck.py
+# statuspagina: versie-gepinde kopie van het Peil-sjabloon met herkomstkop (O-14); de app controleert de sha256
+COPY design/ontwerptaal/statuspagina.html /usr/local/lib/search-ai/peil/statuspagina.html
 RUN set -eu; \
     for b in postgres initdb pg_ctl pg_isready psql pg_dump pg_restore; do \
       printf '#!/bin/sh\nLD_LIBRARY_PATH=/opt/pglibs exec /usr/lib/postgresql/16/bin/%s "$@"\n' "$b" > /usr/local/bin/$b; \
@@ -67,9 +69,11 @@ RUN set -eu; \
     groupadd -g 568 apps; useradd -u 568 -g 568 -M -d /tmp -s /usr/sbin/nologin apps; \
     mkdir -p /appdata /bronnen; chown 568:568 /appdata; chmod 0755 /bronnen; \
     find / -xdev -perm /6000 -type f -exec chmod a-s {} + 2>/dev/null || true; \
-    python -c "import search_ai.app, psycopg, uvicorn, cryptography"
+    python -c "import search_ai.app, psycopg, uvicorn, cryptography"; \
+    python -c "from pathlib import Path; from search_ai.peil import load_template; load_template(Path('/usr/local/lib/search-ai/peil'))"
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     SEARCH_AI_DATA_DIR=/appdata SEARCH_AI_PORT=30450 SEARCH_AI_ALEMBIC_DIR=/usr/local/lib/search-ai/alembic \
+    SEARCH_AI_PEIL_DIR=/usr/local/lib/search-ai/peil \
     SEARCH_AI_READ_ROOTS=/bronnen \
     SEARCH_AI_DATABASE_URL="postgresql+psycopg://search_ai@/search_ai?host=/tmp/search-ai-pg" SEARCH_AI_VERSION=${VERSION}
 VOLUME ["/appdata"]

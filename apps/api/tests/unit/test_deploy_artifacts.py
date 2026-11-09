@@ -38,6 +38,18 @@ def test_base_images_pinned_by_digest_and_never_latest() -> None:
     assert not re.search(r"chown[^;\n]*/bronnen", text)  # /bronnen wordt nooit van eigenaar gewisseld
 
 
+def test_image_ships_the_pinned_peil_copy() -> None:
+    """De statuspagina in de image gebruikt de versie-gepinde Peil-kopie (O-14), niet een eigen variant."""
+    text = DOCKERFILE.read_text()
+    assert "COPY design/ontwerptaal/statuspagina.html /usr/local/lib/search-ai/peil/statuspagina.html" in text
+    assert "SEARCH_AI_PEIL_DIR=/usr/local/lib/search-ai/peil" in text
+    assert "load_template(Path('/usr/local/lib/search-ai/peil'))" in text  # bouw faalt bij een gewijzigde kopie
+    ignored = (REPO_ROOT / ".dockerignore").read_text().split()
+    assert "design" not in ignored and "design/ontwerptaal" not in ignored
+    smoke = (REPO_ROOT / "deploy/allinone/smoke-test.sh").read_text()
+    assert "Peil statuspagina.css 1.1.0" in smoke
+
+
 def test_supervisor_never_touches_sources() -> None:
     sup = (REPO_ROOT / "deploy/allinone/supervisor.py").read_text()
     assert 'MANAGED = ("postgres", "secrets", "backups", "logs")' in sup

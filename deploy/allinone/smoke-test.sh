@@ -2,7 +2,7 @@
 # Rooktest van de alles-in-één image (ALLEEN ontwikkeling/CI; geen installatiemethode).
 #   deploy/allinone/smoke-test.sh [image]   (standaard zoeken-en-persoonlijke-ai:dev)
 # Controleert: start als root op een lege /appdata → processen als 568, healthcheck 'healthy', /healthz, /readyz (incl.
-# pgvector 0.8.7), pgvector werkt echt (HNSW-index + KNN-zoekvraag), statuspagina 'niet gekoppeld', geen PostgreSQL-
+# pgvector 0.8.7), pgvector werkt echt (HNSW-index + KNN-zoekvraag), statuspagina 'niet gekoppeld' in Peil, geen PostgreSQL-
 # netwerkpoort en socket alleen voor 568, geheimen 0600/568, databasegegevens en geheimen blijven na herstart, harde
 # kill én een nieuwe container op dezelfde /appdata (zoals bij een update), start als 568, duidelijke fouten bij
 # verkeerde maprechten en een verkeerde gebruiker, dat een alleen-lezen share onder /bronnen NIET wordt aangeraakt, en
@@ -164,6 +164,9 @@ check "pgvector werkt echt (HNSW-index, KNN via de index, vector_dims)" "pgvecto
 check "migraties op de nieuwste revisie (samengestelde bron-sleutels aanwezig)" \
   "[ \"\$(sql $NAME -c \"SELECT count(*) FROM pg_constraint WHERE conname = 'fk_embedding_chunk_id_chunk' AND array_length(conkey, 1) = 2\")\" = 1 ]"
 check "statuspagina toont 'niet gekoppeld'" "http_has / 'niet gekoppeld'"
+check "statuspagina in Peil 1.1.0 (sjabloon uit de image, sha256 gecontroleerd)" "http_has / 'Peil statuspagina.css 1.1.0'"
+check "koppelformulier met verplicht vingerafdrukveld (contract 1.2 §3.7)" "http_has / 'name=\"hub_vingerafdruk\" required'"
+check "statuspagina zonder JavaScript" "http_has / '</html>' && ! grep -qi '<script' $WORK/http.txt"
 check "API zonder token geeft 401 unauthorized" \
   "[ \"\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$PORT/search/v1/sources)\" = 401 ]"
 docker top "$NAME" -eo pid,user,args > "$WORK/ps.txt"
