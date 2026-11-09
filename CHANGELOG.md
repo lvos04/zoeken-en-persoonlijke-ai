@@ -62,6 +62,21 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
   nooit groen als de dienst niet gereed of niet gekoppeld is; *Alles gezond* alleen als ook de connector-gezondheid
   gezond is. Browsercontrole (axe-core 0 overtredingen, geen overloop op 320 px, geen CSP-schending) in een eigen
   CI-job en schermafdrukken in `docs/screenshots/peil/statuspagina/`.
+- **Ontwerpreview statuspagina (ADR-0014, `docs/ontwerp/PEIL_REVIEW.md`):** review door de design-agent tegen de echte
+  dienst. Doorgelopen zijn 12 toestanden × 320/360/390/768/1440 × licht/donker, bereikt via het formulier en via
+  Hub-acties in de simulator. Uitkomst: 0 axe-overtredingen, tekst ≥ 7:1, geen overloop.
+  - Hersteld (alleen tekst en weergave):
+    - geen taak-ID's (B07/B15) en geen "in orde" meer op de pagina;
+    - "Gekoppelde shares" met "Niet ingesteld" in plaats van "Leeswortels"/"Geen";
+    - *Gereed* noemt per toestand de echte reden;
+    - "Alles gezond" telt de functies die nog niet beschikbaar zijn;
+    - de melding `hub_weigerde` noemt alleen de koppelcode, en een fout staat niet meer drie keer op de pagina;
+    - meldingen volgen wat, waarom en wat je kunt doen;
+    - de paginatitel herhaalt niets;
+    - de noodpagina zonder sjabloon heeft systeemkleuren (licht en donker), ≥ 14 px en een selecteerbare Trace-ID.
+  - Nieuw: `tests/ui/peilcontrole.mjs` toetst contrast in de DOM, 44 px, focus, vaste woorden en "nooit groen";
+    `make ui-echt` en een CI-stap draaien de review tegen de echte dienst.
+  - Acht punten in het Peil-sjabloon zelf gaan als voorstel naar `ai-server-manager`.
 
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).

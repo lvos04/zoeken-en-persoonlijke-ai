@@ -269,3 +269,57 @@ gebruiker (*Custom User* 1000:1000 → NL-fout vóór `initdb`).
   alle spraakfuncties (eerlijk `capability_unavailable`).
 - GitHub Actions: vóór *P0 afmaken* was de job `image` rood (zie boven); de runs na de reparatie staan in de
   tabel *P0 afmaken*.
+
+## Ontwerpreview statuspagina tegen de echte dienst (2026-11-09, ADR-0014)
+
+**Machine:** dezelfde als hierboven (Ubuntu 26.04, gedeelde PostgreSQL 16 + pgvector, Node 22, Chromium 158 uit
+Playwright 1.65.0, axe-core 4.14.0). **Verslag:** `docs/ontwerp/PEIL_REVIEW.md`.
+
+| Commando | Uitkomst |
+|---|---|
+| `make ui-echt` | **132 controles in 12 toestanden, 0 mislukt.** Zie de opsomming onder de tabel. |
+| `make ui` (renderer, zonder database, 8 toestanden × 5 breedtes × 2 thema's, nu met dezelfde Peil-controles) | **80 controles, 0 mislukt** (rapport en afdrukken in `build/statuspagina/`) |
+| negatieve controle: `statuspagina.mjs` op een opzettelijk foute pagina | **FOUT** gemeld, zie de opsomming onder de tabel |
+| `cd apps/api && PATH=/usr/lib/postgresql/16/bin:$PATH pytest -q` | **387 geslaagd** (371 + 16 nieuw; de vergelijking met de referentie-renderer draaide lokaal mee) |
+| `pytest -q tests/e2e -p no:cacheprovider` | **7 geslaagd** (simulator met de nieuwe `/sim/pairing-code`) |
+| `make lint` · `shellcheck deploy/allinone/smoke-test.sh` · `actionlint .github/workflows/*.yml` | geen bevindingen (mypy: 44 bronbestanden) |
+| OpenAPI-export + `git diff --exit-code docs/openapi/` | geen drift |
+
+**`make ui-echt`** draait de echte API en worker met eigen PostgreSQL-databases, naast twee Hub-simulators.
+
+- **Toestanden:** 12 × 320/360/390/768/1440 × licht/donker, plus forced colors.
+- **Doorloop:**
+  - koppelen via het formulier: veldfout, `hub_weigerde`, gelukt;
+  - testbronnen;
+  - ontkoppelen en intrekken door de Hub;
+  - niet gereed;
+  - verlopen formulier;
+  - te veel pogingen;
+  - onleesbare koppelstatus;
+  - gewijzigde sjabloonkopie (500).
+- **Uitkomst:**
+  - 0 axe-overtredingen;
+  - tekst ≥ 8,34:1 (licht) en ≥ 9,32:1 (donker); noodpagina 9,4:1 en 7,84:1;
+  - niet-tekst ≥ 4,86:1;
+  - focusring ≥ 7,79:1;
+  - lettermaat ≥ 14 px;
+  - geen overloop, ook niet met tekstafstand;
+  - de skiplink is de eerste tabstop; na een fout wijst hij naar het veld (`aria-invalid` + `aria-describedby`);
+  - de velden zijn na een fout leeg;
+  - de stippelrand van Onbekend blijft in forced colors.
+- **Uitvoer:** 64 afdrukken (palet-PNG) en `CONTROLE.json` in `docs/screenshots/peil/statuspagina/`.
+
+**Negatieve controle.** `statuspagina.mjs` op een opzettelijk foute pagina meldt FOUT op elk ingebouwd probleem:
+
+- tekst 2,55:1;
+- veldrand 1,46:1;
+- links van 21 px hoog;
+- een pil zonder icoon;
+- "Niet gekoppeld" in groen;
+- "in orde" en "!";
+- focus zonder ring;
+- de axe-meldingen `color-contrast` en `target-size`.
+
+**Niet gedaan:** een echte schermlezer (NVDA/TalkBack), een echte telefoon of tv en de echte NAS. Die zijn **NIET
+GEVALIDEERD**. Forced colors is alleen als mediaquery geëmuleerd.
+

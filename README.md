@@ -23,8 +23,9 @@ Getest tegen een Hub-simulator, **niet** tegen de echte Hub.
 `GET /` rendert het framework-vrije statuspagina-sjabloon van de ontwerptaal Peil 1.1.0 (versie-gepinde kopie met
 herkomstkop in [`design/ontwerptaal/`](design/ontwerptaal/HERKOMST.md); CI faalt bij drift met de bron in
 `ai-server-manager`). Geen JavaScript, CSP `default-src 'none'`, eerste signaal nooit groen als de dienst niet gereed is.
-Browsercontrole (axe-core 0 overtredingen, geen overloop op 320 px) en schermafdrukken in
-[`docs/screenshots/peil/statuspagina/`](docs/screenshots/peil/statuspagina/).
+Ontwerpreview tegen de echte dienst ([`docs/ontwerp/PEIL_REVIEW.md`](docs/ontwerp/PEIL_REVIEW.md), ADR-0014): 12
+toestanden × 320/360/390/768/1440 × licht/donker, axe-core 0 overtredingen, tekst ≥ 7:1, focus ≥ 3:1, doelen ≥ 44 px,
+geen overloop op 320 px; schermafdrukken in [`docs/screenshots/peil/statuspagina/`](docs/screenshots/peil/statuspagina/).
 
 ## Installeren
 Uitsluitend als **standaard TrueNAS Custom App** — zie [`deploy/truenas/CUSTOM_APP.md`](deploy/truenas/CUSTOM_APP.md)
@@ -36,7 +37,8 @@ compose, geen terminal.
 ```
 make venv            # .venv met de gepinde afhankelijkheden
 make lint test e2e   # ruff + mypy, unit/integratie (PostgreSQL + pgvector op 127.0.0.1:5432), dienst-E2E
-make ui              # statuspagina in de browser: axe-core, 320 px, CSP, schermafdrukken (Node 22, Playwright)
+make ui              # statuspagina in de browser (renderer, zonder database): Peil-controles, axe-core, 320 px, CSP
+make ui-echt         # ontwerpreview tegen de echte dienst (PostgreSQL + Hub-simulators): alle toestanden, afdrukken
 make openapi         # docs/openapi/zoeken-en-persoonlijke-ai.openapi.json
 make image smoke     # alles-in-één image bouwen en de rooktest draaien
 ```

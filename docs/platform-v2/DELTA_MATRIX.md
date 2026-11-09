@@ -46,3 +46,8 @@ framework-vrije Peil-sjabloon als versie-gepinde kopie (`design/ontwerptaal/`, P
 O-14) met een CI-drift-controle tegen `ai-server-manager`. Geen nieuwe functie: koppelen, CSRF, throttle en meldingen
 blijven; de veldnamen van `POST /koppelen` volgen het sjabloon. Nieuw: Trace-ID van een mislukte poging op de pagina
 (zonder JS, niet uit de URL) en een totaal dat ook de connector-gezondheid meeneemt (nooit groener dan de Hub).
+
+**Ontwerpreview statuspagina (2026-11-09, ADR-0014):** de design-agent heeft de review achteraf gedaan, tegen de echte
+dienst, in 12 toestanden. Hersteld zijn alleen teksten en weergave (`docs/ontwerp/PEIL_REVIEW.md`, P-01 t/m P-13).
+Nieuw zijn twee hulpmiddelen: `tests/ui/peilcontrole.mjs` en `make ui-echt`; die laatste draait ook in CI. Er is geen
+functie gewijzigd. Bevindingen in het Peil-sjabloon zelf (S-01 t/m S-08) liggen bij `ai-server-manager`.

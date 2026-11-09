@@ -80,3 +80,6 @@ CI tegen de bron controleert.
   koppelbestand en geen `hourglass` voor "Nog niet beschikbaar" (besluiten 3 en 6).
 - Niet gedaan: echte schermlezer-, telefoon- en tv-test (ONTWERPTAAL §15 punt 7) en een test op een echte NAS:
   **NIET GEVALIDEERD**. De ontwerpreview achteraf door de design-agent (contract §13 werkwijze) is nog niet gebeurd.
+- Aanvulling 2026-11-09: de ontwerpreview achteraf is gedaan tegen de echte dienst; zie ADR-0014 en
+  `docs/ontwerp/PEIL_REVIEW.md`. `make ui` schrijft sindsdien naar `build/`; de afdrukken in `docs/` komen uit
+  `make ui-echt`.
