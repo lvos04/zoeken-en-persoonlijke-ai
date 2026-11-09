@@ -148,6 +148,7 @@ dienst fail-closed `ingetrokken` (`::test_swapped_hub_key_is_never_trusted_witho
 | negatieve controle: image met de vorige `supervisor.py` op een `/appdata` met `backups → /usr/local/lib` | `/usr/local/lib` en `search_ai/app.py` werden eigendom van 568 (lek bevestigd); met de nieuwe bewaker: fout in de log, eigenaar blijft 0 |
 | GitHub Actions `ci`, run 42642241110 (commit aaf7722, branch `ccr-c133d7a0-kuz1cv`) | **groen**: job `python` (278 + 7 geslaagd, pip-audit schoon) en job `image` (rooktest 52 geslaagd, 0 mislukt) |
 | GitHub Actions `ci`, run 42643295437 (commit 8f1a916, alleen interoptest en docs) | **rood**: `test_04_body_limit_over_real_http` kreeg een verbindingsreset i.p.v. 413 (zie de bevinding over de 413 hierboven; daarna gerepareerd) |
+| GitHub Actions `ci`, run 42644401633 (commit 27eb591, na de 413-reparatie) | **groen**: job `python` (284 + 7 geslaagd, pip-audit schoon) en job `image` (rooktest 52 geslaagd, 0 mislukt) |
 
 **Interop tegen de echte Hub (lokaal, niet in CI).** `ai-server-manager` levert inmiddels H1–H4 (enroll 1.2,
 `services/self`, `self/rotate`, dienst-JWT, `key-rotations`). De Hub-API is uit `git archive be7d593` (remote-branch,
