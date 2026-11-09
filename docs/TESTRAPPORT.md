@@ -80,8 +80,7 @@ tegen contract 1.1 en de acceptatie van B07-001 gelegd. Gevonden en gerepareerd 
 | vorige image zonder `--security-opt`: `grep NoNewPrivs /proc/*/status` in de container | alle processen `0` (gereproduceerd) |
 | `nice -n 10 flock …/docker-build.lock docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:qa-na .` | gebouwd |
 | `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:qa-na` (als uid 1000) | **39 geslaagd, 0 mislukt** (37 + 2 controles no-new-privileges) |
-
-GitHub Actions-runs na deze commits: zie het eindrapport van deze QA-ronde en `EVIDENCE.json`.
+| GitHub Actions `ci`, run 42622755067 (commit eb6854c, branch `ccr-c133d7a0-kuz1cv`) | **groen**: job `python` (107 + 4 geslaagd, pip-audit schoon) en job `image` (rooktest 39 geslaagd, 0 mislukt, ook de controle no-new-privileges zonder `--security-opt`) |
 
 ## B07-001 — wat de tests aantonen (Sim-getest)
 - *Niet geselecteerde share indexeert niets*: de bronwizard ziet alleen share A; share B, symlinks naar B (ook een
