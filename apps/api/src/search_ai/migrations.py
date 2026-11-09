@@ -48,11 +48,31 @@ def pending(settings: Settings, db: Database) -> bool:
     return db.current_revision() != head_revision(settings)
 
 
+# Tabellen waarvan de back-up vóór een upgrade alleen de structuur bewaart, niet de inhoud (review P0, ADR-0008):
+# - afgeleide index (documentverwijzingen, fragmenten, embeddings, transcriptverwijzingen) en zoekgeschiedenis: anders
+#   zou een ingetrokken bron in /appdata/backups blijven bestaan ("intrekken laat geen restdata achter"). De index is
+#   altijd herbouwbaar uit de bronnen (B07 §5).
+# - spraaktranscripten en -intenties (B15-006: sessie verwijderen wist transcripten, niets daarvan in een back-up).
+# - idempotency-antwoorden: kortlevend (7 dagen) en zonder waarde na een herstel.
+BACKUP_SCHEMA_ONLY_TABLES = (
+    "document_ref",
+    "chunk",
+    "embedding",
+    "transcript_ref",
+    "search_query",
+    "transcript",
+    "intent",
+    "idempotency_record",
+)
+
+
 def pre_upgrade_backup(settings: Settings, db: Database, backup_dir: Path, keep: int = 3) -> Path | None:
     """``pg_dump -Fc`` vóór openstaande migraties (alleen als er al een schema is). Faalt nooit hard.
 
-    Let op: de dump bevat ook de afgeleide index (chunks/embeddings). Primaire gegevens staan nooit in deze database;
-    die blijven bij hun eigenaar (bestanden, Immich, Jellyfin).
+    De dump bevat toestemming, ACL, bronnen, audit en koppeling, maar **niet** de inhoud van de afgeleide index, de
+    zoekgeschiedenis of spraaktranscripten (zie ``BACKUP_SCHEMA_ONLY_TABLES``). Na een herstel uit zo'n back-up is de
+    index leeg en moet opnieuw worden opgebouwd. Primaire gegevens staan nooit in deze database; die blijven bij hun
+    eigenaar (bestanden, Immich, Jellyfin).
     """
     current = db.current_revision()
     if current is None or current == head_revision(settings):
@@ -74,6 +94,7 @@ def pre_upgrade_backup(settings: Settings, db: Database, backup_dir: Path, keep:
         host,
         "-U",
         parts.username or "search_ai",
+        *[f"--exclude-table-data=public.{t}" for t in BACKUP_SCHEMA_ONLY_TABLES],
         (parts.path or "/search_ai").lstrip("/"),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603 (vaste argumenten)

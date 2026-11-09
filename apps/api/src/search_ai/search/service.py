@@ -33,6 +33,7 @@ from ..config import Settings
 from ..errors import ApiError, capability_unavailable, conflict, forbidden
 from ..security.auth import KNOWN_ROLES, Principal
 from ..timeutil import iso, utcnow
+from ..voice.models import ContextScope
 from .models import (
     DB_SCOPES,
     AccessScope,
@@ -43,6 +44,7 @@ from .models import (
     IndexRun,
     IndexSource,
     PrivacyConsent,
+    SearchQuery,
     TranscriptRef,
 )
 from .paths import PathGuard, PathRuleError, is_readonly_mount, validate_patterns, validate_read_roots
@@ -127,6 +129,16 @@ def derived_counts(session: Session, source_id: uuid.UUID) -> dict[str, int]:
         "embeddings": n(Embedding),
         "transcripten": n(TranscriptRef),
     }
+
+
+def history_refs(session: Session, source_id: uuid.UUID) -> int:
+    """Aantal bewaarde zoekopdrachten (alleen bij retentie > 0) met een resultaat uit deze bron."""
+    return int(
+        session.scalar(
+            select(func.count()).select_from(SearchQuery).where(SearchQuery.source_ids.contains([str(source_id)]))
+        )
+        or 0
+    )
 
 
 def acl_entries(session: Session, source_id: uuid.UUID) -> list[AccessScope]:
@@ -588,6 +600,12 @@ def revoke(
         .where(AccessScope.source_id == src.id, AccessScope.revoked_at.is_(None))
         .values(revoked_at=now, revoked_by=principal.audit_id)
     )
+    # B15: een ingetrokken bron is ook geen spraak-/chatcontext meer
+    session.execute(
+        update(ContextScope)
+        .where(ContextScope.search_source_id == src.id, ContextScope.revoked_at.is_(None))
+        .values(revoked_at=now)
+    )
     already = src.status == "revoked"
     src.status = "revoked"
     src.revoked_at = src.revoked_at or now
@@ -662,13 +680,22 @@ def purge_source(
     session.execute(delete(TranscriptRef).where(TranscriptRef.source_id == src.id))
     session.execute(delete(Chunk).where(Chunk.source_id == src.id))
     session.execute(delete(DocumentRef).where(DocumentRef.source_id == src.id))
+    # Bewaarde zoekgeschiedenis (alleen bij retentie > 0) die naar deze bron verwijst, is ook afgeleide data: weg.
+    # Alleen een ja/nee in het bewijs: een aantal zou de eigenaar vertellen hoe vaak anderen in zijn bron zochten.
+    session.execute(delete(SearchQuery).where(SearchQuery.source_ids.contains([str(src.id)])))
     session.flush()
     after = derived_counts(session, src.id)
-    ok = all(v == 0 for v in after.values())
+    history_left = history_refs(session, src.id)
+    ok = all(v == 0 for v in after.values()) and history_left == 0
     run.status = "succeeded" if ok else "failed"
     run.finished_at = utcnow()
     run.counts = {"verwijderd": before, "reden": reason}
-    run.verification = {"na_verwijderen": after, "leeg": ok, "gecontroleerd_op": iso(run.finished_at)}
+    run.verification = {
+        "na_verwijderen": after,
+        "zoekgeschiedenis_opgeschoond": history_left == 0,
+        "leeg": ok,
+        "gecontroleerd_op": iso(run.finished_at),
+    }
     if not ok:
         run.error_code = "purge_onvolledig"
     src.purge_status = "done" if ok else "failed"
@@ -747,7 +774,8 @@ def sweep_revoked(session: Session) -> int:
     """Worker: purge opnieuw voor ingetrokken bronnen waar toch afgeleide data staat of de controle mislukte."""
     fixed = 0
     for src in session.scalars(select(IndexSource).where(IndexSource.status == "revoked")):
-        if src.purge_status == "done" and all(v == 0 for v in derived_counts(session, src.id).values()):
+        clean = all(v == 0 for v in derived_counts(session, src.id).values()) and history_refs(session, src.id) == 0
+        if src.purge_status == "done" and clean:
             continue
         purge_source(session, None, src, str(uuid.uuid4()), reason="nacontrole_intrekking")
         fixed += 1

@@ -117,17 +117,48 @@ def test_request_size_limit(paired_client: Any, auth: Auth) -> None:
 
 @pytest.mark.skipif(shutil.which("pg_dump") is None, reason="pg_dump niet beschikbaar")
 def test_pre_upgrade_backup_with_real_pg_dump(tmp_path: Path) -> None:
-    """Een openstaande migratie (testrevisie 0002) → pg_dump vooraf; de nieuwste 3 blijven bewaard."""
-    from search_ai.migrations import alembic_dir, pre_upgrade_backup, upgrade
+    """Een openstaande migratie (testrevisie bovenop de echte head) → pg_dump vooraf; de nieuwste 3 blijven bewaard.
+
+    Review P0: de back-up bevat bronnen, toestemming en ACL, maar **niet** de inhoud van de afgeleide index, de
+    zoekgeschiedenis of spraaktranscripten — anders zou een ingetrokken bron in /appdata/backups blijven bestaan.
+    """
+    from sqlalchemy import text
+
+    from search_ai.migrations import BACKUP_SCHEMA_ONLY_TABLES, alembic_dir, head_revision, pre_upgrade_backup, upgrade
 
     url = recreate_database("zoek_test_backup")
     base = Settings(database_url=url)
     upgrade(base)
+    head = head_revision(base)
+    db = Database(url)
+    try:
+        with db.sessions() as s:
+            src = IndexSource(
+                kind="files",
+                name="back-uptest",
+                owner_sub="u",
+                created_by="t",
+                updated_by="t",
+                allowed_paths=["/bronnen/x"],
+            )
+            s.add(src)
+            s.flush()
+            simulate_ingest(s, src.id, "/bronnen/x/geheim.txt", ["GEHEIME-INHOUD-UIT-DE-INDEX"])
+            s.execute(
+                text(
+                    "INSERT INTO search_query (id, principal_sub, roles, query_text, mode, filters, result_count, "
+                    "source_ids, created_at, expires_at) VALUES (gen_random_uuid(), 'u', '[]', 'GEHEIME-ZOEKVRAAG', "
+                    "'fulltext', '{}', 1, '[]', now(), now() + interval '1 day')"
+                )
+            )
+            s.commit()
+    finally:
+        db.dispose()
     mig = tmp_path / "alembic"
     shutil.copytree(alembic_dir(base), mig, ignore=shutil.ignore_patterns("__pycache__"))
-    (mig / "versions" / "0002_test.py").write_text(
-        '"""testrevisie"""\nrevision = "0002"\ndown_revision = "0001"\nbranch_labels = None\ndepends_on = None\n\n\n'
-        "def upgrade() -> None:\n    pass\n\n\ndef downgrade() -> None:\n    pass\n",
+    (mig / "versions" / "9001_test.py").write_text(
+        f'"""testrevisie"""\nrevision = "9001"\ndown_revision = "{head}"\nbranch_labels = None\n'
+        "depends_on = None\n\n\ndef upgrade() -> None:\n    pass\n\n\ndef downgrade() -> None:\n    pass\n",
         encoding="utf-8",
     )
     settings = Settings(database_url=url, alembic_dir=mig)
@@ -138,10 +169,17 @@ def test_pre_upgrade_backup_with_real_pg_dump(tmp_path: Path) -> None:
     finally:
         db.dispose()
     assert all(d is not None for d in dumps)
-    kept = sorted(backups.glob("voor-upgrade-0001-*.dump"))
+    kept = sorted(backups.glob(f"voor-upgrade-{head}-*.dump"))
     assert 1 <= len(kept) <= 3
     listing = subprocess.run(["pg_restore", "--list", str(kept[-1])], capture_output=True, text=True, check=True)
-    assert "index_source" in listing.stdout and "embedding" in listing.stdout
+    data_entries = {line.split()[-2] for line in listing.stdout.splitlines() if " TABLE DATA public " in line}
+    # structuur van alle tabellen staat erin; inhoud van bronnen/toestemming/ACL wel, van de afgeleide index niet
+    assert "TABLE public embedding" in listing.stdout and "TABLE public chunk" in listing.stdout
+    assert {"index_source", "privacy_consent", "access_scope", "audit_event"} <= data_entries
+    assert not data_entries & set(BACKUP_SCHEMA_ONLY_TABLES)
+    sql = subprocess.run(["pg_restore", "-f", "-", str(kept[-1])], capture_output=True, text=True, check=True).stdout
+    assert "back-uptest" in sql  # de bron zelf (configuratie) is bewaard …
+    assert "GEHEIME-INHOUD-UIT-DE-INDEX" not in sql and "GEHEIME-ZOEKVRAAG" not in sql  # … de indexinhoud niet
     # zonder openstaande migratie: geen dump
     db = Database(url)
     try:
