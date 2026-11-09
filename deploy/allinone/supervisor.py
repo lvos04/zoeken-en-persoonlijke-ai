@@ -6,7 +6,9 @@ als gewone TrueNAS Custom App zonder YAML. Shares worden als Host Path met 'Read
 
 Regels (gebaseerd op het werkende MSO-voorbeeld):
 - Start als root alleen om /appdata (en alleen de eigen submappen) aan 568:568 te geven; daarna draait elk proces
-  als 568 (PostgreSQL weigert root). **/bronnen wordt nooit aangeraakt** (geen chown/chmod: alleen lezen).
+  als 568 (PostgreSQL weigert root). **/bronnen wordt nooit aangeraakt** (geen chown/chmod: alleen lezen). Als root
+  volgt de bewaker nooit een symbolische koppeling: een link als eigen submap van /appdata → duidelijke fout; een link
+  als socketmap in /tmp wordt vervangen door een gewone map (anders kan 568 root buiten /appdata laten chownen).
 - Na de gebruikerswissel zet de bewaker zelf ``no_new_privs`` (prctl) voor zichzelf en elk kindproces (contract 1.2
   §2.2): het standaard Custom App-formulier van TrueNAS zet geen no-new-privileges en geen cap_drop (ADR-0010).
 - De bewaker is zelf **PID 1** (geen root-init zoals dumb-init): na de eigenaarschapsstap draait ook PID 1 als 568, met
@@ -138,9 +140,36 @@ def check_run_user() -> None:
         )
 
 
+def refuse_symlinks() -> None:
+    """Als root nooit een symbolische link volgen in /appdata (eigen submappen): anders kan een proces dat als 568 draaide
+    (of iemand met schrijfrechten op de dataset) bij de volgende start root laten chownen/chmodden buiten /appdata,
+    bijvoorbeeld in /usr/local van de image, en zo weer root worden (contract 1.2 §2.2: na de eigenaarschapsstap draait
+    niets meer als root). Een link → duidelijke Nederlandse fout, niets aangeraakt."""
+    for sub in MANAGED:
+        p = DATA / sub
+        if p.is_symlink():
+            fail(
+                f"{p} is een symbolische koppeling (symlink). Dat is niet toegestaan: de app past daar als root rechten "
+                f"aan. Verwijder de koppeling of vervang hem door een gewone map in de dataset."
+            )
+
+
+def prepare_socket_dir(root: bool) -> None:
+    """Socketmap van de ingebouwde database. /tmp blijft bij 'docker restart' staan en deze map is van 568: een link of
+    iets anders dan een map wordt weggehaald (eigen tijdelijke map) en nooit gevolgd, zodat root nooit buiten deze map
+    chownt."""
+    if SOCKET_DIR.is_symlink() or (SOCKET_DIR.exists() and not SOCKET_DIR.is_dir()):
+        log(f"{SOCKET_DIR} was geen gewone map; opnieuw aangemaakt")
+        SOCKET_DIR.unlink()
+    SOCKET_DIR.mkdir(parents=True, exist_ok=True)
+    if root:
+        os.chown(SOCKET_DIR, UID, GID, follow_symlinks=False)
+
+
 def prepare_dirs() -> None:
     if not DATA.exists():
         fail(f"{DATA} bestaat niet. Koppel in de app-instellingen een dataset (Host Path) aan {DATA}.")
+    refuse_symlinks()
     root = os.getuid() == 0
     if root:
         st = DATA.stat()
@@ -167,9 +196,7 @@ def prepare_dirs() -> None:
         os.chmod(DATA / "secrets", 0o700)
     except PermissionError:
         fail(f"{PGDATA} is niet van gebruiker {UID}; start de app als root of maak {UID} eigenaar van de dataset.")
-    SOCKET_DIR.mkdir(parents=True, exist_ok=True)
-    if root:
-        os.chown(SOCKET_DIR, UID, GID)
+    prepare_socket_dir(root)
     probe = subprocess.run(
         [
             sys.executable,

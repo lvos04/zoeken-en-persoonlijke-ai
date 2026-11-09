@@ -5,7 +5,8 @@
 # pgvector 0.8.7), pgvector werkt echt (HNSW-index + KNN-zoekvraag), statuspagina 'niet gekoppeld', geen PostgreSQL-
 # netwerkpoort en socket alleen voor 568, geheimen 0600/568, databasegegevens en geheimen blijven na herstart, harde
 # kill én een nieuwe container op dezelfde /appdata (zoals bij een update), start als 568, duidelijke fouten bij
-# verkeerde maprechten en een verkeerde gebruiker, en dat een alleen-lezen share onder /bronnen NIET wordt aangeraakt.
+# verkeerde maprechten en een verkeerde gebruiker, dat een alleen-lezen share onder /bronnen NIET wordt aangeraakt, en
+# dat de bewaker als root nooit een symbolische koppeling volgt (in /appdata of als socketmap in /tmp).
 # Zoals het standaard TrueNAS Custom App-formulier start de test ZONDER '--security-opt no-new-privileges' en ZONDER
 # '--cap-drop': de image moet zelf naar 568 wisselen en no_new_privs zetten. Voor ELK proces in de container, ook
 # PID 1, geldt daarna Uid 568, CapEff 0000000000000000 en NoNewPrivs 1 (contract 1.2 §2.2/§10, ADR-0011). Alleen
@@ -22,7 +23,7 @@ PASS=0
 FAIL=0
 
 cleanup() {
-  docker rm -f "$NAME" "$NAME-568" "$NAME-bad" "$NAME-uid" >/dev/null 2>&1 || true
+  docker rm -f "$NAME" "$NAME-568" "$NAME-bad" "$NAME-uid" "$NAME-link" >/dev/null 2>&1 || true
   docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c 'rm -rf /w/* /w/.[!.]* 2>/dev/null || true' >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
@@ -143,7 +144,7 @@ run() { # naam, datamap, extra args (geen --security-opt: dat kan het TrueNAS-fo
     --health-interval 3s --health-start-period 60s "$@" "$IMAGE" >/dev/null
 }
 
-mkdir -p "$WORK/root" "$WORK/u568" "$WORK/bad" "$WORK/u1000" "$WORK/share/werk"
+mkdir -p "$WORK/root" "$WORK/u568" "$WORK/bad" "$WORK/u1000" "$WORK/link" "$WORK/share/werk"
 echo "offerte keuken" > "$WORK/share/werk/offerte.txt"
 # root-eigendom-map zoals een nieuwe TrueNAS-dataset; 'bad' is van root (0755) zodat 568 er nooit in mag schrijven
 # en 'u1000' is van 1000 — ongeacht de uid van de host-gebruiker die de test draait
@@ -235,6 +236,31 @@ docker run -d --name "$NAME-uid" -v "$WORK/u1000:/appdata" --user 1000:1000 "$IM
 check "fout 'draait als gebruiker 1000:1000' in de log" "wait_log $NAME-uid 'FOUT: de app draait als gebruiker 1000:1000'"
 check "geen initdb gestart" "! log_has $NAME-uid 'initdb'"
 docker rm -f "$NAME-uid" >/dev/null
+
+echo "== 7. symbolische koppelingen: root volgt ze nooit (anders kan 568 root buiten /appdata laten chownen)"
+docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c \
+  'chown 0:0 /w/link && chmod 0755 /w/link && ln -s /usr/local/lib /w/link/backups' >/dev/null
+docker run -d --name "$NAME-link" -v "$WORK/link:/appdata" "$IMAGE" >/dev/null
+check "link als eigen submap van /appdata geeft een duidelijke Nederlandse fout" \
+  "wait_log $NAME-link 'FOUT: /appdata/backups is een symbolische koppeling'"
+check "doel van die link niet aangeraakt (blijft van root)" \
+  "[ \"\$(docker exec $NAME-link stat -c '%u' /usr/local/lib)\" = 0 ]"
+check "geen database aangemaakt bij een geweigerde start" "! log_has $NAME-link 'initdb'"
+docker rm -f "$NAME-link" >/dev/null
+
+echo "== 7b. socketmap in /tmp door 568 vervangen door een link, daarna herstarten (root chownt het doel niet)"
+run "$NAME" "$WORK/root" -v "$WORK/share:/bronnen/documenten:ro"
+check "container healthy vóór de proef" "wait_healthy $NAME"
+docker exec -u 568 "$NAME" sh -c 'mv /tmp/search-ai-pg /tmp/search-ai-pg.oud && ln -s /usr/local/lib /tmp/search-ai-pg'
+docker restart -t 30 "$NAME" >/dev/null
+check "na herstart weer healthy" "wait_healthy $NAME"
+check "doel van de link niet aangeraakt (blijft van root)" \
+  "[ \"\$(docker exec $NAME stat -c '%u' /usr/local/lib)\" = 0 ]"
+check "socketmap is weer een gewone map van 568" \
+  "[ \"\$(docker exec $NAME stat -c '%F %u' /tmp/search-ai-pg)\" = 'directory 568' ]"
+check "databasegegevens behouden" "marker_ok $NAME"
+check "ook daarna elk proces: Uid 568, CapEff 0, NoNewPrivs 1" "privs_all_568 $NAME"
+docker rm -f "$NAME" >/dev/null
 
 echo
 echo "Resultaat: $PASS geslaagd, $FAIL mislukt"
