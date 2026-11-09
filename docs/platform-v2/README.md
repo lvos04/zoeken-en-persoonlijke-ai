@@ -33,3 +33,8 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 - `05_TESTS/INTEGRALE_E2E_TESTMATRIX.md`
 - `06_TEMPLATES/PROMPTS_PER_APP/PROMPT_B07_PERSOONLIJKE_ZOEKMACHINE.md`
 - `06_TEMPLATES/PROMPTS_PER_APP/PROMPT_B15_SPRAAK_PERSOONLIJKE_AI.md`
+
+## Bewijs en inventaris (deze repo)
+
+- `EVIDENCE.json` — status/validatie per Excel-ID (contract §11; nooit 'Gereed'/'Geslaagd' zonder echte NAS-run)
+- `DELTA_MATRIX.md` — inventaris bestaand / onvolledig / ontbrekend

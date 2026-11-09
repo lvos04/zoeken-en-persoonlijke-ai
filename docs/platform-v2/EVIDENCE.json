@@ -1,0 +1,212 @@
+[
+ {
+  "id": "B07-001",
+  "status": "Bezig",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_unselected_share_indexes_nothing_and_never_leaves_nas; apps/api/tests/integration/test_b07_001_consent.py::test_consent_only_by_owner_bound_to_snapshot; apps/api/tests/integration/test_b07_001_consent.py::test_source_validation_rejects_paths_outside_allowlist; apps/api/tests/integration/test_b07_001_consent.py::test_readonly_mount_required_for_consent; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; apps/api/tests/integration/test_b07_001_consent.py::test_owner_only_documents_and_paused_sources; apps/api/tests/integration/test_b07_001_consent.py::test_kid_profile_restrictions; apps/api/tests/integration/test_b07_001_consent.py::test_revoke_purges_index_and_embeddings_but_not_originals; apps/api/tests/integration/test_b07_001_consent.py::test_narrowing_selection_purges_outside_docs; apps/api/tests/integration/test_review_p0.py::test_preview_shows_names_only_to_owner; apps/api/tests/integration/test_review_p0.py::test_expired_consent_is_treated_as_revocation; apps/api/tests/unit/test_paths.py; tests/e2e/test_service_e2e.py::test_02_b07_001_flow_over_http; deploy/allinone/smoke-test.sh (21/21, alleen-lezen share onder /bronnen ongewijzigd)",
+  "blokkade": "Echte acceptatie vereist shares als Read Only Host Path op de NAS (D02, datasets onbekend), de Hub (bronwizard-UI, Hub-JWT) en de ingest (B07-002, nog niet gebouwd) — NIET GEVALIDEERD (echte NAS).",
+  "opmerking": "Consent-register met scopes per bronsoort, gebonden aan een momentopname (paden/uitsluitingen/adres/scopes); alleen de gegevenseigenaar geeft toestemming; lees-padenallowlist (leeswortels /bronnen, paden per bron, vaste uitsluitingen, symlinks niet gevolgd); gebruikers-ACL in de WHERE vóór ts_rank; beheerder ziet geen inhoud zonder ACL; kinderprofiel wint altijd; intrekken en verlopen toestemming verwijderen index/embeddings met telcontrole; 'ai.external' bestaat niet (verlaat NAS niet). Index in tests gevuld via simulatie, niet via echte ingest.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B07-002",
+  "status": "Niet gestart",
+  "validatie": "Unit-getest (alleen datamodel)",
+  "bewijs": "commit db0810f; apps/api/tests/integration/test_schema_constraints.py::test_cascade_removes_all_derived_rows",
+  "blokkade": "Adapters voor bestanden/Immich/Jellyfin/logs nog niet gebouwd (P5).",
+  "opmerking": "Tabellen document_ref/chunk/embedding/index_run met source_etag, content_sha256 en herkomst staan klaar. POST /search/v1/reindex geeft eerlijk 501 capability_unavailable (409 zonder toestemming).",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B07-003",
+  "status": "Bezig",
+  "validatie": "Sim-getest (alleen full-text + ACL vóór ranking; semantisch/hybride niet gebouwd)",
+  "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; apps/api/tests/integration/test_schema_constraints.py::test_vector_roundtrip_and_dimension_check",
+  "blokkade": "Acceptatie via vectorindex vereist een lokaal embeddingmodel (optionele app, standaard uit) en B07-002.",
+  "opmerking": "GET /search/v1/search (full-text, GIN-index) met ACL in de WHERE; mode=semantic/hybrid → 501. embedding: model/versie/dimensie per rij (CHECK vector_dims). HNSW-index per model en RLS volgen.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B07-004",
+  "status": "Niet gestart",
+  "validatie": "Unit-getest (alleen datamodel)",
+  "bewijs": "commit db0810f; apps/api/tests/integration/test_schema_constraints.py::test_no_invented_timecodes_half_pair",
+  "blokkade": "Vereist B07-002 en Jellyfin-adapter (P5).",
+  "opmerking": "Schema dwingt af: tijdcodes alleen als volledig paar; transcript_ref.kind 'asr' alleen met opt-in.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B07-005",
+  "status": "Niet gestart",
+  "validatie": "",
+  "bewijs": "",
+  "blokkade": "Vereist B07-002/B07-003 en een lokaal taalmodel (optioneel, standaard uit).",
+  "opmerking": "Geen RAG/LLM in P0; geen schrijftool aanwezig.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B07-006",
+  "status": "Bezig",
+  "validatie": "Sim-getest (alleen verwijderen bij intrekking + telcontrole)",
+  "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_revoke_purges_index_and_embeddings_but_not_originals; apps/api/tests/integration/test_b07_001_consent.py::test_delete_index_keeps_consent; apps/api/tests/integration/test_review_p0.py::test_pre_upgrade_backup_with_real_pg_dump",
+  "blokkade": "Checksum-purgeverificatie, privacyrapport, export en herindexeren na restore vereisen B07-002 (P5).",
+  "opmerking": "Intrekken verwijdert afgeleide data in één transactie, telt na (index_run purge) en de worker controleert na.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B15-001",
+  "status": "Niet gestart",
+  "validatie": "",
+  "bewijs": "",
+  "blokkade": "Spraakinvoer volgt in P5 (PWA in ai-server-manager + optionele STT-app).",
+  "opmerking": "GET /voice/v1/status meldt eerlijk capability_unavailable; getypte invoer blijft de terugval.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B15-002",
+  "status": "Niet gestart",
+  "validatie": "Unit-getest (alleen datamodel)",
+  "bewijs": "commit db0810f; apps/api/tests/unit/test_models_and_vector.py::test_intent_can_never_record_execution",
+  "blokkade": "STT-app (faster-whisper) optioneel en standaard uit; logica P5.",
+  "opmerking": "transcript.expires_at verplicht, retentie voice_transcript = 0 dagen; intent kan geen 'uitgevoerd' vastleggen.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B15-003",
+  "status": "Niet gestart",
+  "validatie": "",
+  "bewijs": "",
+  "blokkade": "Intentrouter volgt in P5; acties alleen als ActionProposal via de Hub-policy.",
+  "opmerking": "",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B15-004",
+  "status": "Niet gestart",
+  "validatie": "",
+  "bewijs": "",
+  "blokkade": "TTS-app (Piper) optioneel en standaard uit; logica P5.",
+  "opmerking": "tts_job bewaart alleen status, geen audio.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B15-005",
+  "status": "Niet gestart",
+  "validatie": "Unit-getest (alleen datamodel)",
+  "bewijs": "commit db0810f",
+  "blokkade": "Sessies/apparaten volgen in P5.",
+  "opmerking": "voice_session met vervaltijd per apparaat; context_scope met vervaltijd.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B15-006",
+  "status": "Niet gestart",
+  "validatie": "Unit-getest (alleen datamodel: geen audiokolommen)",
+  "bewijs": "commit db0810f; apps/api/tests/unit/test_models_and_vector.py::test_no_raw_audio_column_anywhere_in_b15",
+  "blokkade": "Privacy-/datatools volgen in P5.",
+  "opmerking": "Geen enkele binaire kolom in de B15-tabellen.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "B15-007",
+  "status": "Niet gestart",
+  "validatie": "",
+  "bewijs": "",
+  "blokkade": "Vereist Hub-incidenten en MediaGuard/MSO-read-API's (P5).",
+  "opmerking": "",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "I14-14-01",
+  "status": "Bezig",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; apps/api/tests/unit/test_models_and_vector.py::test_embedding_has_model_and_dimension_metadata",
+  "blokkade": "NAS-versie (D01) en appimage-digest op de NAS onbekend.",
+  "opmerking": "ACL per bron + embeddings met model/versie/dimensie; retentie-tabel met privacyvriendelijke standaarden.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "I14-14-02",
+  "status": "Bezig",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit 4bd082b, ebeeca0; deploy/allinone/smoke-test.sh (pgvector 0.8.7 in de ingebouwde database; alleen-lezen share ongewijzigd)",
+  "blokkade": "Niet op TrueNAS geïnstalleerd; GHCR-release/digest nog niet uitgebracht.",
+  "opmerking": "Officiële image pgvector/pgvector:0.8.7-pg16-bookworm@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f; CREATE EXTENSION vector in migratie 0001.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "I14-14-03",
+  "status": "Bezig",
+  "validatie": "Sim-getest (ACL-filter + full-text-index; RLS en vectorindex niet gebouwd)",
+  "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking",
+  "blokkade": "RLS vereist een aparte niet-superuser querierol (ADR-0003); vectorindex volgt in B07-003.",
+  "opmerking": "",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "I25-25-01",
+  "status": "Bezig",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_unselected_share_indexes_nothing_and_never_leaves_nas; apps/api/tests/unit/test_paths.py",
+  "blokkade": "Immich/Jellyfin-bronnen (adapters) nog niet gebouwd; shares op de echte NAS onbekend (D02).",
+  "opmerking": "Niet toegestane paden blijven buiten de index (leeswortels, allowlist, vaste uitsluitingen, symlinks).",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "I25-25-02",
+  "status": "Bezig",
+  "validatie": "Unit-getest (datamodel; geen ingest)",
+  "bewijs": "commit db0810f; apps/api/tests/integration/test_platform_core.py::test_schema_has_no_drift_against_models",
+  "blokkade": "Geen ingest (B07-002); 'geen dubbele/verouderde resultaten' kan pas met echte ingest worden getoetst.",
+  "opmerking": "Uniek (source_id, external_id) en (document_id, ordinal); content_sha256/source_etag/model_version aanwezig.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "I25-25-05",
+  "status": "Bezig",
+  "validatie": "Sim-getest (alleen ACL; prompt-injectie niet gebouwd)",
+  "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; apps/api/tests/integration/test_b07_001_consent.py::test_kid_profile_restrictions",
+  "blokkade": "Prompt-injectietests vereisen B07-005 (P5).",
+  "opmerking": "",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "EX44",
+  "status": "Bezig",
+  "validatie": "Sim-geslaagd",
+  "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_revoke_purges_index_and_embeddings_but_not_originals; tests/e2e/test_service_e2e.py::test_02_b07_001_flow_over_http",
+  "blokkade": "Echte run op de NAS vereist (status blijft Bezig tot een echte run).",
+  "opmerking": "Intrekken van een zoekbron verwijdert indexdata en embeddings (gecontroleerd 0/0/0/0); originelen ongewijzigd.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "EX16",
+  "status": "Bezig",
+  "validatie": "Sim-geslaagd (deel zoeken-en-persoonlijke-ai)",
+  "bewijs": "commit e8adee6; apps/api/tests/integration/test_platform_core.py::test_jwt_roles_and_fail_closed_when_hub_disappears; tests/e2e/test_service_e2e.py::test_04_fail_closed_when_hub_disappears; apps/api/tests/unit/test_security.py::test_no_hub_means_no_access",
+  "blokkade": "Echte run op de NAS vereist.",
+  "opmerking": "Ongeldig/verlopen service-token of geen bruikbare JWKS → 401, nooit open toegang; connector-health 'down'/'degraded'.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-09"
+ }
+]
