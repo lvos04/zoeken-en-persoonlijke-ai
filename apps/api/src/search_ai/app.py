@@ -21,7 +21,7 @@ from .connector import router as connector_router
 from .db import Database
 from .deps import get_session, trace_id
 from .enrollment import JWKS_PATH, EnrollmentService, stored_jwks
-from .errors import TRACE_HEADER, install_handlers, trace_id_for
+from .errors import TRACE_HEADER, error_response, install_handlers, trace_id_for
 from .health import router as health_router
 from .hubclient import HubClient
 from .idempotency import idempotency_key, run_idempotent
@@ -37,6 +37,8 @@ from .status_page import router as status_router
 from .voice.router import router as voice_router
 
 log = logging.getLogger("search_ai")
+
+MAX_BODY_BYTES = 1024 * 1024  # 1 MiB: geen enkel verzoek van deze API is groter (geen uploads)
 
 
 class HubLinkCache:
@@ -195,6 +197,18 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
     @app.middleware("http")
     async def trace_and_headers(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         tid = trace_id_for(request)
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            raw = request.headers.get("content-length")
+            if raw is None and "chunked" in request.headers.get("transfer-encoding", "").lower():
+                return error_response(request, 411, "length_required", "Content-Length is verplicht.")
+            if raw is not None and (not raw.isdigit() or int(raw) > MAX_BODY_BYTES):
+                return error_response(
+                    request,
+                    413,
+                    "payload_too_large",
+                    "Het verzoek is te groot (maximaal 1 MiB).",
+                    {"max": MAX_BODY_BYTES},
+                )
         response = await call_next(request)
         response.headers.setdefault(TRACE_HEADER, tid)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")

@@ -67,7 +67,8 @@ def test_unselected_share_indexes_nothing_and_never_leaves_nas(
     assert r.status_code == 409 and r.json()["code"] == "geen_toestemming"
 
     # Bronwizard: alleen share A; share B, symlinks naar B, .ssh, .zfs en sleutels nooit.
-    pv = client.get(f"/search/v1/sources/{src['id']}/preview", headers=auth("admin", sub="beheer")).json()
+    # (bestandsnamen ziet alleen de eigenaar; de beheerder krijgt tellingen — zie test_review_p0)
+    pv = client.get(f"/search/v1/sources/{src['id']}/preview", headers=auth("viewer", sub="user-a")).json()
     assert pv["inhoud_gelezen"] is False
     assert pv["bestanden"] == 2 and sorted(pv["voorbeeld"]) == ["documenten/notities.md", "documenten/werk/offerte.txt"]
     assert not any("prive-b" in s or "dagboek" in s or "id_ed25519" in s or ".zfs" in s for s in pv["voorbeeld"])

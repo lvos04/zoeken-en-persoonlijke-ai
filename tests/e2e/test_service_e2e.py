@@ -120,7 +120,9 @@ def test_02_b07_001_flow_over_http(stack: Stack) -> None:
     )
     b = r.json()
 
-    pv = httpx.get(f"{stack.api}/search/v1/sources/{a['id']}/preview", headers=admin).json()
+    pv = httpx.get(
+        f"{stack.api}/search/v1/sources/{a['id']}/preview", headers=stack.token("viewer", sub="user-a")
+    ).json()
     assert sorted(pv["voorbeeld"]) == [
         "documenten/notities.md",
         "documenten/werk/offerte.txt",

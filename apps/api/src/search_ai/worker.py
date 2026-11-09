@@ -21,7 +21,7 @@ from .enrollment import EVENTS_INBOX_PATH, EnrollmentService
 from .hubclient import HubClient
 from .idempotency import purge_expired
 from .search.models import SearchQuery
-from .search.service import sweep_revoked
+from .search.service import expire_consents, sweep_revoked
 from .security.secrets import ensure_secrets, load_identity, load_vault_key, public_jwk
 from .security.vault import Vault
 from .timeutil import utcnow
@@ -36,7 +36,13 @@ class WorkerState:
     enroll_failures: int = 0
     last_purge: float = 0.0
     stats: dict[str, int] = field(
-        default_factory=lambda: {"pushed": 0, "push_failed": 0, "revoked_resweeps": 0, "expired_rows": 0}
+        default_factory=lambda: {
+            "pushed": 0,
+            "push_failed": 0,
+            "expired_consents": 0,
+            "revoked_resweeps": 0,
+            "expired_rows": 0,
+        }
     )
 
 
@@ -99,6 +105,7 @@ class Worker:
 
     def housekeeping_step(self, now: float) -> None:
         with self.db.sessions() as s:
+            self.state.stats["expired_consents"] += expire_consents(s, self.settings)
             self.state.stats["revoked_resweeps"] += sweep_revoked(s)
             n = 0
             for model in (SearchQuery, Transcript):

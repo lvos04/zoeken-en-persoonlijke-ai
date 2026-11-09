@@ -189,9 +189,12 @@ def preview_source(
     source_id: uuid.UUID,
     request: Request,
     session: Session = Depends(get_session),
-    principal: Principal = Depends(require_admin),
+    principal: Principal = Depends(require_user_context),
 ) -> dict[str, Any]:
     src = _load(session, source_id)
+    is_owner = principal.subject == src.owner_sub and not principal.is_kid
+    if not (principal.is_admin or is_owner):
+        raise not_found("Bron")
     if src.kind not in service.PATH_KINDS:
         raise capability_unavailable(
             f"preview.{src.kind}", "Voorvertoning voor API-bronnen (Immich/Jellyfin) volgt met de adapters (B07-002)."
@@ -215,7 +218,9 @@ def preview_source(
             "onleesbaar": result.unreadable,
         },
         "afgekapt": result.truncated,
-        "voorbeeld": result.sample,
+        # Bestandsnamen alleen voor de eigenaar zelf; een beheerder ziet tellingen (beheren ≠ meelezen).
+        "voorbeeld": result.sample if is_owner else [],
+        "voorbeeld_verborgen": not is_owner,
         "vaste_uitsluitingen": [*service.guard_for(settings, src).all_excludes[:12], "…"],
         "inhoud_gelezen": False,
         "observed_at": iso(utcnow()),

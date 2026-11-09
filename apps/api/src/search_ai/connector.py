@@ -30,7 +30,8 @@ from .timeutil import iso, utcnow
 router = APIRouter(prefix=CONNECTOR_PREFIX, tags=["connector"])
 
 ITEM_TYPES: dict[str, dict[str, Any]] = {
-    "search.source": {"roles": {"admin", "operator", "viewer", "service"}, "title_nl": "Zoekbronnen (zonder paden)"},
+    # Bronnamen kunnen persoonlijk zijn: alleen beheer/operator/Hub; een viewer ziet zijn bronnen via /search/v1.
+    "search.source": {"roles": {"admin", "operator", "service"}, "title_nl": "Zoekbronnen (zonder paden)"},
     "search.index_run": {"roles": {"admin", "operator", "service"}, "title_nl": "Index- en purge-runs"},
     "search.privacy_summary": {
         "roles": {"admin", "operator", "service"},

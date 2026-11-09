@@ -557,10 +557,20 @@ def resume(session: Session, principal: Principal, src: IndexSource, trace: str)
     )
 
 
+SYSTEM_EXPIRY = Principal(kind="service", subject="worker-toestemming-verlopen", roles=frozenset())
+
+
 def revoke(
-    session: Session, settings: Settings, principal: Principal, src: IndexSource, reason: str, trace: str
+    session: Session,
+    settings: Settings,
+    principal: Principal,
+    src: IndexSource,
+    reason: str,
+    trace: str,
+    *,
+    system: bool = False,
 ) -> IndexRun:
-    if principal.is_kid or not (principal.is_admin or principal.subject == src.owner_sub):
+    if not system and (principal.is_kid or not (principal.is_admin or principal.subject == src.owner_sub)):
         raise forbidden("geen_recht_intrekken", "Alleen de eigenaar van de gegevens of een beheerder kan intrekken.")
     now = utcnow()
     session.execute(
@@ -708,6 +718,29 @@ def purge_outside_selection(
     }
     run.verification = {"buiten_selectie_over": len(left), "leeg": not left, "gecontroleerd_op": iso(run.finished_at)}
     return run
+
+
+def expire_consents(session: Session, settings: Settings) -> int:
+    """Worker: een verlopen toestemming wordt behandeld als intrekking (index en embeddings weg, gecontroleerd)."""
+    now = utcnow()
+    expired = list(
+        session.scalars(
+            select(PrivacyConsent).where(
+                PrivacyConsent.purpose == "search_index",
+                PrivacyConsent.revoked_at.is_(None),
+                PrivacyConsent.expires_at.is_not(None),
+                PrivacyConsent.expires_at <= now,
+            )
+        )
+    )
+    done = 0
+    for consent in expired:
+        src = session.get(IndexSource, consent.source_id) if consent.source_id else None
+        if src is None:
+            continue
+        revoke(session, settings, SYSTEM_EXPIRY, src, "toestemming verlopen", str(uuid.uuid4()), system=True)
+        done += 1
+    return done
 
 
 def sweep_revoked(session: Session) -> int:
