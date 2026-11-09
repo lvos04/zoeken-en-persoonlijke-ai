@@ -26,6 +26,12 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
   testmappen zijn deterministisch van root; de bewaker geeft een duidelijke Nederlandse fout als de app als andere
   gebruiker dan root of 568 start (*Custom User*), in plaats van een Engelse `initdb`-melding.
 
+- **QA P0-afronding (ADR-0010):** een bronpad dat onder de leeswortel via een symlink loopt, wordt geweigerd en nooit
+  gelezen (kon een niet-geselecteerde share openen); vervaldatum zonder tijdzone → 422 i.p.v. 500; geen lege namen
+  of eigenaar; cursor alleen een geheel getal ≥ 0; connector-health `unknown` (niet `healthy`) zolang de
+  Hub-sleutels onbekend zijn; kinderprofiel nooit de beheerweergave; de image zet zelf no-new-privileges (het
+  TrueNAS-formulier kan dat niet) en de rooktest start zonder die vlag.
+
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).
 Validatie op een echte NAS: **NIET GEVALIDEERD**.

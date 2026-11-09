@@ -70,7 +70,9 @@ Daarna staat de app op *Running* en na de healthcheck (`/readyz`) op *Healthy*.
 
 **Een share koppelen betekent nog niet dat hij doorzocht wordt.** Pas als een beheerder in de Hub een bron kiest
 (bronwizard) én de eigenaar van de gegevens toestemming geeft, wordt die map gebruikt. Een niet-geselecteerde share
-wordt nooit gelezen en de index verlaat de NAS niet.
+wordt nooit gelezen en de index verlaat de NAS niet. Mappen en bestanden die via een symbolische koppeling
+(symlink) naar een andere plek wijzen — bijvoorbeeld naar een andere share — worden nooit gelezen; kies in de
+bronwizard altijd de echte map.
 
 Niet doen: geen Docker-socket koppelen, geen extra host-paden zoals `/`, `/mnt`, `/etc` of `/var/run`, geen *Host
 Network*, geen *Privileged*, geen schrijfbare share-koppelingen. Er is geen enkele reden voor in deze app.

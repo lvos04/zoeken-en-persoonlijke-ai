@@ -19,6 +19,8 @@ Status: aanvaard · Datum: 2026-11-09 · Fase: P0 · Excel: B07-001, I25-25-01
    `id_rsa*`, `id_ecdsa*`, `id_ed25519*`, `*.gpg` (hoofdletterongevoelig).
 5. **Symlinks**: mappen- en bestandssymlinks worden niet gevolgd; elk kandidaatbestand wordt op het echte pad
    (`realpath`) opnieuw tegen het echte toegestane pad gecontroleerd (`symlink_buiten_bron`).
+   Aanvulling (ADR-0010): ook het gekozen bronpad zelf mag onder de leeswortel nergens via een symlink lopen
+   (`pad_via_symlink` bij kiezen, `symlink_in_bronpad`/`via_symlink` bij lezen en bij toestemming).
 6. De **bronwizard-voorvertoning** gebruikt alleen `lstat`/namen (geen `open`), telt en toont een kleine steekproef
    van relatieve namen aan de eigenaar; hard begrensd (`SEARCH_AI_PREVIEW_MAX_FILES`).
 7. Bij een smallere selectie verwijdert de dienst direct de afgeleide data die nu buiten de selectie valt.
