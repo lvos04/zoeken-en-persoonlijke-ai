@@ -12,30 +12,30 @@
  {
   "id": "B07-002",
   "status": "Bezig",
-  "validatie": "Sim-getest (alleen het opschoondeel van de acceptatie; ingest-adapters niet gebouwd)",
+  "validatie": "Sim-getest",
   "bewijs": "commit db0810f; apps/api/tests/integration/test_schema_constraints.py::test_cascade_removes_all_derived_rows; commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_b07_001_consent.py::test_revoke_purges_index_and_embeddings_but_not_originals; apps/api/tests/integration/test_review_p0_qa.py::test_revoke_leaves_no_rest_data_anywhere",
   "blokkade": "Adapters voor bestanden/Immich/Jellyfin/logs (read-only ingest, hash/ETag, rate limiting) nog niet gebouwd (P5); indexrijen in tests via simulatie.",
-  "opmerking": "Acceptatie-deel 'verwijderde bron verwijdert gekoppelde embeddings zonder originele data te wijzigen' is Sim-getest via intrekken/opschonen (embeddings 0, checksum + mtime van originelen gelijk). Tabellen document_ref/chunk/embedding/index_run met source_etag, content_sha256 en herkomst staan klaar; migratie 0002 houdt afgeleide rijen bij de bron van hun ouder. POST /search/v1/reindex geeft eerlijk 501 capability_unavailable (409 zonder toestemming).",
+  "opmerking": "Reikwijdte validatie: alleen het opschoondeel van de acceptatie; ingest-adapters niet gebouwd. Acceptatie-deel 'verwijderde bron verwijdert gekoppelde embeddings zonder originele data te wijzigen' is Sim-getest via intrekken/opschonen (embeddings 0, checksum + mtime van originelen gelijk). Tabellen document_ref/chunk/embedding/index_run met source_etag, content_sha256 en herkomst staan klaar; migratie 0002 houdt afgeleide rijen bij de bron van hun ouder. POST /search/v1/reindex geeft eerlijk 501 capability_unavailable (409 zonder toestemming).",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
  {
   "id": "B07-003",
   "status": "Bezig",
-  "validatie": "Sim-getest (full-text + vectorzoeker met ACL vóór ranking, ook met HNSW-index; semantische API niet beschikbaar)",
+  "validatie": "Sim-getest",
   "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; apps/api/tests/integration/test_schema_constraints.py::test_vector_roundtrip_and_dimension_check; commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_vector_index_acl_b07_003; apps/api/tests/integration/test_review_p0_qa.py::test_acl_before_ranking_survives_limit_and_pagination; apps/api/tests/integration/test_review_p0_qa.py::test_derived_rows_cannot_cross_sources",
   "blokkade": "Semantisch/hybride zoeken via de API vereist een lokaal embeddingmodel (optionele app, standaard uit) en B07-002; de vectorzoeker is alleen met vaste testvectoren getoetst. NIET GEVALIDEERD (echte NAS).",
-  "opmerking": "GET /search/v1/search (full-text, GIN-index) met ACL in de WHERE; mode=semantic/hybrid → 501. search/semantic.py: ACL, model, versie en dimensie in de WHERE vóór de cosinusafstand; acceptatie 'B kan niet in privéfile van A zoeken via de vectorindex' Sim-getest (ook met limit=1 en een echte HNSW-index). Fuzzy zoeken, filters type/datum/score en RLS volgen.",
+  "opmerking": "Reikwijdte validatie: full-text + vectorzoeker met ACL vóór ranking, ook met HNSW-index; semantische API niet beschikbaar. GET /search/v1/search (full-text, GIN-index) met ACL in de WHERE; mode=semantic/hybrid → 501. search/semantic.py: ACL, model, versie en dimensie in de WHERE vóór de cosinusafstand; acceptatie 'B kan niet in privéfile van A zoeken via de vectorindex' Sim-getest (ook met limit=1 en een echte HNSW-index). Fuzzy zoeken, filters type/datum/score en RLS volgen.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
  {
   "id": "B07-004",
   "status": "Niet gestart",
-  "validatie": "Unit-getest (alleen datamodel)",
+  "validatie": "Unit-getest",
   "bewijs": "commit db0810f; apps/api/tests/integration/test_schema_constraints.py::test_no_invented_timecodes_half_pair",
   "blokkade": "Vereist B07-002 en Jellyfin-adapter (P5).",
-  "opmerking": "Schema dwingt af: tijdcodes alleen als volledig paar; transcript_ref.kind 'asr' alleen met opt-in.",
+  "opmerking": "Reikwijdte validatie: alleen datamodel. Schema dwingt af: tijdcodes alleen als volledig paar; transcript_ref.kind 'asr' alleen met opt-in.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
@@ -52,10 +52,10 @@
  {
   "id": "B07-006",
   "status": "Bezig",
-  "validatie": "Sim-getest (opschonen bij intrekking incl. zoekgeschiedenis en B15-context; back-up zonder indexinhoud)",
+  "validatie": "Sim-getest",
   "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_revoke_purges_index_and_embeddings_but_not_originals; apps/api/tests/integration/test_b07_001_consent.py::test_delete_index_keeps_consent; apps/api/tests/integration/test_review_p0.py::test_pre_upgrade_backup_with_real_pg_dump; commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_revoke_leaves_no_rest_data_anywhere; apps/api/tests/integration/test_review_p0.py::test_pre_upgrade_backup_with_real_pg_dump (back-up zonder indexinhoud)",
   "blokkade": "Checksum-purgeverificatie, privacyrapport, export en herindexeren na restore vereisen B07-002 (P5).",
-  "opmerking": "Intrekken verwijdert afgeleide data én bewaarde zoekgeschiedenis met deze bron in één transactie, telt na (index_run purge) en de worker controleert na; een test doorzoekt daarna alle tabellen op inhoud en bestandsnaam. De back-up vóór een upgrade bevat geen indexinhoud, zoekgeschiedenis of transcripten (ADR-0008). Fysiek wissen uit ZFS-snapshots valt buiten de app.",
+  "opmerking": "Reikwijdte validatie: opschonen bij intrekking incl. zoekgeschiedenis en B15-context; back-up zonder indexinhoud. Intrekken verwijdert afgeleide data én bewaarde zoekgeschiedenis met deze bron in één transactie, telt na (index_run purge) en de worker controleert na; een test doorzoekt daarna alle tabellen op inhoud en bestandsnaam. De back-up vóór een upgrade bevat geen indexinhoud, zoekgeschiedenis of transcripten (ADR-0008). Fysiek wissen uit ZFS-snapshots valt buiten de app.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
@@ -72,10 +72,10 @@
  {
   "id": "B15-002",
   "status": "Niet gestart",
-  "validatie": "Unit-getest (alleen datamodel)",
+  "validatie": "Unit-getest",
   "bewijs": "commit db0810f; apps/api/tests/unit/test_models_and_vector.py::test_intent_can_never_record_execution",
   "blokkade": "STT-app (faster-whisper) optioneel en standaard uit; logica P5.",
-  "opmerking": "transcript.expires_at verplicht, retentie voice_transcript = 0 dagen; intent kan geen 'uitgevoerd' vastleggen.",
+  "opmerking": "Reikwijdte validatie: alleen datamodel. transcript.expires_at verplicht, retentie voice_transcript = 0 dagen; intent kan geen 'uitgevoerd' vastleggen.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
@@ -102,20 +102,20 @@
  {
   "id": "B15-005",
   "status": "Niet gestart",
-  "validatie": "Unit-getest (alleen datamodel)",
+  "validatie": "Unit-getest",
   "bewijs": "commit db0810f",
   "blokkade": "Sessies/apparaten volgen in P5.",
-  "opmerking": "voice_session met vervaltijd per apparaat; context_scope met vervaltijd.",
+  "opmerking": "Reikwijdte validatie: alleen datamodel. voice_session met vervaltijd per apparaat; context_scope met vervaltijd.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
  {
   "id": "B15-006",
   "status": "Niet gestart",
-  "validatie": "Unit-getest (alleen datamodel: geen audiokolommen)",
+  "validatie": "Unit-getest",
   "bewijs": "commit db0810f; apps/api/tests/unit/test_models_and_vector.py::test_no_raw_audio_column_anywhere_in_b15",
   "blokkade": "Privacy-/datatools volgen in P5.",
-  "opmerking": "Geen enkele binaire kolom in de B15-tabellen.",
+  "opmerking": "Reikwijdte validatie: alleen datamodel: geen audiokolommen. Geen enkele binaire kolom in de B15-tabellen.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
@@ -143,19 +143,19 @@
   "id": "I14-14-02",
   "status": "Bezig",
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
-  "bewijs": "commit 4bd082b, ebeeca0; deploy/allinone/smoke-test.sh (pgvector 0.8.7 in de ingebouwde database; alleen-lezen share ongewijzigd); commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); deploy/allinone/smoke-test.sh 32/32 alleen als root (pgvector werkt echt: HNSW-index + KNN via de index; databehoud na herstart, harde kill en nieuwe container); unit/integratie/E2E (87 + 4) geslaagd tegen een PostgreSQL uit de gebouwde image (PG 16.15 + pgvector 0.8.7); commit c60d34a, ef10e18 (P0 afmaken, ADR-0009); GitHub Actions ci run 42619280743 groen (python + image); deploy/allinone/smoke-test.sh 37/37 lokaal als uid 1000 én op de GitHub-runner; apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_refuses_other_run_user_with_clear_dutch_error; commit 72d3714 (QA P0-afronding, ADR-0010); apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_sets_no_new_privs_for_itself_and_children; deploy/allinone/smoke-test.sh 39/39 lokaal als uid 1000 (start zonder --security-opt, elk proces van 568 NoNewPrivs 1); GitHub Actions ci run 42622755067 (commit eb6854c) groen: job python 107 + 4 geslaagd, job image rooktest 39/39 op de GitHub-runner",
+  "bewijs": "commit 4bd082b, ebeeca0; deploy/allinone/smoke-test.sh (pgvector 0.8.7 in de ingebouwde database; alleen-lezen share ongewijzigd); commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); deploy/allinone/smoke-test.sh 32/32 alleen als root (pgvector werkt echt: HNSW-index + KNN via de index; databehoud na herstart, harde kill en nieuwe container); unit/integratie/E2E (87 + 4) geslaagd tegen een PostgreSQL uit de gebouwde image (PG 16.15 + pgvector 0.8.7); commit c60d34a, ef10e18 (P0 afmaken, ADR-0009); GitHub Actions ci run 42619280743 groen (python + image); deploy/allinone/smoke-test.sh 37/37 lokaal als uid 1000 én op de GitHub-runner; apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_refuses_other_run_user_with_clear_dutch_error; commit 72d3714 (QA P0-afronding, ADR-0010); apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_sets_no_new_privs_for_itself_and_children; deploy/allinone/smoke-test.sh 39/39 lokaal als uid 1000 (start zonder --security-opt, elk proces van 568 NoNewPrivs 1); GitHub Actions ci run 42622755067 (commit eb6854c) groen: job python 107 + 4 geslaagd, job image rooktest 39/39 op de GitHub-runner; commit 558c474, f1fb078, 5b74b00 (contract 1.2); deploy/allinone/smoke-test.sh 43/43 lokaal (elk proces ook PID 1: Uid 568, CapEff 0, NoNewPrivs 1; PID 1 = bewaker; zombies opgeruimd; nette stop op SIGTERM)",
   "blokkade": "Niet op TrueNAS geïnstalleerd; GHCR-release/digest nog niet uitgebracht.",
-  "opmerking": "Officiële image pgvector/pgvector:0.8.7-pg16-bookworm@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f; CREATE EXTENSION vector in migratie 0001. P0 afmaken: CI-job 'image' was rood doordat de rooktest /appdata/secrets (bewust 0700/568) als niet-root host-gebruiker las; nu via een alleen-lezen wegwerpcontainer. Bewaker geeft een NL-fout bij een andere run-gebruiker dan root/568 (Custom User). QA P0-afronding: zonder --security-opt (het TrueNAS-formulier kan die vlag niet zetten) draaiden alle processen met NoNewPrivs 0; de bewaker zet nu zelf PR_SET_NO_NEW_PRIVS en de rooktest start zoals het formulier.",
+  "opmerking": "Officiële image pgvector/pgvector:0.8.7-pg16-bookworm@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f; CREATE EXTENSION vector in migratie 0001. P0 afmaken: CI-job 'image' was rood doordat de rooktest /appdata/secrets (bewust 0700/568) als niet-root host-gebruiker las; nu via een alleen-lezen wegwerpcontainer. Bewaker geeft een NL-fout bij een andere run-gebruiker dan root/568 (Custom User). QA P0-afronding: zonder --security-opt (het TrueNAS-formulier kan die vlag niet zetten) draaiden alle processen met NoNewPrivs 0; de bewaker zet nu zelf PR_SET_NO_NEW_PRIVS en de rooktest start zoals het formulier. Contract 1.2: geen root-PID 1 meer (dumb-init verwijderd; de bewaker is PID 1 en wisselt zelf naar 568); de Docker-healthcheck zakt als eerste naar 568. Manifest volgens §9 zonder custom_app.ports/joins_platform_network, lokaal geldig volgens de validator van appstore-en-fork 837fa61 (in --strict alleen nog digest_pending_release, want er is in deze ronde bewust geen release). Of het TrueNAS-formulier een tag met @sha256 accepteert: NIET GEVALIDEERD (echte NAS).",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
  {
   "id": "I14-14-03",
   "status": "Bezig",
-  "validatie": "Sim-getest (ACL-filter + full-text-index + HNSW-vectorindex met ACL; RLS niet gebouwd)",
+  "validatie": "Sim-getest",
   "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_vector_index_acl_b07_003 (EXPLAIN toont de HNSW-index, ACL blijft gelden)",
   "blokkade": "RLS vereist een aparte niet-superuser querierol (ADR-0003); een HNSW-index per embeddingmodel wordt pas aangemaakt als er een lokaal model is (B07-003).",
-  "opmerking": "",
+  "opmerking": "Reikwijdte validatie: ACL-filter + full-text-index + HNSW-vectorindex met ACL; RLS niet gebouwd.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
@@ -172,20 +172,20 @@
  {
   "id": "I25-25-02",
   "status": "Bezig",
-  "validatie": "Unit-getest (datamodel; geen ingest)",
+  "validatie": "Unit-getest",
   "bewijs": "commit db0810f; apps/api/tests/integration/test_platform_core.py::test_schema_has_no_drift_against_models; commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_derived_rows_cannot_cross_sources; apps/api/tests/integration/test_review_p0_qa.py::test_migration_0002_keeps_valid_rows_and_drops_cross_source_rows",
   "blokkade": "Geen ingest (B07-002); 'geen dubbele/verouderde resultaten' kan pas met echte ingest worden getoetst.",
-  "opmerking": "Uniek (source_id, external_id) en (document_id, ordinal); content_sha256/source_etag/model_version aanwezig.",
+  "opmerking": "Reikwijdte validatie: datamodel; geen ingest. Uniek (source_id, external_id) en (document_id, ordinal); content_sha256/source_etag/model_version aanwezig.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
  {
   "id": "I25-25-05",
   "status": "Bezig",
-  "validatie": "Sim-getest (alleen ACL; prompt-injectie niet gebouwd)",
+  "validatie": "Sim-getest",
   "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; apps/api/tests/integration/test_b07_001_consent.py::test_kid_profile_restrictions; commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_vector_index_acl_b07_003; apps/api/tests/integration/test_review_p0_qa.py::test_kid_profile_sees_nothing_blocked_anywhere",
   "blokkade": "Prompt-injectietests vereisen B07-005 (P5).",
-  "opmerking": "",
+  "opmerking": "Reikwijdte validatie: alleen ACL; prompt-injectie niet gebouwd.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
@@ -202,30 +202,30 @@
  {
   "id": "EX16",
   "status": "Bezig",
-  "validatie": "Sim-geslaagd (deel zoeken-en-persoonlijke-ai)",
-  "bewijs": "commit e8adee6; apps/api/tests/integration/test_platform_core.py::test_jwt_roles_and_fail_closed_when_hub_disappears; tests/e2e/test_service_e2e.py::test_04_fail_closed_when_hub_disappears; apps/api/tests/unit/test_security.py::test_no_hub_means_no_access; commit 561fba1 (QA P0-afronding, ADR-0010); apps/api/tests/integration/test_qa_p0_afronding.py::test_connector_health_unknown_while_hub_keys_never_fetched; GitHub Actions ci run 42622755067 (commit eb6854c) groen: job python 107 + 4 geslaagd, job image rooktest 39/39 op de GitHub-runner",
+  "validatie": "Sim-geslaagd",
+  "bewijs": "commit e8adee6; commit 561fba1 (QA P0-afronding, ADR-0010); commit 558c474, f1fb078, 5b74b00 (contract 1.2); apps/api/tests/integration/test_contract_1_2.py::test_revocation_detected_only_when_services_self_also_401; apps/api/tests/integration/test_contract_1_2.py::test_unlink_by_hub_then_every_hub_jwt_refused; apps/api/tests/integration/test_qa_p0_afronding.py::test_hub_without_keys_in_enroll_answer_is_never_trusted; apps/api/tests/unit/test_security.py::test_state_checked_first; apps/api/tests/unit/test_security.py::test_service_token_never_accepted_inbound; tests/e2e/test_service_e2e.py::test_06_hub_outage_is_never_a_revocation; tests/e2e/test_service_e2e.py::test_07_revocation_is_fail_closed",
   "blokkade": "Echte run op de NAS vereist.",
-  "opmerking": "Ongeldig/verlopen service-token of geen bruikbare JWKS → 401, nooit open toegang; connector-health 'down'/'degraded'. QA P0-afronding: zolang de Hub-sleutels onbekend zijn is connector-health 'unknown' (niet 'healthy').",
+  "opmerking": "Reikwijdte validatie: deel zoeken-en-persoonlijke-ai. Contract 1.2: een ingetrokken koppeling (de Hub geeft 401 op een aanroep én op GET /api/v1/services/self) zet state 'ingetrokken'; daarna geeft elke Hub-JWT 401 met reason 'revoked' (fail-closed, nooit open toegang), eigen data blijft, één audit-regel + incident-event service.hub_link.revoked. Netwerkfouten, 5xx en 429 zijn nooit een intrekking; een Hub die tijdelijk weg is verandert niets aan de gepinde sleutels. Niet gekoppeld/ontkoppeld → 401 'not_linked'. De JWKS-cache (1.1) is vervangen door pinning: er wordt nooit meer een JWKS opgehaald.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
  {
   "id": "EX36",
   "status": "Bezig",
-  "validatie": "Sim-geslaagd (deel zoeken-en-persoonlijke-ai: kinderprofiel-ACL in index en vectorindex)",
+  "validatie": "Sim-geslaagd",
   "bewijs": "commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_kid_profile_sees_nothing_blocked_anywhere; apps/api/tests/integration/test_review_p0_qa.py::test_vector_index_acl_b07_003; apps/api/tests/integration/test_b07_001_consent.py::test_kid_profile_restrictions; commit 561fba1 (QA P0-afronding, ADR-0010); apps/api/tests/integration/test_qa_p0_afronding.py::test_kid_as_owner_never_gets_admin_view; GitHub Actions ci run 42622755067 (commit eb6854c) groen: job python 107 + 4 geslaagd, job image rooktest 39/39 op de GitHub-runner",
   "blokkade": "Jellyfin-adapter (B07-002) en de vertaling van leeftijdsclassificatie naar kid_safe ontbreken; echte run op de NAS vereist.",
-  "opmerking": "Kinderprofiel ziet alleen kid_safe-documenten in bronnen die voor kinderen zijn opengezet en niet gevoelig zijn; 'kind' wint van elke andere rol; geen bronnamen, details, voorvertoning, runs, privacy of connector. QA P0-afronding: ook als 'eigenaar' van een bron krijgt een kinderprofiel geen paden, toegangslijst of toestemming.",
+  "opmerking": "Reikwijdte validatie: deel zoeken-en-persoonlijke-ai: kinderprofiel-ACL in index en vectorindex. Kinderprofiel ziet alleen kid_safe-documenten in bronnen die voor kinderen zijn opengezet en niet gevoelig zijn; 'kind' wint van elke andere rol; geen bronnamen, details, voorvertoning, runs, privacy of connector. QA P0-afronding: ook als 'eigenaar' van een bron krijgt een kinderprofiel geen paden, toegangslijst of toestemming.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
  {
   "id": "EX43",
   "status": "Bezig",
-  "validatie": "Sim-geslaagd (deel zoeken-en-persoonlijke-ai: visibility=owner in index en vectorindex)",
+  "validatie": "Sim-geslaagd",
   "bewijs": "commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_b07_001_consent.py::test_owner_only_documents_and_paused_sources; apps/api/tests/integration/test_review_p0_qa.py::test_vector_index_acl_b07_003",
   "blokkade": "Immich-adapter (B07-002, alleen metadata, privé-albums als visibility=owner) en thumbnails via de Hub ontbreken; echte run op de NAS vereist.",
-  "opmerking": "Een document met visibility=owner is alleen voor zijn eigenaar vindbaar, ook via de vectorindex en ook als de zoeker leesrecht op de bron heeft.",
+  "opmerking": "Reikwijdte validatie: deel zoeken-en-persoonlijke-ai: visibility=owner in index en vectorindex. Een document met visibility=owner is alleen voor zijn eigenaar vindbaar, ook via de vectorindex en ook als de zoeker leesrecht op de bron heeft.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  }
