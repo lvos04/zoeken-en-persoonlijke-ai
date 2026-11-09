@@ -3,8 +3,11 @@ en validatiewaarden, en elke test die als bewijs wordt genoemd bestaat echt.
 
 - ``status`` uit de Excel-lijst; ``Gereed`` en ``Geslaagd`` worden in deze bouwomgeving nooit gezet.
 - ``validatie``: één of meer waarden uit de vaste lijst, gescheiden door ``"; "``; toelichting hoort in ``opmerking``.
-  Alleen bij ``Niet gestart`` mag ``validatie`` leeg zijn (er is dan niets gevalideerd; een lege waarde is eerlijker dan
-  een verzonnen waarde).
+  Nooit leeg en nooit vrije tekst (A4), ook niet bij ``Niet gestart``: dan noemt ``validatie`` wat nog ontbreekt
+  (``NIET GEVALIDEERD (…)``), wat waar is en niets verzint (QA statuspagina, ADR-0015).
+- Per Excel-blad een eigen lijst: Testmatrix (``EX01``–``EX50``) heeft ``Sim-geslaagd``/``Sim-mislukt`` als
+  simulatorresultaat, werkpakketten en installatiestappen ``Sim-getest``/``Unit-getest``; besluiten (``D01``–``D18``)
+  hun eigen statussen.
 """
 
 from __future__ import annotations
@@ -19,18 +22,27 @@ from tests.conftest import REPO_ROOT
 
 EVIDENCE = REPO_ROOT / "docs" / "platform-v2" / "EVIDENCE.json"
 EXCEL_TAKEN = REPO_ROOT / "docs" / "platform-v2" / "EXCEL_TAKEN.json"
-STATUSSEN = {"Niet gestart", "Bezig", "Geblokkeerd", "N.v.t.", "Mislukt", "Open", "Ingevuld", "Getest"}
 NOOIT = {"Gereed", "Geslaagd"}
-VALIDATIE = {
-    "Sim-getest",
-    "Unit-getest",
+NIET_GEVALIDEERD = {
     "NIET GEVALIDEERD (echte NAS)",
     "NIET GEVALIDEERD (hardware)",
     "NIET GEVALIDEERD (account)",
     "NIET GEVALIDEERD (Mac/Xcode)",
-    "Sim-geslaagd",
-    "Sim-mislukt",
 }
+# (patroon van de ID, toegestane statussen, toegestane validatiewaarden) per Excel-blad (§11)
+BLADEN = [
+    (
+        re.compile(r"EX\d{2}"),
+        {"Niet gestart", "Bezig", "Mislukt", "Geblokkeerd", "N.v.t."},
+        {"Sim-geslaagd", "Sim-mislukt"} | NIET_GEVALIDEERD,
+    ),
+    (re.compile(r"D\d{2}"), {"Open", "Ingevuld", "Getest", "Geblokkeerd", "N.v.t."}, NIET_GEVALIDEERD),
+    (
+        re.compile(r"(B\d{2}-\d{3}|I\d{2}-\d{2}-\d{2})"),
+        {"Niet gestart", "Bezig", "Geblokkeerd", "N.v.t."},
+        {"Sim-getest", "Unit-getest"} | NIET_GEVALIDEERD,
+    ),
+]
 VELDEN = {"id", "status", "validatie", "bewijs", "blokkade", "opmerking", "repo", "bijgewerkt"}
 TEST_REF = re.compile(r"((?:apps/api/)?tests/[\w/.-]+\.py)::(\w+)")
 
@@ -46,12 +58,12 @@ def test_item_volgt_paragraaf_11(item: dict[str, Any]) -> None:
     assert set(item) == VELDEN
     assert item["repo"] == "zoeken-en-persoonlijke-ai"
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", item["bijgewerkt"])
-    assert item["status"] in STATUSSEN and item["status"] not in NOOIT
-    if item["validatie"] == "":
-        assert item["status"] == "Niet gestart", item["id"]
-        return
+    blad = next(((s, v) for p, s, v in BLADEN if p.fullmatch(item["id"])), None)
+    assert blad is not None, f"onbekende soort ID: {item['id']}"
+    statussen, validaties = blad
+    assert item["status"] in statussen and item["status"] not in NOOIT, (item["id"], item["status"])
     waarden = item["validatie"].split("; ")
-    assert all(w in VALIDATIE for w in waarden), item["validatie"]
+    assert all(w in validaties for w in waarden), (item["id"], item["validatie"])  # ook nooit leeg
     assert len(waarden) == len(set(waarden))
 
 

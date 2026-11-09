@@ -42,10 +42,10 @@
  {
   "id": "B07-005",
   "status": "Niet gestart",
-  "validatie": "",
+  "validatie": "NIET GEVALIDEERD (echte NAS)",
   "bewijs": "",
   "blokkade": "Vereist B07-002/B07-003 en een lokaal taalmodel (optioneel, standaard uit).",
-  "opmerking": "Geen RAG/LLM in P0; geen schrijftool aanwezig.",
+  "opmerking": "Geen RAG/LLM in P0; geen schrijftool aanwezig. Niet gestart: er is niets gebouwd of getest; validatie noemt alleen wat de acceptatie nodig heeft (lijstwaarde, contract §11/A4).",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
@@ -62,10 +62,10 @@
  {
   "id": "B15-001",
   "status": "Niet gestart",
-  "validatie": "",
+  "validatie": "NIET GEVALIDEERD (hardware)",
   "bewijs": "",
   "blokkade": "Spraakinvoer volgt in P5 (PWA in ai-server-manager + optionele STT-app).",
-  "opmerking": "GET /voice/v1/status meldt eerlijk capability_unavailable; getypte invoer blijft de terugval.",
+  "opmerking": "GET /voice/v1/status meldt eerlijk capability_unavailable; getypte invoer blijft de terugval. Niet gestart: er is niets gebouwd of getest; validatie noemt alleen wat de acceptatie nodig heeft (lijstwaarde, contract §11/A4).",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
@@ -82,20 +82,20 @@
  {
   "id": "B15-003",
   "status": "Niet gestart",
-  "validatie": "",
+  "validatie": "NIET GEVALIDEERD (echte NAS); NIET GEVALIDEERD (hardware)",
   "bewijs": "",
   "blokkade": "Intentrouter volgt in P5; acties alleen als ActionProposal via de Hub-policy.",
-  "opmerking": "",
+  "opmerking": "Niet gestart: er is niets gebouwd of getest; validatie noemt alleen wat de acceptatie nodig heeft (lijstwaarde, contract §11/A4).",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
  {
   "id": "B15-004",
   "status": "Niet gestart",
-  "validatie": "",
+  "validatie": "NIET GEVALIDEERD (hardware)",
   "bewijs": "",
   "blokkade": "TTS-app (Piper) optioneel en standaard uit; logica P5.",
-  "opmerking": "tts_job bewaart alleen status, geen audio.",
+  "opmerking": "tts_job bewaart alleen status, geen audio. Niet gestart: er is niets gebouwd of getest; validatie noemt alleen wat de acceptatie nodig heeft (lijstwaarde, contract §11/A4).",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
@@ -122,10 +122,10 @@
  {
   "id": "B15-007",
   "status": "Niet gestart",
-  "validatie": "",
+  "validatie": "NIET GEVALIDEERD (echte NAS)",
   "bewijs": "",
   "blokkade": "Vereist Hub-incidenten en MediaGuard/MSO-read-API's (P5).",
-  "opmerking": "",
+  "opmerking": "Niet gestart: er is niets gebouwd of getest; validatie noemt alleen wat de acceptatie nodig heeft (lijstwaarde, contract §11/A4).",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
  },
