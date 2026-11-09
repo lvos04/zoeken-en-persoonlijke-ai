@@ -3,20 +3,24 @@ PY ?= .venv/bin/python
 API := apps/api
 IMAGE ?= zoeken-en-persoonlijke-ai:dev
 
-.PHONY: venv lint test e2e openapi lock image smoke clean
+.PHONY: venv lint test e2e interop openapi lock image smoke clean
 
 venv:
 	python3.12 -m venv .venv && .venv/bin/pip install -q -r $(API)/requirements.lock && .venv/bin/pip install -q -e '$(API)[dev]'
 
 lint:
 	cd $(API) && ../../$(PY) -m ruff check . && ../../$(PY) -m ruff format --check . && ../../$(PY) -m mypy
-	$(PY) -m ruff check tests/e2e deploy/allinone && $(PY) -m ruff format --check tests/e2e deploy/allinone
+	$(PY) -m ruff check tests/e2e tests/interop deploy/allinone && $(PY) -m ruff format --check tests/e2e tests/interop deploy/allinone
 
 test:
 	cd $(API) && ../../$(PY) -m pytest -q
 
 e2e:
 	$(PY) -m pytest -q tests/e2e -p no:cacheprovider
+
+# ALLEEN lokaal: dienst tegen de ECHTE Hub (ai-server-manager) in een eigen venv; HUB_PY = Python van die venv.
+interop:
+	SEARCH_AI_REAL_HUB_PYTHON=$(HUB_PY) $(PY) -m pytest -q tests/interop -p no:cacheprovider
 
 openapi:
 	$(PY) -m search_ai openapi --out docs/openapi/zoeken-en-persoonlijke-ai.openapi.json
