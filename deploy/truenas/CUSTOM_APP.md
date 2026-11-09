@@ -109,7 +109,10 @@ Network*, geen *Privileged*, geen schrijfbare share-koppelingen. Er is geen enke
   toont) in. Het token vervalt na 60 minuten of na gebruik.
 - **Handmatig, zonder formulierwijziging:** open `http://<NAS-adres>:30450`. Zolang de app **nog nooit** gekoppeld is,
   toont de statuspagina een formulier met Hub-adres, koppelcode en Hub-vingerafdruk (alle drie verplicht; de Hub-UI
-  toont koppelcode en vingerafdruk samen). Hooguit 5 pogingen per kwartier per apparaat.
+  toont koppelcode en vingerafdruk samen). Hooguit 5 pogingen per kwartier per bron-IP-adres en 20 per kwartier voor
+  de hele app; er loopt hooguit één koppelpoging tegelijk. Welk bron-IP-adres de app achter de poortdoorsturing van
+  TrueNAS ziet (jouw apparaat of één gateway-adres voor iedereen), is **NIET GEVALIDEERD (echte NAS)**; in het
+  laatste geval delen alle apparaten de limiet van 5.
 
 **Ontkoppelen of opnieuw koppelen gaat alleen via de Hub** (of met een nieuw `HUB_ENROLLMENT_TOKEN` in dit formulier:
 wie het formulier kan wijzigen is TrueNAS-beheerder). Op de statuspagina kan dat niet meer, en er is geen lokale

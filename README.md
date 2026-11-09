@@ -13,7 +13,8 @@ ACL vóór ranking (alleen intern en getest; de API voor semantisch zoeken blijf
 zonder restdata (ook zoekgeschiedenis en back-ups) en een verzoek- en tijdlimiet op zoeken.
 
 **Platformcontract 1.2** (kopie in [`docs/platform-v2/PLATFORM_CONTRACTEN.md`](docs/platform-v2/PLATFORM_CONTRACTEN.md),
-keuzes in [`docs/adr/ADR-0011-contract-1-2-conformiteit.md`](docs/adr/ADR-0011-contract-1-2-conformiteit.md)): koppeling
+keuzes in [`docs/adr/ADR-0011-contract-1-2-conformiteit.md`](docs/adr/ADR-0011-contract-1-2-conformiteit.md), review in
+[`docs/adr/ADR-0012-qa-contract-1-2.md`](docs/adr/ADR-0012-qa-contract-1-2.md)): koppeling
 in `/appdata/secrets/hub-link.json` met gepinde Hub-sleutels en vingerafdruk, alleen Hub-JWT's (`token_use`,
 `jti`-replaycache), ontkoppelen/opnieuw koppelen alleen via de Hub, geen root-proces in de container (ook PID 1 niet).
 Getest tegen een Hub-simulator, **niet** tegen de echte Hub.

@@ -111,6 +111,44 @@ Wat de rooktest sinds 1.2 extra controleert: **elk** proces in de container, ook
 mee); PID 1 is de bewaker zelf; een verweesd proces wordt opgeruimd (geen zombie); `docker restart` stopt netjes via
 SIGTERM op PID 1; er staat **geen** ontkoppelcode meer in de log en zonder koppeling bestaat er geen `hub-link.json`.
 
+## QA contract 1.2 (onafhankelijke review, 2026-11-09, ADR-0012)
+Zelfde machine (Ubuntu 26.04, uid 1000, gedeelde PostgreSQL 16 + pgvector 0.8.7, Docker Engine). Eerst alle
+CI-stappen ongewijzigd opnieuw gedraaid op commit 86b08d1: ruff/mypy/actionlint/shellcheck schoon, **258 geslaagd**
+(unit + integratie), E2E **7 geslaagd**, migraties op/neer/op, geen OpenAPI-drift, pip-audit schoon. De contractkopie
+en de conformiteitslijst zijn byte-gelijk aan `ai-server-manager` (sha256 `6a9d29bd…f424` en `6daedffb…7f59`). Daarna
+is de code naast §1–§13 en ZA1–ZA9 gelegd. Gevonden en gerepareerd (elk eerst gereproduceerd):
+
+| Bevinding | Reparatie | Test (faalt op de vorige code) |
+|---|---|---|
+| Onleesbare JSON-body **zonder** authenticatie gaf `422 validation_error` (ongeldige UTF-8: `400`) in plaats van 401 (§4.7): FastAPI ontleedt de body vóór de afhankelijkheden | Bij een body-fout op `/search/v1`, `/voice/v1` en `/connector/v1` wordt eerst geauthenticeerd als er nog geen principal is. Zonder geldige auth volgt 401 met de vaste `reason`; met auth blijft het 422/400 en wordt de `jti` niet verbruikt | `test_qa_contract_1_2.py::test_unreadable_body_without_valid_auth_is_401_not_422` (5 varianten), `::test_unreadable_body_when_not_linked_is_401_not_linked`, `::test_unreadable_body_with_valid_auth_stays_422_and_keeps_the_jti` |
+| Twee **gelijktijdige** koppelpogingen via de statuspagina slaagden allebei; de tweede verving de net gemaakte koppeling (§3.7) | Hooguit één koppelcode-poging tegelijk (`koppelen_bezig`, gaat niet naar de Hub); een koppelcode slaat alleen op zolang de dienst nog nooit gekoppeld is (binnen de `flock`), ook bij een wedloop met het env-token van de worker | `::test_concurrent_code_pairings_only_one_reaches_the_hub`, `::test_code_attempt_never_replaces_a_link_made_meanwhile`, `::test_no_pairing_on_the_status_page_after_revocation` |
+| De bewaker volgde als **root** symbolische koppelingen in `/appdata/{postgres,secrets,backups,logs}` en in de socketmap `/tmp/search-ai-pg` (die bij `docker restart` blijft en van 568 is). In de echte image gereproduceerd met de vorige bewaker: een link `backups → /usr/local/lib` maakte `/usr/local/lib`, inclusief `search_ai/app.py`, eigendom van 568, waarna 568 bij de volgende start als root code kon laten draaien (§2.2) | Link als eigen submap van `/appdata` → Nederlandse fout, niets aangeraakt; link of niet-map als socketmap → vervangen door een gewone map, chown zonder links te volgen | `test_deploy_artifacts.py::test_supervisor_refuses_symlinked_own_dirs` (4×), `::test_supervisor_socket_dir_link_is_replaced_never_followed`, rooktest secties 7 en 7b |
+| `CUSTOM_APP.md`: "5 pogingen per kwartier per apparaat" | Per bron-IP-adres + 20 voor de hele app; welk adres de container achter de poortdoorsturing ziet, is NIET GEVALIDEERD (echte NAS) | — |
+
+Ontbrekende negatieve tests toegevoegd (de code was al goed): een verlopen enrollment-token (> 60 min, regels van de
+simulator) wordt definitief afgehandeld en nooit opnieuw geprobeerd, ook niet na een herstart
+(`::test_expired_enrollment_token_is_refused_by_the_hub_and_never_retried`). Een hergebruikt token in een nieuwe
+installatie wordt geweigerd en trekt het gebruikte token van de eerste installatie niet in
+(`::test_reused_enrollment_token_on_a_fresh_install_is_refused`). De rate-limit negeert `X-Forwarded-For`, `X-Real-IP`
+en `Forwarded` (`::test_status_page_rate_limit_ignores_x_forwarded_for`). Een gewisselde Hub-sleutel wordt zonder
+ondertekende rotatie nooit vertrouwd (`unknown_key`; gepinde `kid` met een andere sleutel → `invalid_token`).
+Herkoppelen met de oude `HUB_KEY_FINGERPRINT` slaat niets op; trekt de Hub daarbij het oude token in, dan wordt de
+dienst fail-closed `ingetrokken` (`::test_swapped_hub_key_is_never_trusted_without_rotation_or_relink`).
+
+| Commando | Uitkomst |
+|---|---|
+| `cd apps/api && ruff check . && ruff format --check . && mypy` · `ruff check/format --check tests/e2e deploy/allinone` · `shellcheck deploy/allinone/smoke-test.sh` · `actionlint .github/workflows/*.yml` | geen bevindingen (mypy: 43 bronbestanden) |
+| `cd apps/api && pytest -q` (unit + integratie) | **278 geslaagd** (258 + 20 nieuw) |
+| dezelfde nieuwe tests met de reparaties teruggedraaid (`git stash` van de broncode) | **12 falen** zoals bedoeld (body-fouten, gelijktijdig koppelen, koppelen na intrekking, symlinks); de overige nieuwe tests dekken gedrag dat al klopte |
+| `pytest -q tests/e2e -p no:cacheprovider` | **7 geslaagd** |
+| `python -m search_ai migrate` → `--down base` → `migrate` (database `zoek_qa_mig`) · OpenAPI-export + `git diff --exit-code docs/openapi/` · `pip-audit -r apps/api/requirements.lock` | op/neer/op zonder fouten (revisie 0003) · geen drift · geen bekende kwetsbaarheden |
+| `nice -n 10 flock …/docker-build.lock docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:qa .` | gebouwd |
+| `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:qa` (als uid 1000, zonder `--security-opt`/`--cap-drop`) | **52 geslaagd, 0 mislukt** (43 + 9 nieuw in secties 7/7b) |
+| negatieve controle: image met de vorige `supervisor.py` op een `/appdata` met `backups → /usr/local/lib` | `/usr/local/lib` en `search_ai/app.py` werden eigendom van 568 (lek bevestigd); met de nieuwe bewaker: fout in de log, eigenaar blijft 0 |
+
+Niet gedaan (terecht): ZA9 (CSS uit de ontwerptaaltokens). `ONTWERPTAAL.md` en `design/ontwerptaal/` ontbreken nog
+in `ai-server-manager`, dus §13 laat de UI-ombouw niet starten. Niet getest: echte NAS en echte Hub.
+
 ## B07-001 — wat de tests aantonen (Sim-getest)
 - *Niet geselecteerde share indexeert niets*: de bronwizard ziet alleen share A; share B, symlinks naar B (ook een
   bronpad dat zelf via een symlink naar B loopt, ADR-0010), `.ssh`,

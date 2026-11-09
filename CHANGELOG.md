@@ -45,6 +45,13 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
   (`dumb-init` weg, de bewaker is PID 1 en ruimt zombies op), rooktest controleert elk proces; manifest volgens §9;
   Custom App-instructie met tag + digest en registry-login alleen als terugval.
 
+- **QA contract 1.2 (ADR-0012):** zonder geldige authenticatie altijd 401, ook bij een onleesbare JSON-body (was
+  422/400); hooguit één koppelpoging tegelijk via de statuspagina, en een koppelcode vervangt nooit een koppeling die er
+  intussen is; de bewaker volgt als root nooit een symbolische koppeling (in `/appdata` → duidelijke fout; socketmap in
+  `/tmp` → opnieuw aangemaakt), zodat een 568-proces root niet buiten `/appdata` kan laten chownen; extra negatieve
+  tests (verlopen/hergebruikt token, `X-Forwarded-For`, gewisselde Hub-sleutel, koppelen na intrekking) en rooktest
+  secties 7/7b.
+
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).
 Validatie op een echte NAS: **NIET GEVALIDEERD**.
