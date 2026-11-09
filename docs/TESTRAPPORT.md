@@ -363,6 +363,7 @@ Daarna zijn de code en de documenten gelezen; zeven bevindingen (Q-01 t/m Q-07, 
 | `actionlint .github/workflows/*.yml` · `shellcheck deploy/allinone/smoke-test.sh` | geen bevindingen |
 | alle routes uit de OpenAPI zonder authenticatie aangeroepen (losse controle) | elke route behalve `/healthz` en `/readyz` geeft `401 unauthorized` (`not_linked`); niets staat open bij een fout |
 | `flock … docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:qa .` + `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:qa` (na de reparaties) | gebouwd; **55 geslaagd, 0 mislukt** (lege `/appdata`, healthy, elk proces 568 / CapEff 0 / NoNewPrivs 1, gegevens behouden na herstart, harde kill en nieuwe container) |
+| GitHub Actions `ci`, run 42669242728 (commit 1ceeb3e) | **groen**. `python`: drift 9 geslaagd, 404 geslaagd + 10 overgeslagen (vergelijking met de referentie-renderer, alleen lokaal), E2E 7, pip-audit zonder bevindingen. `statuspagina-ui`: renderer 100 controles 0 mislukt, echte dienst 132 controles in 12 toestanden 0 mislukt. `image`: rooktest 55 geslaagd, 0 mislukt. |
 
 **Niet gedaan:** een echte NAS (welk bron-IP de dienst achter de poortdoorsturing ziet), een echte schermlezer, een
 echte telefoon of tv. Die blijven **NIET GEVALIDEERD**.
