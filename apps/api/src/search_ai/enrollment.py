@@ -175,6 +175,7 @@ class EnrollmentService:
         # gezet door elk geauthenticeerd Hub-antwoord met ``Hub-Token-Rotation: required`` (§3.8)
         self.rotation_required = False
         self._poll_lock = threading.Lock()
+        self._code_lock = threading.Lock()
 
     # ------------------------------------------------------------------ status
     def link(self) -> dict[str, Any]:
@@ -257,13 +258,22 @@ class EnrollmentService:
         return self._attempt("token", token, token_hash, hub_url, expected)
 
     def enroll_with_code(self, hub_url: str, code: str, fingerprint: str) -> Outcome:
-        """Statuspagina (§3.7). Invoer is al gecontroleerd door de aanroeper; hier nog één keer, voor de zekerheid."""
+        """Statuspagina (§3.7). Invoer is al gecontroleerd door de aanroeper; hier nog één keer, voor de zekerheid.
+
+        Hooguit één koppelcode-poging tegelijk (deze dienst heeft één API-proces): een tweede gelijktijdige poging gaat
+        niet naar de Hub (``koppelen_bezig``). Anders zou de Hub bij de tweede uitgifte het token van de eerste intrekken
+        (opnieuw koppelen) of zou een tweede "Hub" een net gemaakte koppeling kunnen vervangen."""
         url = validate_hub_url(hub_url, self.settings.allow_loopback_hub)
         normalized = normalize_pairing_code(code)
         expected = normalize_fingerprint(fingerprint)
         if normalized is None or expected is None:
             raise ValueError("koppelcode of vingerafdruk ongeldig")
-        return self._attempt("koppelcode", normalized, sha256_hex(normalized), url, expected)
+        if not self._code_lock.acquire(blocking=False):
+            return Outcome(False, "koppelen_bezig")
+        try:
+            return self._attempt("koppelcode", normalized, sha256_hex(normalized), url, expected)
+        finally:
+            self._code_lock.release()
 
     def _note_config_error(self, code: str) -> None:
         def fn(doc: dict[str, Any]) -> dict[str, Any] | None:
@@ -322,7 +332,11 @@ class EnrollmentService:
         except (InvalidResponse, ValueError) as exc:
             log.warning("koppelen geweigerd: ongeldig antwoord van de Hub (%s)", exc)
             return self._definitive(kind, secret_hash, Outcome(False, "hub_antwoord_ongeldig"))
-        self._store_link(kind, secret_hash, hub_url, parsed)
+        if not self._store_link(kind, secret_hash, hub_url, parsed):
+            # §3.7: een koppelcode koppelt alleen een dienst die nog nooit gekoppeld was. Een gelijktijdige poging die
+            # intussen slaagde (of een env-token) gaat voor; deze uitgifte van de Hub wordt nooit gebruikt.
+            log.warning("koppelcode-antwoord van de Hub niet opgeslagen: de dienst is intussen al gekoppeld")
+            return Outcome(False, "al_gekoppeld")
         log.info("gekoppeld met de Hub op %s via %s (vingerafdruk %s)", hub_url, kind, parsed["fingerprint"])
         confirmed = self.confirm()
         return Outcome(
@@ -331,10 +345,19 @@ class EnrollmentService:
             detail={"replayed": parsed["replayed"], "confirmed": confirmed.ok, "fingerprint": parsed["fingerprint"]},
         )
 
-    def _store_link(self, kind: str, secret_hash: str, hub_url: str, parsed: dict[str, Any]) -> None:
+    def _store_link(self, kind: str, secret_hash: str, hub_url: str, parsed: dict[str, Any]) -> bool:
+        """Schrijft de koppeling atomair (§3.6 stap 3). ``False`` als een koppelcode-poging te laat is: de dienst is
+        intussen (gelijktijdige poging, env-token) al eens gekoppeld; dan blijft alles ongewijzigd (§3.7)."""
         now = self._iso()
+        stored = {"ok": True}
 
-        def fn(doc: dict[str, Any]) -> dict[str, Any]:
+        def fn(doc: dict[str, Any]) -> dict[str, Any] | None:
+            if kind == "koppelcode" and (
+                doc.get("state") != "nooit_gekoppeld" or doc.get("first_linked_at") or doc.get("corrupt")
+            ):
+                stored["ok"] = False
+                self._clear_pending(doc, secret_hash)
+                return doc if not doc.get("corrupt") else None
             old_pins = doc.get("pins") if doc.get("state") == "gekoppeld" else None
             new = empty_doc(APP_ID) if doc.get("corrupt") else doc
             new.pop("corrupt", None)
@@ -369,6 +392,7 @@ class EnrollmentService:
             return new
 
         self.store.update(fn)
+        return stored["ok"]
 
     def _clear_pending(self, doc: dict[str, Any], secret_hash: str) -> bool:
         pending = doc.get("pending")

@@ -53,6 +53,10 @@ NOTICES = {
         "Het formulier is verlopen of ongeldig. Laad de pagina opnieuw en probeer het nog eens.",
     ),
     "te_veel_pogingen": ("fout", "Te veel pogingen. Wacht een kwartier en probeer het opnieuw."),
+    "koppelen_bezig": (
+        "fout",
+        "Er loopt al een koppelpoging. Wacht tot die klaar is en laad de pagina daarna opnieuw.",
+    ),
     "ongeldig_hub_adres": (
         "fout",
         "Het Hub-adres is ongeldig. Gebruik http(s)://<NAS-adres>:<poort>, zonder pad en geen localhost.",
