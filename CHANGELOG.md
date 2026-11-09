@@ -50,7 +50,8 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
   intussen is; de bewaker volgt als root nooit een symbolische koppeling (in `/appdata` → duidelijke fout; socketmap in
   `/tmp` → opnieuw aangemaakt), zodat een 568-proces root niet buiten `/appdata` kan laten chownen; extra negatieve
   tests (verlopen/hergebruikt token, `X-Forwarded-For`, gewisselde Hub-sleutel, koppelen na intrekking) en rooktest
-  secties 7/7b.
+  secties 7/7b; na een 413 wordt de rest van de body begrensd weggelezen (4 MiB, 2 s), zodat de client de 413 krijgt in
+  plaats van een verbindingsreset; interoptest tegen de echte Hub (`tests/interop`, alleen lokaal).
 
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).

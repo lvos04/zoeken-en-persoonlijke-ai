@@ -1,4 +1,4 @@
-# ADR-0012 — QA contract 1.2: authenticatie vóór body-fouten, één koppelpoging tegelijk, geen links volgen als root
+# ADR-0012 — QA contract 1.2: authenticatie vóór body-fouten, één koppelpoging tegelijk, geen links volgen als root, 413 zonder reset
 
 Status: aanvaard · Datum: 2026-11-09 · Contract: `contracts 1.2` (kopie byte-gelijk aan `lvos04/ai-server-manager`,
 sha256 `6a9d29bd…f424`) · Aanvulling op ADR-0011 · Onafhankelijke review van de bouwronde contract 1.2.
@@ -7,7 +7,7 @@ sha256 `6a9d29bd…f424`) · Aanvulling op ADR-0011 · Onafhankelijke review van
 Een onafhankelijke review heeft alle CI-stappen opnieuw gedraaid (alles groen) en de code naast
 `PLATFORM_CONTRACTEN.md` §1–§13 en elk punt van `CONTRACT_1.2_CONFORMITEIT.md` (A1–A7, ZA1–ZA9) gelegd. ZA1–ZA8 zijn
 gebouwd en getest; ZA9 is terecht niet gedaan (§13: `ONTWERPTAAL.md` en `design/ontwerptaal/` ontbreken nog in
-`ai-server-manager`). Drie afwijkingen zijn eerst gereproduceerd en daarna gerepareerd.
+`ai-server-manager`). Vier afwijkingen zijn eerst gereproduceerd en daarna gerepareerd.
 
 ## Bevindingen en besluiten
 
@@ -44,6 +44,19 @@ gebouwd en getest; ZA9 is terecht niet gedaan (§13: `ONTWERPTAAL.md` en `design
    niet-map als socketmap wordt verwijderd en opnieuw als gewone map gemaakt (dat is onze eigen tijdelijke map). De
    chown daarvan volgt geen links.
 
+4. **413 kwam bij de client vaak niet aan, maar als verbindingsreset** (gevonden doordat CI-run 42643295437 faalde op
+   `test_04_body_limit_over_real_http` bij een commit zonder runtime-wijziging). Na de 413 sloot de dienst de
+   verbinding terwijl er nog ongelezen body in de ontvangstbuffer zat. TCP stuurt dan een reset, en die kan het
+   antwoord bij de client wissen (RFC 9112 §9.6). Lokaal: 70 van de 200 chunked verzoeken van 1,06 MiB kregen
+   `ConnectionResetError` in plaats van 413. Voor de Hub betekent dat "niet bereikbaar" (opnieuw proberen) in plaats van
+   een definitieve 413 (§3.3).
+   **Besluit:** vóór de 413 leest de laag de rest van de body en gooit hem weg ("lingering close"). Niets wordt bewaard
+   of verwerkt (wat al gebufferd was, wordt gewist), en het lezen is begrensd tot 4 MiB extra en 2 s. Een te grote
+   `Content-Length` wordt nog steeds geweigerd zonder dat er iets bij de app komt. Alleen als de opgegeven lengte
+   binnen grens + 4 MiB valt, wordt de body eerst weggelezen; ver daarboven volgt de 413 meteen, zonder te lezen.
+   Interpretatie van "direct geweigerd" (§5): niet verwerken en niet bufferen, wel begrensd weglezen. Uitkomst: 200 van
+   de 200 goed.
+
 ## Kleinere punten
 - `deploy/truenas/CUSTOM_APP.md` zei "5 pogingen per kwartier per apparaat". Het is per bron-IP-adres van de
   TCP-verbinding, plus 20 voor de hele app. Welk adres de container achter de poortdoorsturing ziet, is NIET
@@ -76,5 +89,7 @@ tokens pas intrekken bij het eerste gebruik van het nieuwe token, zoals bij rota
   pagina opnieuw (daarna is er geen formulier meer).
 - Een dataset waarin iemand `postgres`, `secrets`, `backups` of `logs` door een link heeft vervangen, start niet meer.
   De app-log noemt de map.
+- Een te groot verzoek kost de dienst hooguit 4 MiB en 2 s extra lezen (zonder geheugen), en de client krijgt de 413
+  dan betrouwbaar.
 - Niet gevalideerd: alles is Sim-getest (Hub-simulator, lokale Docker), plus één lokale interop-run tegen de echte
   Hub-code (be7d593). Niets is getest op een echte NAS.
