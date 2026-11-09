@@ -7,10 +7,17 @@
 
 De body wordt (tot de grens) gebufferd en daarna ongewijzigd aan de app doorgegeven. Deze dienst heeft geen uploads;
 een hogere grens per route zou een ADR en een eigen bovengrens vragen.
+
+**Netjes afsluiten (ADR-0012):** sluit de dienst de verbinding terwijl er nog ongelezen body in de ontvangstbuffer zit,
+dan stuurt TCP een reset en ziet de client de 413 vaak niet (RFC 9112 §9.6). De Hub zou dat als netwerkfout zien en
+opnieuw proberen. Daarom leest de laag vóór de 413 de rest van de body nog en gooit hem weg: niets wordt bewaard of
+verwerkt, en het lezen is begrensd (hooguit ``drain_max_bytes`` extra en ``drain_max_s`` seconden). Is de body groter
+of komt hij te traag, dan volgt de 413 toch meteen.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from typing import Any
@@ -18,6 +25,8 @@ from typing import Any
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 MAX_BODY_BYTES = 1024 * 1024
+DRAIN_MAX_BYTES = 4 * 1024 * 1024  # hooguit zoveel extra lezen en weggooien (nooit bufferen)
+DRAIN_MAX_S = 2.0
 TRACE_HEADER = b"x-trace-id"
 
 
@@ -54,9 +63,36 @@ async def _send_error(send: Send, scope: Scope, status: int, code: str, message:
 
 
 class BodyLimitMiddleware:
-    def __init__(self, app: ASGIApp, max_bytes: int = MAX_BODY_BYTES) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        max_bytes: int = MAX_BODY_BYTES,
+        drain_max_bytes: int = DRAIN_MAX_BYTES,
+        drain_max_s: float = DRAIN_MAX_S,
+    ) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self.drain_max_bytes = drain_max_bytes
+        self.drain_max_s = drain_max_s
+
+    async def _drain(self, receive: Receive, budget: int) -> None:
+        """Rest van de body lezen en weggooien, begrensd in bytes en tijd (zie de moduletekst)."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.drain_max_s
+        read = 0
+        while read <= budget:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return
+            try:
+                message = await asyncio.wait_for(receive(), remaining)
+            except TimeoutError:
+                return
+            if message["type"] == "http.disconnect":
+                return
+            read += len(message.get("body", b""))
+            if not message.get("more_body", False):
+                return
 
     async def _too_large(self, send: Send, scope: Scope) -> None:
         await _send_error(
@@ -79,6 +115,9 @@ class BodyLimitMiddleware:
                     await _send_error(send, scope, 400, "bad_request", "Ongeldige Content-Length.", {})
                     return
                 if int(raw) > self.max_bytes:
+                    # direct geweigerd: niets gebufferd of verwerkt; een body tot de draingrens wordt nog weggelezen
+                    if int(raw) <= self.max_bytes + self.drain_max_bytes:
+                        await self._drain(receive, int(raw))
                     await self._too_large(send, scope)
                     return
         chunks: list[bytes] = []
@@ -90,6 +129,9 @@ class BodyLimitMiddleware:
             chunk = message.get("body", b"")
             total += len(chunk)
             if total > self.max_bytes:
+                chunks.clear()  # niets bewaren van een te groot verzoek
+                if message.get("more_body", False):
+                    await self._drain(receive, self.drain_max_bytes)
                 await self._too_large(send, scope)
                 return
             chunks.append(chunk)
