@@ -155,6 +155,11 @@ def connector_health(request: Request, session: Session) -> dict[str, Any]:
     status = "down" if any(c["status"] == "down" for c in service_checks if c["name"] == "pgvector") else None
     if status is None:
         status = "degraded" if bad or not coupled else "healthy"
+    # Onbekend is nooit groen: een dienstcheck die 'unknown' is (bv. Hub-sleutels nog nooit opgehaald) maakt het
+    # geheel 'unknown', niet 'healthy'. Niet-gebouwde functies (ingest, spraak) tellen hier niet mee: die staan
+    # eerlijk als capability_unavailable in hun eigen check.
+    if status == "healthy" and any(c["status"] == "unknown" for c in service_checks):
+        status = "unknown"
     reason = next((c["reason_code"] or c["name"] for c in service_checks if c["status"] != "healthy"), None)
     return {
         "status": status,

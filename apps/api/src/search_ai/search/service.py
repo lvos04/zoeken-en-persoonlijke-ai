@@ -197,7 +197,8 @@ def source_view(session: Session, src: IndexSource, principal: Principal, settin
         "updated_at": iso(src.updated_at),
         "etag": f'W/"{src.version}"',
     }
-    if not (principal.is_admin or principal.subject == src.owner_sub):
+    # Kinderprofiel krijgt nooit de beheerweergave, ook niet als 'eigenaar' (de meest beperkende rol wint).
+    if not (principal.is_admin or (principal.subject == src.owner_sub and not principal.is_kid)):
         return base
     consent = active_consent(session, src.id)
     current_sha = snapshot(src, list(consent.scopes) if consent else [])[1]
