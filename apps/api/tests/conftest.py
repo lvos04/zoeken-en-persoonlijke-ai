@@ -1,38 +1,36 @@
-"""Gedeelde fixtures: Hub-sleutels/JWT's, een nep-Hub (httpx.MockTransport), een test-PostgreSQL met pgvector en
-nep-shares op schijf.
+"""Gedeelde fixtures: een Hub-simulator volgens contract 1.2 (``tests/hubsim.py``, via httpx.MockTransport), een
+test-PostgreSQL met pgvector en nep-shares op schijf.
 
 Integratietests gebruiken de gedeelde ontwikkel-PostgreSQL (``SEARCH_AI_TEST_ADMIN_URL``, standaard
 127.0.0.1:5432) met een eigen database ``zoek_test_api``. Er worden nooit echte apps, NAS'en of accounts aangesproken.
-De nep-Hub volgt het verzoekformaat van de echte Hub (``ai-server-manager``, ``routers/services.py``).
 """
 
 from __future__ import annotations
 
-import json
+import hashlib
 import os
-import time
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import httpx
-import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy import create_engine, text
 
 from search_ai.config import Settings
-from search_ai.security.secrets import public_jwk
+from tests.hubsim import HubSim, b64url
 
 ADMIN_DB_URL = os.environ.get("SEARCH_AI_TEST_ADMIN_URL", "postgresql+psycopg://postgres@127.0.0.1:5432/postgres")
 TEST_DB_NAME = os.environ.get("SEARCH_AI_TEST_DB_NAME", "zoek_test_api")
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-ENV_TOKEN = "enr_env-enroll-token-0123456789abcdef"  # testwaarde (nep-Hub)
-PAIR_CODE = "KOPP-ELC0-DE42"
+# vaste testwaarden (alleen de simulator kent ze); formaat zoals contract 1.2 §3.4
+ENV_TOKEN = "enr_" + b64url(hashlib.sha256(b"zoek-test-env-token").digest())
+PAIR_CODE = "KQ4M-7ZP2-9HXT"
 HUB_URL = "http://hub.test:30400"
+HUB_HOST = "hub.test"
 
 
 def recreate_database(name: str) -> str:
@@ -44,121 +42,95 @@ def recreate_database(name: str) -> str:
     return ADMIN_DB_URL.rsplit("/", 1)[0] + "/" + name
 
 
-@dataclass
-class HubKeys:
-    private: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
+class FreshAuth(Mapping[str, str]):
+    """``Authorization``-header die bij **elke** lezing een nieuwe Hub-JWT (nieuwe ``jti``) maakt — zoals de echte Hub
+    per mutatie een nieuwe JWT haalt (contract 1.2 §4.6). Zo kan een test ``headers=admin`` vaker gebruiken; replaytests
+    gebruiken bewust één vaste tokenstring."""
 
-    @property
-    def jwk(self) -> dict[str, str]:
-        return public_jwk(self.private)
+    def __init__(self, mint: Callable[[], str]) -> None:
+        self._mint = mint
 
-    @property
-    def kid(self) -> str:
-        return self.jwk["kid"]
+    def __getitem__(self, key: str) -> str:
+        if key != "Authorization":
+            raise KeyError(key)
+        return f"Bearer {self._mint()}"
 
-    def jwks(self) -> dict[str, Any]:
-        return {"keys": [self.jwk]}
+    def __iter__(self) -> Iterator[str]:
+        return iter(("Authorization",))
 
-    def token(
-        self,
-        roles: list[str] | None = None,
-        sub: str = "user-1",
-        aud: str = "zoeken-en-persoonlijke-ai",
-        iss: str = "hub",
-        lifetime: int = 60,
-        iat_offset: int = 0,
-        kid: str | None = None,
-        extra: dict[str, Any] | None = None,
-    ) -> str:
-        now = int(time.time()) + iat_offset
-        claims = {
-            "iss": iss,
-            "aud": aud,
-            "sub": sub,
-            "roles": roles or [],
-            "iat": now,
-            "nbf": now,
-            "exp": now + lifetime,
-            "jti": str(uuid.uuid4()),
-            **(extra or {}),
-        }
-        return jwt.encode(claims, self.private, algorithm="EdDSA", headers={"kid": kid or self.kid})
-
-
-ENROLL_FIELDS = {"app_id", "enrollment_token", "pairing_code", "version", "base_url", "public_key_jwk"}
+    def __len__(self) -> int:
+        return 1
 
 
 @dataclass
 class FakeHub:
-    """Nep-Hub voor httpx.MockTransport. Registreert **elk** uitgaand verzoek (voor de 'verlaat NAS niet'-toets)."""
+    """Hub-simulator achter ``httpx.MockTransport``. Registreert **elk** uitgaand verzoek (voor de 'verlaat NAS
+    niet'-toets) en kan offline gaan of een antwoord vervangen."""
 
-    keys: HubKeys
+    sim: HubSim = field(default_factory=HubSim)
     up: bool = True
-    issued_token: str = field(default_factory=lambda: "svc_" + uuid.uuid4().hex + uuid.uuid4().hex)
-    used: set[str] = field(default_factory=set)
-    enroll_requests: list[dict[str, Any]] = field(default_factory=list)
-    inbox: list[dict[str, Any]] = field(default_factory=list)
     all_requests: list[dict[str, Any]] = field(default_factory=list)
-    inbox_status: int = 202
-    jwks_calls: int = 0
+    override: Callable[[httpx.Request], httpx.Response | None] | None = None
+
+    def __post_init__(self) -> None:
+        self.sim.add_enrollment_token(ENV_TOKEN)
+        self.sim.add_pairing_code(PAIR_CODE)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = request.url
         self.all_requests.append(
             {"host": url.host, "path": url.path, "method": request.method, "body": request.content.decode()}
         )
-        if url.host != "hub.test":
+        if url.host != HUB_HOST:
             raise httpx.ConnectError("onbekende host", request=request)
         if not self.up:
             raise httpx.ConnectError("hub offline", request=request)
-        if url.path == "/api/v1/auth/jwks":
-            self.jwks_calls += 1
-            return httpx.Response(200, json=self.keys.jwks())
-        if url.path == "/api/v1/services/enroll" and request.method == "POST":
-            body = json.loads(request.content)
-            self.enroll_requests.append(body)
-            if set(body) - ENROLL_FIELDS:  # de echte Hub heeft extra=forbid
-                return httpx.Response(422, json={"code": "validation_error"})
-            if bool(body.get("enrollment_token")) == bool(body.get("pairing_code")):
-                return httpx.Response(422, json={"code": "validation_error"})
-            secret = body.get("enrollment_token") or body.get("pairing_code")
-            if secret not in {ENV_TOKEN, PAIR_CODE} or secret in self.used:
-                return httpx.Response(401, json={"code": "invalid_enrollment"})
-            self.used.add(secret)
-            return httpx.Response(
-                200,
-                json={
-                    "service_id": str(uuid.uuid4()),
-                    "app_id": body["app_id"],
-                    "service_token": self.issued_token,
-                    "token_type": "Bearer",
-                    "hub_issuer": "hub",
-                    "jwks": self.keys.jwks(),
-                    "jwks_url": "/api/v1/auth/jwks",
-                    "policy_public_key": HubKeys().jwk,
-                    "events_inbox_url": "/api/v1/events/inbox",
-                },
-            )
-        if url.path == "/api/v1/events/inbox" and request.method == "POST":
-            if request.headers.get("Authorization") != f"Bearer {self.issued_token}":
-                return httpx.Response(401)
-            self.inbox.append(json.loads(request.content))
-            return httpx.Response(self.inbox_status)
-        return httpx.Response(404)
+        if self.override is not None:
+            replaced = self.override(request)
+            if replaced is not None:
+                return replaced
+        status, headers, body = self.sim.handle(
+            request.method,
+            url.path,
+            url.query.decode(),
+            {k.lower(): v for k, v in request.headers.items()},
+            request.content,
+            "192.0.2.10",
+        )
+        return httpx.Response(status, json=body, headers=headers)
 
     @property
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self.handler)
 
+    # gemak voor tests
+    @property
+    def inbox(self) -> list[dict[str, Any]]:
+        return self.sim.inbox
+
+    @property
+    def enroll_requests(self) -> list[dict[str, Any]]:
+        return self.sim.enroll_requests
+
+    @property
+    def issued_token(self) -> str:
+        tok = self.sim.current_token()
+        assert tok, "nog geen service-token uitgegeven"
+        return tok
+
+    def fingerprint(self) -> str:
+        return self.sim.fingerprint()
+
+    def user(self, *roles: str, sub: str = "user-1", **kw: Any) -> Mapping[str, str]:
+        return FreshAuth(lambda: self.sim.user_jwt(list(roles), sub=sub, **kw))
+
+    def service(self, **kw: Any) -> Mapping[str, str]:
+        return FreshAuth(lambda: self.sim.service_jwt(**kw))
+
 
 @pytest.fixture
-def hub_keys() -> HubKeys:
-    return HubKeys()
-
-
-@pytest.fixture
-def fake_hub(hub_keys: HubKeys) -> FakeHub:
-    return FakeHub(hub_keys)
+def fake_hub() -> FakeHub:
+    return FakeHub()
 
 
 @pytest.fixture
@@ -221,7 +193,7 @@ def database_url() -> Iterator[str]:
 
 
 TRUNCATE = (
-    "TRUNCATE service_state, idempotency_record, outbox_event, vault_secret, audit_event, index_source, "
+    "TRUNCATE service_state, idempotency_record, outbox_event, vault_secret, audit_event, jwt_replay, index_source, "
     "privacy_consent, connector_permission, access_scope, document_ref, chunk, embedding, index_run, search_query, "
     "transcript_ref, voice_session, transcript, intent, context_scope, tts_job, audio_consent "
     "RESTART IDENTITY CASCADE"
@@ -247,8 +219,6 @@ def make_settings(data_dir: Path, clean_db: str, shares: Shares) -> Callable[...
             "database_url": clean_db,
             "hub_url": None,
             "enrollment_token": None,
-            "jwks_min_refresh_interval_s": 0,
-            "link_cache_ttl_s": 0,
             "read_roots": (str(shares.root),),
             # tijdelijke testmappen zijn schrijfbaar; de alleen-lezen-eis wordt apart getest
             "require_readonly_mounts": False,
@@ -284,25 +254,39 @@ def client(app_factory: Callable[..., Any]) -> Any:
     return app_factory()
 
 
+def pair(client: Any, fake_hub: FakeHub) -> None:
+    """Koppelt via de koppelcode + vingerafdruk (zoals de statuspagina) met de simulator."""
+    outcome = client.app.state.enrollment.enroll_with_code(HUB_URL, PAIR_CODE, fake_hub.fingerprint())
+    assert outcome.ok, outcome.code
+
+
 @pytest.fixture
-def paired_client(client: Any) -> Any:
-    """App die via de koppelcode met de nep-Hub gekoppeld is."""
-    state = client.app.state
-    with state.db.sessions() as s:
-        outcome = state.enrollment.enroll_with_code(s, HUB_URL, PAIR_CODE)
-        s.commit()
-    assert outcome.ok, outcome.reason
-    state.link.invalidate()
+def paired_client(client: Any, fake_hub: FakeHub) -> Any:
+    """App die via de koppelcode met de Hub-simulator gekoppeld én bevestigd is."""
+    pair(client, fake_hub)
+    assert client.app.state.hub_link.read()["confirmed_at"]
     return client
 
 
 @pytest.fixture
-def auth(hub_keys: HubKeys) -> Callable[..., dict[str, str]]:
-    def _auth(*roles: str, sub: str = "user-1") -> dict[str, str]:
-        return {"Authorization": f"Bearer {hub_keys.token(list(roles), sub=sub)}"}
+def auth(fake_hub: FakeHub) -> Callable[..., Mapping[str, str]]:
+    """Gebruikers-JWT (``token_use: user``) van de Hub-simulator; elke lezing een nieuwe ``jti``."""
+
+    def _auth(*roles: str, sub: str = "user-1") -> Mapping[str, str]:
+        return fake_hub.user(*roles, sub=sub)
 
     return _auth
 
 
-def idem(headers: dict[str, str] | None = None, key: str | None = None, **extra: str) -> dict[str, str]:
+@pytest.fixture
+def svc(fake_hub: FakeHub) -> Callable[..., Mapping[str, str]]:
+    """Dienst-JWT van de Hub (``token_use: hub_service``); elke lezing een nieuwe ``jti``."""
+
+    def _svc(**kw: Any) -> Mapping[str, str]:
+        return fake_hub.service(**kw)
+
+    return _svc
+
+
+def idem(headers: Mapping[str, str] | None = None, key: str | None = None, **extra: str) -> dict[str, str]:
     return {**(headers or {}), "Idempotency-Key": key or str(uuid.uuid4()), **extra}

@@ -14,7 +14,7 @@ import subprocess
 import sys
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -25,7 +25,6 @@ from sqlalchemy import create_engine, text
 ADMIN_DB_URL = os.environ.get("SEARCH_AI_TEST_ADMIN_URL", "postgresql+psycopg://postgres@127.0.0.1:5432/postgres")
 E2E_DB = "zoek_test_e2e"
 HERE = Path(__file__).resolve().parent
-ENROLL_TOKEN = "enr_e2e-eenmalig-token-0123456789"
 
 
 def free_port() -> int:
@@ -48,20 +47,46 @@ def wait_http(url: str, timeout: float = 40) -> None:
     raise RuntimeError(f"{url} kwam niet op")
 
 
+class FreshAuth(Mapping[str, str]):
+    """Bij elke lezing een nieuwe Hub-JWT (nieuwe ``jti``), zoals de Hub per mutatie doet (contract 1.2 §4.6)."""
+
+    def __init__(self, mint: Callable[[], str]) -> None:
+        self._mint = mint
+
+    def __getitem__(self, key: str) -> str:
+        if key != "Authorization":
+            raise KeyError(key)
+        return f"Bearer {self._mint()}"
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(("Authorization",))
+
+    def __len__(self) -> int:
+        return 1
+
+
 @dataclass
 class Stack:
     api: str
     hub: str
     db_url: str
     shares: Path
+    data: Path
+    fingerprint: str
     hub_proc: subprocess.Popen[bytes]
     procs: list[subprocess.Popen[bytes]] = field(default_factory=list)
 
-    def token(self, *roles: str, sub: str = "e2e-user") -> dict[str, str]:
-        r = httpx.post(f"{self.hub}/sim/token", json={"roles": list(roles), "sub": sub}, timeout=5)
-        return {"Authorization": f"Bearer {r.json()['token']}"}
+    def token(self, *roles: str, sub: str = "e2e-user") -> Mapping[str, str]:
+        def mint() -> str:
+            r = httpx.post(f"{self.hub}/sim/token", json={"roles": list(roles), "sub": sub}, timeout=5)
+            return str(r.json()["token"])
 
-    def idem(self, headers: dict[str, str], key: str | None = None) -> dict[str, str]:
+        return FreshAuth(mint)
+
+    def service(self) -> Mapping[str, str]:
+        return FreshAuth(lambda: str(httpx.post(f"{self.hub}/sim/service-jwt", timeout=5).json()["token"]))
+
+    def idem(self, headers: Mapping[str, str], key: str | None = None) -> dict[str, str]:
         return {**headers, "Idempotency-Key": key or str(uuid.uuid4())}
 
 
@@ -103,7 +128,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         "all_proxy",
     ):
         base_env.pop(k, None)  # alles blijft lokaal
-    hub_env = {**base_env, "SIM_ENROLL_TOKEN": ENROLL_TOKEN, "PYTHONPATH": str(HERE)}
+    hub_env = {**base_env, "PYTHONPATH": str(HERE)}
     hub_proc = subprocess.Popen(
         [
             sys.executable,
@@ -120,7 +145,10 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         stdout=open(logs / "hub.log", "wb"),
         stderr=subprocess.STDOUT,
     )
-    wait_http(f"{hub_url}/api/v1/auth/jwks")
+    wait_http(f"{hub_url}/sim/fingerprint")  # niet via /api: dat zou in de verzoeklijst van de Hub belanden
+    # zoals de Hub bij installatie via de API: eenmalig token + verwachte vingerafdruk (contract 1.2 §3.2)
+    enroll_token = httpx.post(f"{hub_url}/sim/enrollment-token", timeout=5).json()["token"]
+    fingerprint = httpx.get(f"{hub_url}/sim/fingerprint", timeout=5).json()["fingerprint"]
     svc_env = {
         **base_env,
         "SEARCH_AI_DATA_DIR": str(data),
@@ -131,10 +159,10 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         "SEARCH_AI_REQUIRE_READONLY_MOUNTS": "false",
         "SEARCH_AI_ALLOW_LOOPBACK_HUB": "1",
         "SEARCH_AI_WORKER_INTERVAL_S": "1",
-        "SEARCH_AI_JWKS_TTL_S": "2",
-        "SEARCH_AI_JWKS_MAX_STALE_S": "2",
+        "SEARCH_AI_HUB_SELF_CHECK_S": "2",
         "HUB_URL": hub_url,
-        "HUB_ENROLLMENT_TOKEN": ENROLL_TOKEN,
+        "HUB_ENROLLMENT_TOKEN": enroll_token,
+        "HUB_KEY_FINGERPRINT": fingerprint,
     }
     subprocess.run(
         [sys.executable, "-m", "search_ai", "migrate"],
@@ -142,7 +170,9 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         check=True,
         capture_output=True,
     )
-    st = Stack(api=api_url, hub=hub_url, db_url=db_url, shares=shares, hub_proc=hub_proc)
+    st = Stack(
+        api=api_url, hub=hub_url, db_url=db_url, shares=shares, data=data, fingerprint=fingerprint, hub_proc=hub_proc
+    )
     for name, cmd in (
         (
             "api",

@@ -101,12 +101,13 @@ def b64url(data: bytes) -> str:
 
 
 def public_jwk(private_key: Ed25519PrivateKey) -> dict[str, str]:
-    """Publieke JWK (RFC 8037) met RFC 7638-thumbprint als ``kid``."""
+    """Publieke JWK (RFC 8037) met RFC 7638-thumbprint als ``kid``: precies ``{kty, crv, x, kid}`` (contract 1.2 §3.3;
+    ``use``/``alg`` weigert de Hub in het enroll-verzoek met 422)."""
     raw = private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     x = b64url(raw)
     thumb_input = json.dumps({"crv": "Ed25519", "kty": "OKP", "x": x}, separators=(",", ":"), sort_keys=True)
     kid = b64url(hashlib.sha256(thumb_input.encode()).digest())
-    return {"kty": "OKP", "crv": "Ed25519", "x": x, "kid": kid, "use": "sig", "alg": "EdDSA"}
+    return {"kty": "OKP", "crv": "Ed25519", "x": x, "kid": kid}
 
 
 def secrets_present(secrets_dir: Path) -> dict[str, bool]:

@@ -1,154 +1,89 @@
-"""Simulator van de Hub voor de dienst-E2E. ALLEEN voor tests; geen productiecode.
+"""Hub-simulator als eigen proces voor de dienst-E2E. ALLEEN voor tests; geen productiecode.
 
-Biedt wat zoeken-en-persoonlijke-ai van de Hub verwacht, in het formaat van de echte Hub (``ai-server-manager``):
-- ``GET  /api/v1/auth/jwks``         JWKS met één Ed25519-sleutel
-- ``POST /api/v1/services/enroll``   eenmalig token (``SIM_ENROLL_TOKEN``) → service-token + JWKS (extra velden → 422)
-- ``POST /api/v1/events/inbox``      ontvangt events (alleen met het uitgegeven service-token; dedupe op event_id)
-Plus testhulpmiddelen onder ``/sim/*`` (JWT uitgeven, inbox en alle verzoeken lezen).
+Dunne HTTP-schil om ``apps/api/tests/hubsim.py`` (dezelfde kern als in de integratietests), die platformcontract 1.2
+volgt: enroll exact volgens §3.3 (422/401/429/herhaling), ``services/self``, ``self/rotate``, ``events/inbox``,
+``key-rotations`` en ``jwks``. Testhulpmiddelen onder ``/sim/*`` (koppeltoken maken, JWT's uitgeven, intrekken,
+rotatie aanvragen, inbox en alle verzoeken lezen).
 """
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import json
-import os
-import secrets
-import time
-import uuid
+import sys
+from pathlib import Path
 from typing import Any
 
-import jwt
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
-KEY = Ed25519PrivateKey.generate()
-RAW = KEY.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
-X = base64.urlsafe_b64encode(RAW).rstrip(b"=").decode()
-KID = (
-    base64.urlsafe_b64encode(
-        hashlib.sha256(
-            json.dumps(
-                {"crv": "Ed25519", "kty": "OKP", "x": X},
-                separators=(",", ":"),
-                sort_keys=True,
-            ).encode()
-        ).digest()
-    )
-    .rstrip(b"=")
-    .decode()
-)
-JWKS = {
-    "keys": [
-        {
-            "kty": "OKP",
-            "crv": "Ed25519",
-            "x": X,
-            "kid": KID,
-            "use": "sig",
-            "alg": "EdDSA",
-        }
-    ]
-}
-ENROLL_FIELDS = {
-    "app_id",
-    "enrollment_token",
-    "pairing_code",
-    "version",
-    "base_url",
-    "public_key_jwk",
-}
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "api"))
 
-STATE: dict[str, Any] = {
-    "enroll_token": os.environ.get("SIM_ENROLL_TOKEN", ""),
-    "used": False,
-    "service_token": "svc_" + secrets.token_urlsafe(32),
-    "enroll_requests": [],
-    "inbox": [],
-    "requests": [],
-}
+from tests.hubsim import HubSim
 
+SIM = HubSim()
 app = FastAPI(title="sim-hub")
 
 
-@app.middleware("http")
-async def record(request: Request, call_next: Any) -> Any:
-    if not request.url.path.startswith("/sim/"):
-        body = (await request.body()).decode(errors="replace")
-        STATE["requests"].append({"method": request.method, "path": request.url.path, "body": body})
-    return await call_next(request)
+@app.get("/sim/fingerprint")
+def sim_fingerprint() -> dict[str, str]:
+    return {"fingerprint": SIM.fingerprint()}
 
 
-@app.get("/api/v1/auth/jwks")
-def jwks() -> dict[str, Any]:
-    return JWKS
-
-
-@app.post("/api/v1/services/enroll")
-async def enroll(request: Request) -> dict[str, Any]:
-    body = await request.json()
-    STATE["enroll_requests"].append({k: v for k, v in body.items() if k not in ("enrollment_token", "pairing_code")})
-    if set(body) - ENROLL_FIELDS:
-        raise HTTPException(422, "extra velden")
-    if STATE["used"] or not STATE["enroll_token"] or body.get("enrollment_token") != STATE["enroll_token"]:
-        raise HTTPException(401, "token ongeldig")
-    STATE["used"] = True
-    return {
-        "service_id": str(uuid.uuid4()),
-        "app_id": body["app_id"],
-        "service_token": STATE["service_token"],
-        "token_type": "Bearer",
-        "hub_issuer": "hub",
-        "jwks": JWKS,
-        "jwks_url": "/api/v1/auth/jwks",
-        "events_inbox_url": "/api/v1/events/inbox",
-    }
-
-
-@app.post("/api/v1/events/inbox", status_code=202)
-async def inbox(request: Request, authorization: str = Header(default="")) -> dict[str, str]:
-    if authorization != f"Bearer {STATE['service_token']}":
-        raise HTTPException(401)
-    event = await request.json()
-    if any(e["event_id"] == event["event_id"] for e in STATE["inbox"]):
-        return {"status": "duplicaat"}
-    STATE["inbox"].append(event)
-    return {"status": "ontvangen"}
+@app.post("/sim/enrollment-token")
+def sim_enrollment_token() -> dict[str, str]:
+    return {"token": SIM.add_enrollment_token()}
 
 
 @app.post("/sim/token")
-async def token(request: Request) -> dict[str, str]:
+async def sim_token(request: Request) -> dict[str, str]:
     body = await request.json()
-    now = int(time.time())
-    claims = {
-        "iss": "hub",
-        "aud": "zoeken-en-persoonlijke-ai",
-        "sub": body.get("sub", "e2e-user"),
-        "roles": body.get("roles", []),
-        "iat": now,
-        "nbf": now,
-        "exp": now + 100,
-        "jti": str(uuid.uuid4()),
-    }
-    return {"token": jwt.encode(claims, KEY, algorithm="EdDSA", headers={"kid": KID})}
+    return {"token": SIM.user_jwt(list(body.get("roles", [])), sub=str(body.get("sub", "e2e-user")))}
+
+
+@app.post("/sim/service-jwt")
+def sim_service_jwt() -> dict[str, str]:
+    return {"token": SIM.service_jwt()}
+
+
+@app.post("/sim/revoke")
+def sim_revoke() -> dict[str, str]:
+    SIM.revoke()
+    return {"status": "ingetrokken"}
+
+
+@app.post("/sim/request-rotation")
+def sim_request_rotation() -> dict[str, str]:
+    SIM.request_rotation()
+    return {"status": "aangevraagd"}
+
+
+@app.get("/sim/service-token")
+def sim_service_token() -> dict[str, Any]:
+    return {"token": SIM.current_token(), "issued": len(SIM.issued)}
 
 
 @app.get("/sim/inbox")
 def sim_inbox() -> list[dict[str, Any]]:
-    return list(STATE["inbox"])
+    return list(SIM.inbox)
 
 
 @app.get("/sim/requests")
 def sim_requests() -> list[dict[str, Any]]:
-    return list(STATE["requests"])
+    return list(SIM.requests)
 
 
 @app.get("/sim/enroll-requests")
 def sim_enroll_requests() -> list[dict[str, Any]]:
-    return list(STATE["enroll_requests"])
+    return list(SIM.enroll_requests)
 
 
-@app.get("/sim/service-token")
-def sim_service_token() -> dict[str, str]:
-    return {"token": STATE["service_token"]}
+@app.api_route("/api/{rest:path}", methods=["GET", "POST"])
+async def hub_api(request: Request, rest: str) -> Response:
+    status, headers, body = SIM.handle(
+        request.method,
+        f"/api/{rest}",
+        request.url.query,
+        {k.lower(): v for k, v in request.headers.items()},
+        await request.body(),
+        request.client.host if request.client else "",
+    )
+    return JSONResponse(body, status_code=status, headers=headers)

@@ -89,9 +89,8 @@ def test_unselected_share_indexes_nothing_and_never_leaves_nas(
         simulate_ingest(s, rogue["id"], str(shares.b / "dagboek.txt"), ["Privé dagboek van B"])
     assert search(client, auth, "dagboek", "user-a")["items"] == []
 
-    # Niets heeft de NAS verlaten: het enige uitgaande verkeer ging naar de Hub (koppelen/JWKS/events), zonder
+    # Niets heeft de NAS verlaten: het enige uitgaande verkeer ging naar de Hub (koppelen/bevestigen/events), zonder
     # bestandsnamen of inhoud.
-    client.app.state.link.invalidate()
     from search_ai.worker import Worker
 
     w = Worker(client.app.state.settings, transport=fake_hub.transport)
@@ -103,7 +102,8 @@ def test_unselected_share_indexes_nothing_and_never_leaves_nas(
         assert needle not in wire
     assert {r["path"] for r in fake_hub.all_requests} <= {
         "/api/v1/services/enroll",
-        "/api/v1/auth/jwks",
+        "/api/v1/services/self",
+        "/api/v1/auth/key-rotations",
         "/api/v1/events/inbox",
     }
     assert shares.checksums() == before  # originelen ongewijzigd
@@ -172,7 +172,7 @@ def test_consent_only_by_owner_bound_to_snapshot(paired_client: Any, auth: Auth,
 def test_source_validation_rejects_paths_outside_allowlist(
     paired_client: Any, auth: Auth, shares: Shares, tmp_path: Any
 ) -> None:
-    admin = idem(auth("admin", sub="beheer"))
+    admin = auth("admin", sub="beheer")
     for path, code in [
         (str(tmp_path), "pad_buiten_leeswortels"),
         (str(shares.a / ".ssh"), "pad_uitgesloten"),
@@ -192,14 +192,13 @@ def test_source_validation_rejects_paths_outside_allowlist(
     assert r.status_code == 403
 
 
-def test_readonly_mount_required_for_consent(app_factory: Callable[..., Any], auth: Auth, shares: Shares) -> None:
-    from tests.conftest import HUB_URL, PAIR_CODE
+def test_readonly_mount_required_for_consent(
+    app_factory: Callable[..., Any], auth: Auth, shares: Shares, fake_hub: FakeHub
+) -> None:
+    from tests.conftest import pair
 
     client = app_factory(require_readonly_mounts=True)
-    with client.app.state.db.sessions() as s:
-        assert client.app.state.enrollment.enroll_with_code(s, HUB_URL, PAIR_CODE).ok
-        s.commit()
-    client.app.state.link.invalidate()
+    pair(client, fake_hub)
     src = make_source(client, auth, str(shares.a))
     r = consent(client, auth, src["id"])
     assert r.status_code == 409 and r.json()["code"] == "bron_niet_klaar"
@@ -222,7 +221,7 @@ def test_readonly_mount_required_for_consent(app_factory: Callable[..., Any], au
 
 
 # ------------------------------------------------------------------ ACL vóór ranking
-def test_acl_applied_before_ranking(paired_client: Any, auth: Auth, shares: Shares) -> None:
+def test_acl_applied_before_ranking(paired_client: Any, auth: Auth, shares: Shares, fake_hub: FakeHub) -> None:
     client = paired_client
     a = make_source(client, auth, str(shares.a), owner="user-a", name="A")
     b = make_source(client, auth, str(shares.b), owner="user-b", name="B")
@@ -260,17 +259,14 @@ def test_acl_applied_before_ranking(paired_client: Any, auth: Auth, shares: Shar
         "/search/v1/search", params={"q": "keuken", "mode": "semantic"}, headers=auth("viewer", sub="user-a")
     )
     assert r.status_code == 501
-    # een service-token heeft geen gebruikerscontext → mag niet zoeken
-    token = fake_token(client)
-    r = client.get("/search/v1/search", params={"q": "keuken"}, headers={"Authorization": f"Bearer {token}"})
+    # de Hub als dienst (dienst-JWT) heeft geen gebruikerscontext → mag niet zoeken
+    r = client.get("/search/v1/search", params={"q": "keuken"}, headers=fake_hub.service())
     assert r.status_code == 403 and r.json()["details"]["reason"] == "gebruikerscontext_vereist"
-
-
-def fake_token(client: Any) -> str:
-    with client.app.state.db.sessions() as s:
-        tok = client.app.state.enrollment.service_token(s)
-    assert tok
-    return str(tok)
+    # en het eigen service-token wordt inkomend nooit geaccepteerd
+    r = client.get(
+        "/search/v1/search", params={"q": "keuken"}, headers={"Authorization": f"Bearer {fake_hub.issued_token}"}
+    )
+    assert r.status_code == 401 and r.json()["details"]["reason"] == "service_token_not_accepted"
 
 
 def test_owner_only_documents_and_paused_sources(paired_client: Any, auth: Auth, shares: Shares) -> None:
@@ -425,10 +421,9 @@ def test_revoke_purges_index_and_embeddings_but_not_originals(
     assert consent(client, auth, sid).status_code == 409
     # bewijs via de connector (geredigeerd) en event zonder inhoud
     run_id = body["opschonen"]["id"]
-    tok = fake_token(client)
-    ev = client.get(f"/connector/v1/evidence/{run_id}", headers={"Authorization": f"Bearer {tok}"})
+    ev = client.get(f"/connector/v1/evidence/{run_id}", headers=fake_hub.service())
     assert ev.status_code == 200 and ev.json()["kind"] == "index_run"
-    events = client.get("/connector/v1/events", headers={"Authorization": f"Bearer {tok}"}).json()["items"]
+    events = client.get("/connector/v1/events", headers=fake_hub.service()).json()["items"]
     revoked = [e for e in events if e["event_type"] == "search.source.revoked"]
     assert len(revoked) == 1 and revoked[0]["payload"]["purge_verified"] is True
     assert "appels" not in json.dumps(events) and str(shares.root) not in json.dumps(events)

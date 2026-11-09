@@ -28,7 +28,11 @@ from .db import Base, new_id, utcnow
 
 
 class ServiceState(Base):
-    """Klein key/value-register voor de eigen toestand (koppeling met de Hub e.d.). Nooit geheimen."""
+    """Klein key/value-register voor de eigen toestand. Nooit geheimen.
+
+    De koppeling met de Hub staat sinds contract 1.2 **niet** meer hier maar in ``/appdata/secrets/hub-link.json``;
+    oude rijen (``hub_link``, ``hub_jwks``, ``hub_policy_key``) worden bij de start overgezet en verwijderd.
+    """
 
     __tablename__ = "service_state"
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -96,6 +100,25 @@ class VaultSecret(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class JwtReplay(Base):
+    """Replaycache van Hub-JWT's (contract 1.2 §4.6): ``(iss, jti)`` van elke mutatie tot ``exp + 30 s``.
+
+    Gedeeld door alle processen; een al gebruikte ``jti`` voor een andere mutatie → 401 ``token_replayed``. Bevat geen
+    token, alleen de ``jti`` en de herhalingssleutel (methode, pad, ``Idempotency-Key``).
+    """
+
+    __tablename__ = "jwt_replay"
+    iss: Mapped[str] = mapped_column(String(40), primary_key=True)
+    jti: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    method: Mapped[str] = mapped_column(String(10), nullable=False)
+    path: Mapped[str] = mapped_column(String(500), nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (Index("ix_jwt_replay_expires_at", "expires_at"),)
 
 
 class AuditEvent(Base):

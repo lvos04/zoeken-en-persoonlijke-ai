@@ -1,5 +1,12 @@
-"""Worker: koppelen met het omgevingstoken, outbox pushen, nacontrole van intrekkingen, retentie en opruimen.
+"""Worker: koppelen met het omgevingstoken, koppeling onderhouden, outbox pushen, retentie en opruimen.
 
+Koppeling (contract 1.2 §3.3–§3.8, §4.5):
+- env-token: backoff vanaf 5 s (×2, max. 15 min, met jitter), ``429`` → niet vóór ``Retry-After``; definitief na
+  401/404/413/422, een ongeldig antwoord, een verkeerde vingerafdruk of 60 min na de eerste poging.
+- ``gekoppeld`` zonder ``confirmed_at`` → alleen bevestigen met ``GET /api/v1/services/self``.
+- Elke ~4 min ``services/self`` (zo wordt een rotatieverzoek binnen 5 min opgemerkt en een intrekking ontdekt).
+- ``Hub-Token-Rotation: required`` → ``POST /api/v1/services/self/rotate``.
+- Sleutelrotaties pollen hooguit elke 15 min.
 Ingest (B07-002) draait in P0 bewust **niet**: er wordt niets gelezen of geïndexeerd.
 """
 
@@ -9,17 +16,21 @@ import logging
 import random
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 from sqlalchemy import delete
 
-from . import events
+from . import APP_ID, audit, events
 from .config import Settings
 from .db import Database
-from .enrollment import EVENTS_INBOX_PATH, EnrollmentService
+from .enrollment import EVENTS_INBOX_PATH, EnrollmentService, Outcome, migrate_legacy_link
 from .hubclient import HubClient
+from .hublink import HubLinkStore
 from .idempotency import purge_expired
+from .models import JwtReplay
 from .search.models import SearchQuery
 from .search.service import expire_consents, sweep_revoked
 from .security.secrets import ensure_secrets, load_identity, load_vault_key, public_jwk
@@ -32,9 +43,16 @@ log = logging.getLogger("search_ai.worker")
 
 @dataclass
 class WorkerState:
+    started: bool = False
     next_enroll_at: float = 0.0
     enroll_failures: int = 0
+    next_confirm_at: float = 0.0
+    next_self_check_at: float = 0.0
+    next_rotation_at: float = 0.0
+    next_key_poll_at: float = 0.0
     last_purge: float = 0.0
+    config_error_logged: str | None = None
+    revocation_recorded: bool = False
     stats: dict[str, int] = field(
         default_factory=lambda: {
             "pushed": 0,
@@ -42,6 +60,7 @@ class WorkerState:
             "expired_consents": 0,
             "revoked_resweeps": 0,
             "expired_rows": 0,
+            "expired_replay": 0,
         }
     )
 
@@ -53,44 +72,151 @@ class Worker:
         self.vault = Vault(load_vault_key(settings.secrets_dir))
         self.db = Database(settings.database_url)
         self.hub = HubClient(settings, transport=transport)
+        self.store = HubLinkStore(settings.secrets_dir, APP_ID)
         self.enrollment = EnrollmentService(
-            settings, self.vault, public_jwk(load_identity(settings.secrets_dir)), self.hub
+            settings, self.store, public_jwk(load_identity(settings.secrets_dir)), self.hub
         )
         self.state = WorkerState()
+
+    # ------------------------------------------------------------------ hulp
+    def _record(self, action: str, message_nl: str, event_type: str | None = None, **details: Any) -> None:
+        """Audit + (optioneel) event voor koppelgebeurtenissen. Faalt nooit hard (de koppeling staat al vast)."""
+        tid = str(uuid.uuid4())
+        try:
+            with self.db.sessions() as s:
+                audit.record(
+                    s,
+                    domain="platform",
+                    action=action,
+                    entity_type="hub_link",
+                    entity_id="hub",
+                    principal=None,
+                    trace_id=tid,
+                    message_nl=message_nl,
+                    details=details,
+                )
+                if event_type:
+                    events.emit(
+                        s,
+                        event_type=event_type,
+                        entity_type="hub_link",
+                        entity_id="hub",
+                        actor_type="system",
+                        actor_id="worker",
+                        trace_id=tid,
+                        payload=details,
+                        classification="internal",
+                    )
+                s.commit()
+        except Exception:
+            log.warning("auditspoor voor %s kon niet worden vastgelegd", action)
+
+    def _linked(self) -> bool:
+        return self.store.read_safe().get("state") == "gekoppeld"
+
+    # ------------------------------------------------------------------ stappen
+    def startup(self) -> None:
+        if self.state.started:
+            return
+        self.state.started = True
+        try:
+            migrate_legacy_link(self.store, self.db, self.vault, self.settings.allow_loopback_hub)
+        except Exception:
+            log.warning("overzetten van de oude koppeling is uitgesteld (database niet beschikbaar)")
+            self.state.started = False  # volgende ronde opnieuw
+            return
+        self.enrollment.on_worker_start()
 
     def enroll_step(self, now: float) -> None:
         if now < self.state.next_enroll_at:
             return
-        with self.db.sessions() as s:
-            outcome = self.enrollment.enroll_with_env_token(s)
-            s.commit()
-        if outcome is None or outcome.ok:
+        outcome = self.enrollment.enroll_with_env_token()
+        if outcome is None:
             self.state.enroll_failures = 0
+            return
+        if outcome.ok:
+            self.state.enroll_failures = 0
+            self.state.next_self_check_at = now + self.settings.hub_self_check_s
+            self._record(
+                "hub.pair",
+                "Gekoppeld met de Hub via het koppeltoken uit de app-instellingen.",
+                "service.hub_link.paired",
+                via="token",
+                herhaling=bool(outcome.detail.get("replayed")),
+            )
+            return
+        if outcome.code in ("ongeldig_hub_adres", "ongeldige_vingerafdruk"):
+            if self.state.config_error_logged != outcome.code:
+                log.error("koppelen niet mogelijk: %s (pas de app-instellingen aan)", outcome.code)
+                self.state.config_error_logged = outcome.code
+            self.state.next_enroll_at = now + self.settings.enroll_backoff_max_s
             return
         if outcome.retryable:
             self.state.enroll_failures += 1
-            delay = min(900.0, 15.0 * (2 ** (self.state.enroll_failures - 1))) * random.uniform(0.8, 1.2)  # noqa: S311
+            s = self.settings
+            delay = min(s.enroll_backoff_max_s, s.enroll_backoff_start_s * (2 ** (self.state.enroll_failures - 1)))
+            delay *= random.uniform(0.8, 1.2)  # noqa: S311 - jitter, geen cryptografie
+            if outcome.retry_after_s is not None:
+                delay = max(delay, outcome.retry_after_s)  # nooit eerder dan de Hub vraagt
             self.state.next_enroll_at = now + delay
+            return
+        self._record("hub.pair_failed", "Koppelen met het koppeltoken definitief mislukt.", code=outcome.code)
+
+    def link_step(self, now: float) -> None:
+        doc = self.store.read_safe()
+        if doc.get("state") != "gekoppeld":
+            return
+        st, s = self.state, self.settings
+        if not doc.get("confirmed_at") and now >= st.next_confirm_at:
+            self._after_hub_call(self.enrollment.confirm(), now)
+            st.next_confirm_at = now + 30
+        if now >= st.next_self_check_at:
+            self._after_hub_call(self.enrollment.check_revoked(), now)
+            st.next_self_check_at = now + s.hub_self_check_s
+        if self.enrollment.rotation_required and now >= st.next_rotation_at:
+            outcome = self.enrollment.rotate_service_token()
+            st.next_rotation_at = now + (0 if outcome.ok else 60)
+            if outcome.ok:
+                self._record("hub.token_rotated", "Service-token geroteerd op verzoek van de Hub.")
+            else:
+                self._after_hub_call(outcome, now)
+        if now >= st.next_key_poll_at:
+            outcome = self.enrollment.poll_key_rotations()
+            st.next_key_poll_at = now + min(s.key_rotation_poll_s, 900)
+            if outcome.code == "rotatie_toegepast":
+                self._record(
+                    "hub.key_rotated", "Hub-sleutels bijgewerkt via een ondertekende rotatie.", **outcome.detail
+                )
+            elif outcome.code == "sleutelrotatie_ongeldig":
+                self._record(
+                    "hub.key_rotation_rejected",
+                    "Een sleutelrotatie van de Hub was ongeldig en is niet toegepast.",
+                    "service.hub_key.rotation_rejected",
+                )
+
+    def _after_hub_call(self, _outcome: Outcome | None = None, _now: float | None = None) -> None:
+        """Eén keer per intrekking een audit-regel + incident-event (EX16: geen open toegang, wel een melding)."""
+        state = self.store.read_safe().get("state")
+        if state == "gekoppeld":
+            self.state.revocation_recorded = False
+        elif state == "ingetrokken" and not self.state.revocation_recorded:
+            self.state.revocation_recorded = True
+            self._record(
+                "hub.revoked",
+                "De Hub heeft de koppeling ingetrokken; Hub-JWT's worden vanaf nu geweigerd.",
+                "service.hub_link.revoked",
+            )
 
     def push_step(self) -> None:
+        doc = self.store.read_safe()
+        if doc.get("state") != "gekoppeld" or not doc.get("service_token"):
+            return  # niet gekoppeld: events blijven 'pending' (geen poging geteld); de Hub kan ook pollen
         with self.db.sessions() as s:
-            st = self.enrollment.state(s)
-            if st.get("status") != "gekoppeld":
-                return  # niet gekoppeld: events blijven 'pending' (geen poging geteld); de Hub kan ook pollen
-            token = self.enrollment.service_token(s)
-            hub_url = st.get("hub_url")
-            if not token or not hub_url:
-                return
             for ev in events.due_for_push(s):
                 try:
-                    resp = self.hub.request(
-                        "POST",
-                        hub_url,
-                        EVENTS_INBOX_PATH,
-                        json=events.envelope(ev),
-                        headers={"Authorization": f"Bearer {token}"},
-                        attempts=1,
-                    )
+                    resp = self.enrollment.authed_request("POST", EVENTS_INBOX_PATH, json=events.envelope(ev))
+                    if resp is None:
+                        break  # intussen ontkoppeld of ingetrokken
                     ok = resp.status_code in (200, 201, 202, 204, 409)  # 409 = al ontvangen (dedupe in de Hub)
                     err = f"http_{resp.status_code}"
                 except httpx.HTTPError as exc:
@@ -101,7 +227,10 @@ class Worker:
                 else:
                     events.mark_failed(ev, err)
                     self.state.stats["push_failed"] += 1
+                if not self._linked():
+                    break
             s.commit()
+        self._after_hub_call()
 
     def housekeeping_step(self, now: float) -> None:
         with self.db.sessions() as s:
@@ -112,6 +241,8 @@ class Worker:
                 res = s.execute(delete(model).where(model.expires_at <= utcnow()))
                 n += int(getattr(res, "rowcount", 0) or 0)
             self.state.stats["expired_rows"] += n
+            res = s.execute(delete(JwtReplay).where(JwtReplay.expires_at < utcnow()))
+            self.state.stats["expired_replay"] += int(getattr(res, "rowcount", 0) or 0)
             if now - self.state.last_purge > 3600:
                 purge_expired(s)
                 self.state.last_purge = now
@@ -119,7 +250,13 @@ class Worker:
 
     def run_once(self) -> None:
         now = time.monotonic()
-        for step in (lambda: self.enroll_step(now), self.push_step, lambda: self.housekeeping_step(now)):
+        for step in (
+            self.startup,
+            lambda: self.enroll_step(now),
+            lambda: self.link_step(now),
+            self.push_step,
+            lambda: self.housekeeping_step(now),
+        ):
             try:
                 step()
             except Exception:  # een fout in één stap mag de andere niet blokkeren

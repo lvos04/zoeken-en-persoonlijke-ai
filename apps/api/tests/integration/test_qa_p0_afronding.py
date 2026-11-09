@@ -143,33 +143,29 @@ def test_cursor_must_be_a_plain_non_negative_integer(paired_client: Any, auth: A
 
 
 # ------------------------------------------------------------------ onbekend is nooit groen
-def test_connector_health_unknown_while_hub_keys_never_fetched(
-    app_factory: Callable[..., Any], fake_hub: FakeHub
-) -> None:
-    """Een Hub die bij het koppelen geen JWKS meegeeft: tot de sleutels echt zijn opgehaald is het geheel 'unknown'."""
-    original = fake_hub.handler
+def test_hub_without_keys_in_enroll_answer_is_never_trusted(app_factory: Callable[..., Any], fake_hub: FakeHub) -> None:
+    """Contract 1.2: een Hub die bij het koppelen geen JWKS meegeeft, levert een ongeldig antwoord op — de dienst slaat
+    niets op en haalt de sleutels ook niet alsnog via HTTP op (een JWKS via HTTP voegt nooit vertrouwen toe)."""
 
-    def without_jwks(request: httpx.Request) -> httpx.Response:
-        resp = original(request)
-        if request.url.path == "/api/v1/services/enroll" and resp.status_code == 200:
-            data = json.loads(resp.content)
-            data.pop("jwks")
-            return httpx.Response(200, json=data)
-        return resp
+    def without_jwks(request: httpx.Request) -> httpx.Response | None:
+        if request.url.path != "/api/v1/services/enroll":
+            return None
+        fake_hub.override = None
+        resp = fake_hub.handler(request)
+        data = json.loads(resp.content)
+        data.pop("jwks")
+        return httpx.Response(200, json=data)
 
-    fake_hub.handler = without_jwks  # type: ignore[method-assign]
+    fake_hub.override = without_jwks
     client = app_factory()
-    state = client.app.state
-    with state.db.sessions() as s:
-        assert state.enrollment.enroll_with_code(s, HUB_URL, PAIR_CODE).ok
-        s.commit()
-    state.link.invalidate()
-    svc = {"Authorization": f"Bearer {fake_hub.issued_token}"}
-    health = client.get("/connector/v1/health", headers=svc).json()
-    checks = {c["name"]: c for c in health["checks"]}
-    assert checks["hub_jwks"]["status"] == "unknown" and checks["hub_jwks"]["reason_code"] == "nog_niet_opgehaald"
-    assert health["status"] == "unknown" and health["reason_code"] == "nog_niet_opgehaald"
-    assert fake_hub.jwks_calls == 0  # de health-check haalt zelf niets op (geen verzonnen 'gezond')
+    out = client.app.state.enrollment.enroll_with_code(HUB_URL, PAIR_CODE, fake_hub.fingerprint())
+    assert not out.ok and out.code == "hub_antwoord_ongeldig"
+    doc = client.app.state.hub_link.read()
+    assert doc["state"] == "nooit_gekoppeld" and doc["service_token"] is None and doc["pins"] is None
+    assert not any(r["path"] == "/api/v1/auth/jwks" for r in fake_hub.all_requests)
+    # niet gekoppeld → elke Hub-JWT geweigerd; de statuspagina toont 'nog niet gekoppeld'
+    r = client.get("/connector/v1/health", headers=fake_hub.service())
+    assert r.status_code == 401 and r.json()["details"]["reason"] == "not_linked"
 
 
 # ------------------------------------------------------------------ kinderprofiel als 'eigenaar'

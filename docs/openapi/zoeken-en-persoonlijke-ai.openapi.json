@@ -343,7 +343,7 @@
     }
   },
   "info": {
-    "description": "B07 persoonlijke zoekmachine (PostgreSQL + pgvector) en B15 spraak/persoonlijke AI voor TrueNAS Home Platform V2. Bronselectie en toestemming (B07-001) met lees-padenallowlist, gebruikers-ACL vóór ranking, kinderprofiel-beperkingen en intrekking met gecontroleerde purge. Niet-gebouwde functies geven `501 capability_unavailable`; nooit gesimuleerd succes.",
+    "description": "B07 persoonlijke zoekmachine (PostgreSQL + pgvector) en B15 spraak/persoonlijke AI voor TrueNAS Home Platform V2. Bronselectie en toestemming (B07-001) met lees-padenallowlist, gebruikers-ACL vóór ranking, kinderprofiel-beperkingen en intrekking met gecontroleerde purge. Authenticatie alleen met Hub-JWT's die zijn ondertekend met een bij het koppelen gepinde sleutel (platformcontract 1.2 §4). Niet-gebouwde functies geven `501 capability_unavailable`; nooit gesimuleerd succes.",
     "title": "Zoeken en persoonlijke AI",
     "version": "0.1.0"
   },
@@ -519,6 +519,79 @@
           }
         },
         "summary": "Gezondheid volgens het connectorcontract",
+        "tags": [
+          "connector"
+        ]
+      }
+    },
+    "/connector/v1/hub-link": {
+      "get": {
+        "operationId": "hub_link_connector_v1_hub_link_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Hub Link Connector V1 Hub Link Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Koppelstatus met de Hub (witte lijst, gepinde sleutels; contract 1.2 §3.5/§6)",
+        "tags": [
+          "connector"
+        ]
+      }
+    },
+    "/connector/v1/hub-link/unlink": {
+      "post": {
+        "operationId": "hub_link_unlink_connector_v1_hub_link_unlink_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "niet (meer) gekoppeld: reason not_linked (telt voor de Hub als geslaagd)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ontkoppelen van de Hub (dienst-JWT of admin, Idempotency-Key; contract 1.2 §3.8)",
         "tags": [
           "connector"
         ]
@@ -704,78 +777,6 @@
         "summary": "Actuele toestemmingstekst en scopes per bronsoort",
         "tags": [
           "zoeken (B07)"
-        ]
-      }
-    },
-    "/search/v1/enrollment": {
-      "get": {
-        "operationId": "enrollment_state_search_v1_enrollment_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Enrollment State Search V1 Enrollment Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Koppelstatus met de Hub (admin)",
-        "tags": [
-          "koppeling"
-        ]
-      }
-    },
-    "/search/v1/enrollment/unpair": {
-      "post": {
-        "operationId": "unpair_search_v1_enrollment_unpair_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Unpair Search V1 Enrollment Unpair Post"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Ontkoppelen van de Hub (admin)",
-        "tags": [
-          "koppeling"
         ]
       }
     },

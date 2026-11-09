@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -13,7 +12,7 @@ from alembic.migration import MigrationContext
 from sqlalchemy import create_engine, text
 
 from search_ai.models import all_models
-from tests.conftest import ENV_TOKEN, HUB_URL, PAIR_CODE, FakeHub, idem
+from tests.conftest import ENV_TOKEN, HUB_URL, FakeHub, idem
 
 pytestmark = pytest.mark.integration
 
@@ -42,10 +41,11 @@ def test_health_ready_and_status_page_not_paired(client: Any) -> None:
     assert r.status_code == 200, r.text
     names = {c["name"]: c["status"] for c in r.json()["checks"]}
     assert names == {"database": "ok", "migraties": "ok", "pgvector": "ok", "geheimen": "ok"}
+    assert r.json()["hub_link"]["state"] == "nooit_gekoppeld"
     page = client.get("/")
     assert page.status_code == 200 and "niet gekoppeld" in page.text and 'lang="nl"' in page.text
     assert "default-src 'none'" in page.headers["Content-Security-Policy"]
-    assert "Koppelcode" in page.text and "Spraak" in page.text
+    assert "Koppelcode" in page.text and "Hub-vingerafdruk" in page.text and "Spraak" in page.text
 
 
 def test_unauthenticated_and_error_format(client: Any) -> None:
@@ -54,80 +54,48 @@ def test_unauthenticated_and_error_format(client: Any) -> None:
     body = r.json()
     assert body["code"] == "unauthorized" and body["message"] and uuid.UUID(body["trace_id"])
     assert r.headers["X-Trace-Id"] == body["trace_id"]
-    # niet gekoppeld → ook een geldig ogende JWT wordt geweigerd (geen JWKS = fail-closed)
-    assert client.get("/connector/v1/discover", headers={"Authorization": "Bearer a.b.c"}).status_code == 401
+    assert body["details"]["reason"] == "not_linked"
+    # niet gekoppeld → ook een geldig ogende JWT wordt geweigerd (geen gepinde sleutels = fail-closed)
+    r = client.get("/connector/v1/discover", headers={"Authorization": "Bearer a.b.c"})
+    assert r.status_code == 401 and r.json()["details"]["reason"] == "not_linked"
 
 
-def test_enroll_with_env_token_uses_real_hub_format(app_factory: Callable[..., Any], fake_hub: FakeHub) -> None:
+def test_enroll_with_env_token_follows_contract_1_2(app_factory: Callable[..., Any], fake_hub: FakeHub) -> None:
     from search_ai.worker import Worker
 
-    client = app_factory(hub_url=HUB_URL, enrollment_token=ENV_TOKEN)
+    client = app_factory(hub_url=HUB_URL, enrollment_token=ENV_TOKEN, hub_key_fingerprint=fake_hub.fingerprint())
     w = Worker(client.app.state.settings, transport=fake_hub.transport)
-    w.enroll_step(0)
+    w.run_once()
     req = fake_hub.enroll_requests[-1]
-    assert set(req) == {"app_id", "enrollment_token", "version", "public_key_jwk"}
-    assert req["app_id"] == "zoeken-en-persoonlijke-ai" and "d" not in req["public_key_jwk"]
+    assert set(req) == {"app_id", "version", "base_url", "public_key_jwk"}  # (geheim zelf niet bewaard in de sim)
+    assert req["app_id"] == "zoeken-en-persoonlijke-ai" and set(req["public_key_jwk"]) == {"kty", "crv", "x", "kid"}
+    st = client.app.state.enrollment.public_state()
+    assert st["state"] == "gekoppeld" and st["service_token_last4"] == fake_hub.issued_token[-4:]
+    assert st["keyset_fingerprint"] == fake_hub.fingerprint() and st["via"] == "token"
+    doc = client.app.state.hub_link.read()
+    assert doc["confirmed_at"] and doc["first_linked_at"] == doc["linked_at"]
+    # niets van de koppeling staat in de database (een DB-herstel brengt haar dus nooit terug)
     with client.app.state.db.sessions() as s:
-        st = client.app.state.enrollment.public_state(s)
-    assert st["status"] == "gekoppeld" and st["service_token_last4"] == fake_hub.issued_token[-4:]
-    # het token is eenmalig: na ontkoppelen wordt hetzelfde omgevingstoken niet opnieuw geprobeerd
-    with client.app.state.db.sessions() as s:
-        client.app.state.enrollment.unpair(s)
-        s.commit()
-        assert client.app.state.enrollment.enroll_with_env_token(s) is None
+        assert s.execute(text("SELECT count(*) FROM vault_secret")).scalar() == 0
+        assert s.execute(text("SELECT count(*) FROM service_state WHERE key LIKE 'hub%'")).scalar() == 0
+    # eenmalig: na ontkoppelen wordt hetzelfde omgevingstoken niet opnieuw geprobeerd
+    client.app.state.enrollment.unlink()
+    assert client.app.state.enrollment.enroll_with_env_token() is None
 
 
-def test_enroll_rejected_and_hub_offline(app_factory: Callable[..., Any], fake_hub: FakeHub) -> None:
-    client = app_factory(hub_url=HUB_URL, enrollment_token="enr_verkeerd-token-000000000000")
-    with client.app.state.db.sessions() as s:
-        out = client.app.state.enrollment.enroll_with_env_token(s)
-        s.commit()
-    assert out is not None and not out.ok and out.reason == "hub_weigerde_token" and not out.retryable
-    fake_hub.up = False
-    with client.app.state.db.sessions() as s:
-        out = client.app.state.enrollment.enroll_with_code(s, HUB_URL, PAIR_CODE)
-        s.commit()
-    assert out.reason == "hub_onbereikbaar" and out.retryable
-    with client.app.state.db.sessions() as s:
-        assert client.app.state.enrollment.public_state(s)["status"] == "koppelen_mislukt"
-
-
-def test_pair_via_status_page_with_csrf_and_unpair_code(client: Any, fake_hub: FakeHub, caplog: Any) -> None:
-    page = client.get("/")
-    csrf = re.search(r'name="csrf" value="([^"]+)"', page.text).group(1)  # type: ignore[union-attr]
-    # zonder geldig CSRF-token → geweigerd
-    r = client.post("/koppelen", data={"csrf": "fout", "hub_url": HUB_URL, "code": PAIR_CODE}, follow_redirects=False)
-    assert r.status_code == 303 and "ongeldig_formulier" in r.headers["location"]
-    # loopback-Hub geweigerd (wijst naar de container zelf)
-    r = client.post(
-        "/koppelen", data={"csrf": csrf, "hub_url": "http://127.0.0.1:30400", "code": PAIR_CODE}, follow_redirects=False
-    )
-    assert "ongeldig_hub_adres" in r.headers["location"]
-    r = client.post("/koppelen", data={"csrf": csrf, "hub_url": HUB_URL, "code": PAIR_CODE}, follow_redirects=False)
-    assert "melding=gekoppeld" in r.headers["location"]
-    assert fake_hub.enroll_requests[-1]["pairing_code"] == PAIR_CODE
-    assert "gekoppeld" in client.get("/").text
-    # ontkoppelen vereist de lokale ontkoppelcode
-    page = client.get("/")
-    csrf = re.search(r'name="csrf" value="([^"]+)"', page.text).group(1)  # type: ignore[union-attr]
-    r = client.post("/ontkoppelen", data={"csrf": csrf, "unpair_code": "XXXX-XXXX-XXXX"}, follow_redirects=False)
-    assert "ontkoppelcode_onjuist" in r.headers["location"]
-
-
-def test_jwt_roles_and_fail_closed_when_hub_disappears(paired_client: Any, auth: Auth, fake_hub: FakeHub) -> None:
+def test_jwt_roles_and_pins_survive_hub_outage(paired_client: Any, auth: Auth, svc: Auth, fake_hub: FakeHub) -> None:
     client = paired_client
     assert client.get("/connector/v1/discover", headers=auth("viewer")).status_code == 200
-    assert client.get("/search/v1/enrollment", headers=auth("viewer")).status_code == 403
-    assert client.get("/search/v1/enrollment", headers=auth("admin")).json()["status"] == "gekoppeld"
-    # JWKS veroudert en de Hub is weg: na ttl + max_stale wordt elke JWT geweigerd
+    r = client.get("/connector/v1/hub-link", headers=auth("viewer"))
+    assert r.status_code == 200 and r.json()["state"] == "gekoppeld"
+    # gepinde sleutels: de Hub tijdelijk weg verandert niets aan het vertrouwen (en is nooit een intrekking)
     fake_hub.up = False
-    jwks = client.app.state.jwks
-    jwks._fetched_at = jwks._clock() - (jwks.ttl_s + jwks.max_stale_s + 1)
-    r = client.get("/connector/v1/discover", headers=auth("admin"))
-    assert r.status_code == 401 and r.json()["details"]["reason"] == "jwks_niet_beschikbaar"
-    health = client.get("/connector/v1/health", headers={"Authorization": f"Bearer {fake_hub.issued_token}"}).json()
-    assert {c["name"]: c["status"] for c in health["checks"]}["hub_jwks"] == "down"
-    assert health["status"] == "degraded"
+    assert client.get("/connector/v1/discover", headers=auth("admin")).status_code == 200
+    health = client.get("/connector/v1/health", headers=svc()).json()
+    checks = {c["name"]: c["status"] for c in health["checks"]}
+    assert checks["hub_sleutels"] == "healthy" and checks["hub_koppeling"] == "healthy"
+    assert health["status"] == "healthy"
+    assert not any(r["path"] == "/api/v1/auth/jwks" for r in fake_hub.all_requests)  # nooit een JWKS opgehaald
 
 
 def test_idempotency_required_replay_and_conflict(paired_client: Any, auth: Auth, shares: Any) -> None:
@@ -145,28 +113,27 @@ def test_idempotency_required_replay_and_conflict(paired_client: Any, auth: Auth
     assert r3.status_code == 409 and r3.json()["code"] == "idempotency_key_conflict"
 
 
-def test_connector_contract(paired_client: Any, auth: Auth, fake_hub: FakeHub, shares: Any) -> None:
-    svc = {"Authorization": f"Bearer {fake_hub.issued_token}"}
-    d = paired_client.get("/connector/v1/discover", headers=svc).json()
+def test_connector_contract(paired_client: Any, auth: Auth, svc: Auth, shares: Any) -> None:
+    d = paired_client.get("/connector/v1/discover", headers=svc()).json()
     assert d["app_id"] == "zoeken-en-persoonlijke-ai" and d["schema_version"] == "1.0"
     assert d["capabilities"] == ["read", "stream"] and "apply" in d["unavailable_capabilities"]
     for path in ("/connector/v1/propose", "/connector/v1/apply", "/connector/v1/rollback"):
-        r = paired_client.post(path, headers=svc)
+        r = paired_client.post(path, headers=svc())
         assert r.status_code == 501 and r.json()["code"] == "capability_unavailable"
     paired_client.post(
         "/search/v1/sources",
         json={"kind": "files", "name": "Docs", "allowed_paths": [str(shares.a)]},
         headers=idem(auth("admin", sub="beheer")),
     )
-    items = paired_client.get("/connector/v1/items", params={"type": "search.source"}, headers=svc).json()
+    items = paired_client.get("/connector/v1/items", params={"type": "search.source"}, headers=svc()).json()
     assert len(items["items"]) == 1 and "allowed_paths" not in items["items"][0]
-    r = paired_client.get("/connector/v1/items", params={"type": "search.document"}, headers=svc)
+    r = paired_client.get("/connector/v1/items", params={"type": "search.document"}, headers=svc())
     assert r.status_code == 403
-    r = paired_client.get("/connector/v1/items", params={"type": "voice.session"}, headers=svc)
+    r = paired_client.get("/connector/v1/items", params={"type": "voice.session"}, headers=svc())
     assert r.status_code == 501
     r = paired_client.get("/connector/v1/items", params={"type": "search.source"}, headers=auth("kind"))
     assert r.status_code == 403
-    health = paired_client.get("/connector/v1/health", headers=svc).json()
+    health = paired_client.get("/connector/v1/health", headers=svc()).json()
     checks = {c["name"]: c["status"] for c in health["checks"]}
     assert checks["ingest"] == "unknown" and checks["spraak"] == "unknown" and checks["pgvector"] == "healthy"
     assert health["status"] == "healthy"

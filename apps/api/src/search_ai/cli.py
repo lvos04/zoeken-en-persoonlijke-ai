@@ -33,8 +33,13 @@ def cmd_init(settings: Settings) -> int:
 
 
 def cmd_migrate(settings: Settings, backup_dir: str | None, down: str | None) -> int:
+    from . import APP_ID
     from .db import Database
+    from .enrollment import migrate_legacy_link
+    from .hublink import HubLinkStore
     from .migrations import downgrade, pre_upgrade_backup, upgrade
+    from .security.secrets import ensure_secrets, load_vault_key
+    from .security.vault import Vault
 
     if down:
         downgrade(settings, down)
@@ -48,6 +53,13 @@ def cmd_migrate(settings: Settings, backup_dir: str | None, down: str | None) ->
                 print(f"back-up vóór upgrade: {dump}")
         upgrade(settings)
         print(f"database op revisie {db.current_revision()} (pgvector {db.vector_extension() or 'ontbreekt'})")
+        # contract 1.2 §3.5: koppeling uit de database (1.1) naar /appdata/secrets/hub-link.json, daarna uit de DB weg
+        ensure_secrets(settings.secrets_dir)
+        vault = Vault(load_vault_key(settings.secrets_dir))
+        store = HubLinkStore(settings.secrets_dir, APP_ID)
+        result = migrate_legacy_link(store, db, vault, settings.allow_loopback_hub)
+        if result != "niets":
+            print(f"koppeling uit de vorige versie: {result}")
     finally:
         db.dispose()
     return 0

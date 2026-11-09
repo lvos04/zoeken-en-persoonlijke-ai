@@ -6,7 +6,6 @@ zoekinhoud, geen documenten en geen embeddings verlaten de NAS (B07-001).
 
 from __future__ import annotations
 
-import contextlib
 import ipaddress
 import random
 import time
@@ -20,35 +19,75 @@ from . import __version__
 from .config import Settings
 
 RETRY_STATUS = {429, 502, 503, 504}
+REDIRECT = range(300, 400)  # nooit volgen: 3xx = storing (contract 1.2 §3.2)
 
 
 class HubUrlError(ValueError):
     """Ongeldig adres; de boodschap is Nederlands en mag aan de gebruiker getoond worden."""
 
 
+def _bad_ip(host: str, allow_loopback: bool) -> str | None:
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return None
+    mapped = getattr(ip, "ipv4_mapped", None)
+    for addr in (ip, mapped) if mapped is not None else (ip,):
+        if addr.is_unspecified:
+            return "unspecified"
+        if addr.is_loopback and not allow_loopback:
+            return "loopback"
+        if addr.is_link_local:
+            return "link_local"
+        if addr.is_multicast:
+            return "multicast"
+    return None
+
+
 def validate_hub_url(url: str, allow_loopback: bool = False, label: str = "Het Hub-adres") -> str:
-    url = url.strip().rstrip("/")
+    """Regels van contract 1.2 §3.2 voor ``HUB_URL`` én het Hub-adres op de statuspagina.
+
+    ``http(s)://<host>[:<poort>]`` zonder pad, query, fragment of inloggegevens; geen loopback (alleen met de
+    ontwikkelvlag), geen link-local (169.254.0.0/16, fe80::/10), geen 0.0.0.0/:: en geen multicast. Geeft het adres
+    zonder afsluitende ``/`` terug.
+    """
+    if not isinstance(url, str):
+        raise HubUrlError(f"{label} is ongeldig.")
+    url = url.strip()
     if len(url) > 500:
         raise HubUrlError(f"{label} is te lang.")
+    if any(ch.isspace() or ord(ch) < 32 for ch in url):
+        raise HubUrlError(f"{label} bevat spaties of stuurtekens.")
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https"):
         raise HubUrlError(f"{label} moet met http:// of https:// beginnen.")
+    if parts.username is not None or parts.password is not None or "@" in parts.netloc:
+        raise HubUrlError("Zet geen gebruikersnaam of wachtwoord in het adres.")
     if not parts.hostname:
         raise HubUrlError(f"{label} mist een hostnaam of IP-adres.")
-    if parts.username or parts.password:
-        raise HubUrlError("Zet geen gebruikersnaam of wachtwoord in het adres.")
-    if parts.query or parts.fragment:
+    if parts.query or parts.fragment or "?" in url or "#" in url:
         raise HubUrlError(f"{label} mag geen ?-parameters of #-deel bevatten.")
+    if parts.path not in ("", "/"):
+        raise HubUrlError(f"{label} mag geen pad bevatten: alleen http(s)://<NAS-adres>:<poort>.")
+    try:
+        port = parts.port
+    except ValueError as exc:
+        raise HubUrlError(f"{label} heeft een ongeldige poort.") from exc
+    if port == 0:
+        raise HubUrlError(f"{label} heeft een ongeldige poort.")
     host = parts.hostname.lower()
-    loopback = host == "localhost" or host.endswith(".localhost")
-    with contextlib.suppress(ValueError):
-        loopback = loopback or ipaddress.ip_address(host).is_loopback
-    if loopback and not allow_loopback:
+    named_loopback = host == "localhost" or host.endswith(".localhost")
+    problem = "loopback" if named_loopback and not allow_loopback else _bad_ip(host, allow_loopback)
+    if problem == "loopback":
         raise HubUrlError(
             "Loopback-adressen (localhost/127.0.0.1) wijzen naar deze container zelf. Gebruik het LAN-adres van de NAS "
-            "met de poort van de app."
+            "met de poort van de Hub."
         )
-    return url
+    if problem is not None:
+        raise HubUrlError(
+            f"{label} mag geen link-local-, multicast- of 'alle adressen'-adres zijn (169.254.x.x, fe80::, 0.0.0.0, ::)."
+        )
+    return f"{parts.scheme}://{parts.netloc}"
 
 
 class HubClient:

@@ -11,6 +11,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import APP_ID, __version__
+from .enrollment import pins_ok
+from .hublink import public_view
 from .models import OutboxEvent
 from .search.models import IndexSource
 from .search.paths import validate_read_roots
@@ -50,7 +52,12 @@ def readiness(request: Request) -> tuple[bool, list[dict[str, Any]]]:
 @router.get("/readyz", summary="Klaar voor verkeer: database, migraties, pgvector, geheimen (zonder auth)")
 def readyz(request: Request) -> JSONResponse:
     ok, checks = readiness(request)
-    return JSONResponse({"status": "ready" if ok else "not_ready", "checks": checks}, status_code=200 if ok else 503)
+    # koppelstatus alleen als witte lijst (contract 1.2 §3.5); 'niet gekoppeld' maakt de dienst niet 'niet klaar'
+    link = public_view(request.app.state.hub_link.read_safe())
+    return JSONResponse(
+        {"status": "ready" if ok else "not_ready", "checks": checks, "hub_link": link},
+        status_code=200 if ok else 503,
+    )
 
 
 def _check(name: str, status: str, detail: Any = None, reason: str | None = None) -> dict[str, Any]:
@@ -80,28 +87,39 @@ def connector_health(request: Request, session: Session) -> dict[str, Any]:
     )
     vec = state.db.vector_extension()
     checks.append(_check("pgvector", "healthy" if vec else "down", {"versie": vec}, None if vec else "ontbreekt"))
-    link = state.enrollment.state(session)
-    coupled = link.get("status") == "gekoppeld"
+    link = state.hub_link.read_safe()
+    lstate = str(link.get("state"))
+    coupled = lstate == "gekoppeld"
+    err_code = (link.get("last_error") or {}).get("code")
+    if coupled and link.get("confirmed_at"):
+        hub_status, hub_reason = "healthy", None
+    elif coupled:
+        hub_status, hub_reason = "degraded", "niet_bevestigd"
+    else:
+        hub_status, hub_reason = "degraded", lstate
+    checks.append(_check("hub_koppeling", hub_status, {"state": lstate}, hub_reason))
+    # gepinde Hub-sleutels (§4.5): er wordt nooit een JWKS opgehaald; zonder koppeling is dit 'unknown', nooit groen
+    if not coupled:
+        keys_status, keys_reason = "unknown", "niet_gekoppeld"
+    elif not pins_ok(link):
+        keys_status, keys_reason = "down", "pins_ongeldig"
+    elif err_code == "sleutelrotatie_ongeldig":
+        keys_status, keys_reason = "degraded", "sleutelrotatie_ongeldig"
+    else:
+        keys_status, keys_reason = "healthy", None
+    pins = link.get("pins") or {}
     checks.append(
         _check(
-            "hub_koppeling",
-            "healthy" if coupled else "degraded",
-            {"status": link.get("status")},
-            None if coupled else link.get("reason"),
+            "hub_sleutels",
+            keys_status,
+            {
+                "jwt": len(pins.get("jwt") or []) if coupled else 0,
+                "policy": len(pins.get("policy") or []) if coupled else 0,
+                "rotation_sequence": int(pins.get("rotation_sequence") or 0) if coupled else 0,
+            },
+            keys_reason,
         )
     )
-    js = state.jwks.status()
-    if not coupled:
-        jwks_status, jwks_reason = "unknown", "niet_gekoppeld"
-    elif js.available and not js.stale:
-        jwks_status, jwks_reason = "healthy", None
-    elif js.available:
-        jwks_status, jwks_reason = "degraded", "verouderd"
-    elif js.age_s is None and js.last_error is None:
-        jwks_status, jwks_reason = "unknown", "nog_niet_opgehaald"
-    else:
-        jwks_status, jwks_reason = "down", js.last_error or "niet_beschikbaar"
-    checks.append(_check("hub_jwks", jwks_status, {"keys": js.keys, "age_s": js.age_s}, jwks_reason))
 
     dead = session.scalar(select(func.count()).where(OutboxEvent.delivery_status == "dead_letter")) or 0
     stale_pending = (
@@ -149,13 +167,17 @@ def connector_health(request: Request, session: Session) -> dict[str, Any]:
     service_checks = [
         c
         for c in checks
-        if c["name"] in ("migraties", "pgvector", "hub_koppeling", "hub_jwks", "outbox", "intrekking_opgeschoond")
+        if c["name"] in ("migraties", "pgvector", "hub_koppeling", "hub_sleutels", "outbox", "intrekking_opgeschoond")
     ]
     bad = [c for c in service_checks if c["status"] not in ("healthy", "unknown")]
-    status = "down" if any(c["status"] == "down" for c in service_checks if c["name"] == "pgvector") else None
+    status = (
+        "down"
+        if any(c["status"] == "down" for c in service_checks if c["name"] in ("pgvector", "hub_sleutels"))
+        else None
+    )
     if status is None:
         status = "degraded" if bad or not coupled else "healthy"
-    # Onbekend is nooit groen: een dienstcheck die 'unknown' is (bv. Hub-sleutels nog nooit opgehaald) maakt het
+    # Onbekend is nooit groen: een dienstcheck die 'unknown' is (bv. geen gepinde Hub-sleutels) maakt het
     # geheel 'unknown', niet 'healthy'. Niet-gebouwde functies (ingest, spraak) tellen hier niet mee: die staan
     # eerlijk als capability_unavailable in hun eigen check.
     if status == "healthy" and any(c["status"] == "unknown" for c in service_checks):

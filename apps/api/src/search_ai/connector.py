@@ -1,8 +1,13 @@
-"""Connectorcontract ``/connector/v1/*`` (contract §6).
+"""Connectorcontract ``/connector/v1/*`` (contract 1.2 §6).
 
 Deze dienst levert in P0 ``read`` (bronnen, runs, privacydekking — **nooit documentinhoud** via de connector) en
 ``stream`` als polling-outbox. ``propose``/``apply``/``rollback`` geven eerlijk ``501 capability_unavailable``: deze dienst
 voert geen acties uit voor de Hub (nooit gesimuleerd succes).
+
+Koppelbeheer (alleen eigen diensten, §3.8/§6): ``GET /connector/v1/hub-link`` (witte lijst van §3.5 + gepinde ``kid``'s
+en ``rotation_sequence``; dienst-JWT of gebruiker viewer+) en ``POST /connector/v1/hub-link/unlink`` (dienst-JWT of
+gebruiker admin, ``Idempotency-Key``). Daarna weigert de dienst elke Hub-JWT met 401 ``not_linked``; een herhaalde
+``unlink`` krijgt dus ook 401 ``not_linked`` — voor de Hub telt dat als geslaagd.
 """
 
 from __future__ import annotations
@@ -11,14 +16,18 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import APP_ID, CONNECTOR_PREFIX, SCHEMA_VERSION, __version__
-from .deps import get_session
+from . import APP_ID, CONNECTOR_PREFIX, SCHEMA_VERSION, __version__, audit, events
+from .deps import get_session, trace_id
+from .enrollment import pinned_kids
 from .errors import ApiError, capability_unavailable, forbidden, not_found
 from .events import envelope
 from .health import connector_health
+from .hublink import public_view
+from .idempotency import idempotency_key, run_idempotent
 from .models import AuditEvent, OutboxEvent
 from .pagination import MAX_LIMIT, decode_int_cursor, encode_cursor, offset_page
 from .redact import redact
@@ -55,6 +64,8 @@ def discover(_p: Principal = Depends(require_connector_reader)) -> dict[str, Any
         "unavailable_capabilities": ["propose", "apply", "rollback"],
         "stream_mode": "polling via /connector/v1/events en push naar de Hub-inbox",
         "permissions": [
+            "read:hub_link",
+            "write:hub_link.unlink",
             "read:search.source",
             "read:search.index_run",
             "read:search.privacy_summary",
@@ -208,3 +219,55 @@ def poll_events(
         "next_cursor": encode_cursor(rows[-1].seq) if rows else cursor,
         "dead_letter_count": dead,
     }
+
+
+@router.get("/hub-link", summary="Koppelstatus met de Hub (witte lijst, gepinde sleutels; contract 1.2 §3.5/§6)")
+def hub_link(request: Request, _p: Principal = Depends(require_connector_reader)) -> dict[str, Any]:
+    doc = request.app.state.hub_link.read_safe()
+    pins = doc.get("pins") if doc.get("state") == "gekoppeld" else None
+    return {
+        **public_view(doc),
+        "pinned_kids": pinned_kids(doc),
+        "rotation_sequence": int((pins or {}).get("rotation_sequence") or 0),
+        "timestamp_utc": iso(utcnow()),
+    }
+
+
+@router.post(
+    "/hub-link/unlink",
+    summary="Ontkoppelen van de Hub (dienst-JWT of admin, Idempotency-Key; contract 1.2 §3.8)",
+    responses={401: {"description": "niet (meer) gekoppeld: reason not_linked (telt voor de Hub als geslaagd)"}},
+)
+def hub_link_unlink(
+    request: Request,
+    session: Session = Depends(get_session),
+    principal: Principal = Depends(require_admin_or_service),
+    key: uuid.UUID = Depends(idempotency_key),
+    tid: str = Depends(trace_id),
+) -> JSONResponse:
+    def action() -> tuple[int, Any, dict[str, str]]:
+        state = request.app.state.enrollment.unlink()
+        audit.record(
+            session,
+            domain="platform",
+            action="hub.unlink",
+            entity_type="hub_link",
+            entity_id="hub",
+            principal=principal,
+            trace_id=tid,
+            message_nl="Ontkoppeld van de Hub; Hub-JWT's worden vanaf nu geweigerd.",
+            details={"door": principal.audit_id},
+        )
+        events.emit(
+            session,
+            event_type="service.hub_link.unlinked",
+            entity_type="hub_link",
+            entity_id="hub",
+            actor_type=principal.actor_type,
+            actor_id=principal.audit_id,
+            trace_id=tid,
+            payload={"state": state["state"]},
+        )
+        return 200, state, {}
+
+    return run_idempotent(request, session, principal, key, {"unlink": True}, action)

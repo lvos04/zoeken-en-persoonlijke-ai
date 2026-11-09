@@ -33,10 +33,6 @@ class ApiError(Exception):
         self.headers = headers or {}
 
 
-def unauthorized(reason: str, message: str = "Niet geautoriseerd.") -> ApiError:
-    return ApiError(401, "unauthorized", message, {"reason": reason}, {"WWW-Authenticate": "Bearer"})
-
-
 def forbidden(reason: str, message: str = "Geen toestemming voor deze handeling.") -> ApiError:
     return ApiError(403, "forbidden", message, {"reason": reason})
 

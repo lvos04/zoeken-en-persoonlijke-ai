@@ -27,7 +27,7 @@ from tests.integration.helpers import counts, simulate_ingest
 pytestmark = pytest.mark.integration
 
 Auth = Callable[..., dict[str, str]]
-PUBLIC = {"/", "/healthz", "/readyz", "/koppelen", "/ontkoppelen"}
+PUBLIC = {"/", "/healthz", "/readyz", "/koppelen"}
 
 
 def test_every_api_route_requires_auth(client: Any) -> None:
@@ -114,6 +114,7 @@ def test_request_size_limit(paired_client: Any, auth: Auth) -> None:
         headers=idem(auth("admin"), **{"Content-Type": "application/json"}),
     )
     assert r.status_code == 413 and r.json()["code"] == "payload_too_large"
+    assert r.json()["details"] == {"max_bytes": 1048576} and r.json()["trace_id"]
 
 
 @pytest.mark.skipif(shutil.which("pg_dump") is None, reason="pg_dump niet beschikbaar")

@@ -34,7 +34,7 @@ from search_ai.search.service import sweep_revoked
 from search_ai.security.auth import Principal
 from search_ai.timeutil import utcnow
 from search_ai.voice.models import ContextScope
-from tests.conftest import HUB_URL, PAIR_CODE, Shares, idem
+from tests.conftest import FakeHub, Shares, idem, pair
 from tests.integration.helpers import counts, simulate_ingest
 from tests.integration.test_b07_001_consent import consent, make_source
 
@@ -385,12 +385,11 @@ def test_derived_rows_cannot_cross_sources(clean_db: str) -> None:
 
 
 # ------------------------------------------------------------------ verzoek- en tijdlimiet (B07 §3)
-def test_search_rate_limit_and_statement_timeout(app_factory: Callable[..., Any], auth: Auth, shares: Shares) -> None:
+def test_search_rate_limit_and_statement_timeout(
+    app_factory: Callable[..., Any], auth: Auth, shares: Shares, fake_hub: FakeHub
+) -> None:
     client = app_factory(search_rate_limit=3)
-    with client.app.state.db.sessions() as s:
-        assert client.app.state.enrollment.enroll_with_code(s, HUB_URL, PAIR_CODE).ok
-        s.commit()
-    client.app.state.link.invalidate()
+    pair(client, fake_hub)
     for _ in range(3):
         assert client.get("/search/v1/search", params={"q": "x"}, headers=auth("viewer", sub="u1")).status_code == 200
     r = client.get("/search/v1/search", params={"q": "x"}, headers=auth("viewer", sub="u1"))
