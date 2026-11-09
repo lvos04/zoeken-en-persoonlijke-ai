@@ -99,7 +99,9 @@ def test_pair_via_status_page_with_csrf_and_unpair_code(client: Any, fake_hub: F
     r = client.post("/koppelen", data={"csrf": "fout", "hub_url": HUB_URL, "code": PAIR_CODE}, follow_redirects=False)
     assert r.status_code == 303 and "ongeldig_formulier" in r.headers["location"]
     # loopback-Hub geweigerd (wijst naar de container zelf)
-    r = client.post("/koppelen", data={"csrf": csrf, "hub_url": "http://127.0.0.1:30400", "code": PAIR_CODE}, follow_redirects=False)
+    r = client.post(
+        "/koppelen", data={"csrf": csrf, "hub_url": "http://127.0.0.1:30400", "code": PAIR_CODE}, follow_redirects=False
+    )
     assert "ongeldig_hub_adres" in r.headers["location"]
     r = client.post("/koppelen", data={"csrf": csrf, "hub_url": HUB_URL, "code": PAIR_CODE}, follow_redirects=False)
     assert "melding=gekoppeld" in r.headers["location"]
@@ -120,7 +122,7 @@ def test_jwt_roles_and_fail_closed_when_hub_disappears(paired_client: Any, auth:
     # JWKS veroudert en de Hub is weg: na ttl + max_stale wordt elke JWT geweigerd
     fake_hub.up = False
     jwks = client.app.state.jwks
-    jwks._fetched_at = jwks._clock() - (jwks.ttl_s + jwks.max_stale_s + 1)  # noqa: SLF001 - tijdsprong in de test
+    jwks._fetched_at = jwks._clock() - (jwks.ttl_s + jwks.max_stale_s + 1)
     r = client.get("/connector/v1/discover", headers=auth("admin"))
     assert r.status_code == 401 and r.json()["details"]["reason"] == "jwks_niet_beschikbaar"
     health = client.get("/connector/v1/health", headers={"Authorization": f"Bearer {fake_hub.issued_token}"}).json()

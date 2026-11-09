@@ -11,11 +11,11 @@ from search_ai.search.paths import (
     DEFAULT_EXCLUDES,
     PathGuard,
     PathRuleError,
+    PreviewResult,
     iter_candidates,
     matches_exclude,
     normalize_abs,
     preview,
-    PreviewResult,
     validate_patterns,
     validate_read_roots,
 )

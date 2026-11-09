@@ -29,8 +29,8 @@ B15_TABLES = {"voice_session", "transcript", "intent", "context_scope", "tts_job
 
 def test_all_required_tables_exist() -> None:
     tables = set(all_models().metadata.tables)
-    assert B07_TABLES <= tables
-    assert B15_TABLES <= tables
+    assert tables >= B07_TABLES
+    assert tables >= B15_TABLES
 
 
 def test_no_raw_audio_column_anywhere_in_b15() -> None:
@@ -45,7 +45,9 @@ def test_no_raw_audio_column_anywhere_in_b15() -> None:
 def test_external_ai_scope_not_storable() -> None:
     """'Verlaat NAS niet': de scope ai.external bestaat niet in de database-CHECK."""
     assert "ai.external" not in DB_SCOPES
-    ck = [c for c in all_models().metadata.tables["connector_permission"].constraints if c.name and "scope" in str(c.name)]
+    ck = [
+        c for c in all_models().metadata.tables["connector_permission"].constraints if c.name and "scope" in str(c.name)
+    ]
     assert ck and "ai.external" not in str(ck[0].sqltext)  # type: ignore[attr-defined]
 
 

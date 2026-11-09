@@ -34,7 +34,9 @@ def make_source(client: Any, auth: Auth, path: str, *, owner: str = "user-a", **
     return r.json()
 
 
-def consent(client: Any, auth: Auth, sid: str, *, sub: str = "user-a", scopes: list[str] | None = None, **kw: Any) -> Any:
+def consent(
+    client: Any, auth: Auth, sid: str, *, sub: str = "user-a", scopes: list[str] | None = None, **kw: Any
+) -> Any:
     body = {
         "scopes": scopes or ["metadata.read", "content.read"],
         "consent_text_version": CONSENT_TEXT_VERSION,
@@ -138,7 +140,9 @@ def test_consent_only_by_owner_bound_to_snapshot(paired_client: Any, auth: Auth,
     etag = client.get(f"/search/v1/sources/{sid}", headers=admin).headers["ETag"]
     # paden wijzigen terwijl actief → eerst pauzeren
     r = client.patch(
-        f"/search/v1/sources/{sid}", json={"allowed_paths": [str(shares.a / "werk")]}, headers=idem(admin, **{"If-Match": etag})
+        f"/search/v1/sources/{sid}",
+        json={"allowed_paths": [str(shares.a / "werk")]},
+        headers=idem(admin, **{"If-Match": etag}),
     )
     assert r.status_code == 409 and r.json()["code"] == "bron_actief_eerst_pauzeren"
     # zonder If-Match → 428
@@ -164,7 +168,9 @@ def test_consent_only_by_owner_bound_to_snapshot(paired_client: Any, auth: Auth,
         assert sorted(p.scope for p in perms) == ["content.read", "metadata.read"]
 
 
-def test_source_validation_rejects_paths_outside_allowlist(paired_client: Any, auth: Auth, shares: Shares, tmp_path: Any) -> None:
+def test_source_validation_rejects_paths_outside_allowlist(
+    paired_client: Any, auth: Auth, shares: Shares, tmp_path: Any
+) -> None:
     admin = idem(auth("admin", sub="beheer"))
     for path, code in [
         (str(tmp_path), "pad_buiten_leeswortels"),
@@ -249,7 +255,9 @@ def test_acl_applied_before_ranking(paired_client: Any, auth: Auth, shares: Shar
     assert r.status_code == 200
     assert search(client, auth, "keuken", "user-c")["items"] == []
     # semantisch zoeken zonder lokaal model: eerlijk 501
-    r = client.get("/search/v1/search", params={"q": "keuken", "mode": "semantic"}, headers=auth("viewer", sub="user-a"))
+    r = client.get(
+        "/search/v1/search", params={"q": "keuken", "mode": "semantic"}, headers=auth("viewer", sub="user-a")
+    )
     assert r.status_code == 501
     # een service-token heeft geen gebruikerscontext → mag niet zoeken
     token = fake_token(client)
@@ -281,9 +289,15 @@ def test_owner_only_documents_and_paused_sources(paired_client: Any, auth: Auth,
     assert len(search(client, auth, "offerte", "user-a")["items"]) == 2
     assert [i["fragment"] for i in search(client, auth, "offerte", "user-c")["items"]] == ["«offerte» gedeeld"]
     # gepauzeerd = niet doorzoekbaar
-    assert client.post(f"/search/v1/sources/{src['id']}/pause", headers=idem(auth("admin", sub="beheer"))).status_code == 200
+    assert (
+        client.post(f"/search/v1/sources/{src['id']}/pause", headers=idem(auth("admin", sub="beheer"))).status_code
+        == 200
+    )
     assert search(client, auth, "offerte", "user-a")["items"] == []
-    assert client.post(f"/search/v1/sources/{src['id']}/resume", headers=idem(auth("admin", sub="beheer"))).status_code == 200
+    assert (
+        client.post(f"/search/v1/sources/{src['id']}/resume", headers=idem(auth("admin", sub="beheer"))).status_code
+        == 200
+    )
     assert len(search(client, auth, "offerte", "user-a")["items"]) == 2
 
 
@@ -325,7 +339,14 @@ def test_kid_profile_restrictions(paired_client: Any, auth: Auth, shares: Shares
         headers=idem(admin),
     )
     with client.app.state.db.sessions() as s:
-        simulate_ingest(s, family["id"], str(shares.a / "notities.md"), ["dierentuin uitje"], kid_safe=True, classification="internal")
+        simulate_ingest(
+            s,
+            family["id"],
+            str(shares.a / "notities.md"),
+            ["dierentuin uitje"],
+            kid_safe=True,
+            classification="internal",
+        )
         simulate_ingest(s, family["id"], str(shares.a / "werk" / "offerte.txt"), ["dierentuin kosten"], kid_safe=False)
         simulate_ingest(s, sensitive["id"], str(shares.b / "dagboek.txt"), ["dierentuin dagboek"], kid_safe=True)
     kid = search(client, auth, "dierentuin", "kind-1", "kind")
@@ -334,9 +355,19 @@ def test_kid_profile_restrictions(paired_client: Any, auth: Auth, shares: Shares
     both = search(client, auth, "dierentuin", "kind-1", "kind", "admin")
     assert [i["fragment"] for i in both["items"]] == ["«dierentuin» uitje"]
     kid_hdr = auth("kind", "admin", sub="kind-1")
-    assert client.post("/search/v1/sources", json={"kind": "logs", "name": "x", "allowed_paths": [str(shares.a)]}, headers=idem(kid_hdr)).status_code == 403
+    assert (
+        client.post(
+            "/search/v1/sources",
+            json={"kind": "logs", "name": "x", "allowed_paths": [str(shares.a)]},
+            headers=idem(kid_hdr),
+        ).status_code
+        == 403
+    )
     assert client.get("/search/v1/privacy/coverage", headers=kid_hdr).status_code == 403
-    assert client.post(f"/search/v1/sources/{family['id']}/revoke", headers=idem(auth("kind", sub="ouder"))).status_code == 404
+    assert (
+        client.post(f"/search/v1/sources/{family['id']}/revoke", headers=idem(auth("kind", sub="ouder"))).status_code
+        == 404
+    )
 
 
 # ------------------------------------------------------------------ intrekken = opschonen
@@ -356,16 +387,25 @@ def test_revoke_purges_index_and_embeddings_but_not_originals(
     before = shares.checksums()
 
     key = str(uuid.uuid4())
-    r = client.post(f"/search/v1/sources/{sid}/revoke", json={"reden": "test"}, headers=idem(auth("viewer", sub="user-a"), key=key))
+    r = client.post(
+        f"/search/v1/sources/{sid}/revoke", json={"reden": "test"}, headers=idem(auth("viewer", sub="user-a"), key=key)
+    )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["bron"]["status"] == "revoked"
     assert body["opschonen"]["status"] == "succeeded"
     assert body["opschonen"]["counts"]["verwijderd"] == before_counts
     assert body["opschonen"]["verification"]["leeg"] is True
-    assert body["opschonen"]["verification"]["na_verwijderen"] == {"documenten": 0, "chunks": 0, "embeddings": 0, "transcripten": 0}
+    assert body["opschonen"]["verification"]["na_verwijderen"] == {
+        "documenten": 0,
+        "chunks": 0,
+        "embeddings": 0,
+        "transcripten": 0,
+    }
     # herhaling met dezelfde key → zelfde antwoord, geen tweede uitvoering
-    r2 = client.post(f"/search/v1/sources/{sid}/revoke", json={"reden": "test"}, headers=idem(auth("viewer", sub="user-a"), key=key))
+    r2 = client.post(
+        f"/search/v1/sources/{sid}/revoke", json={"reden": "test"}, headers=idem(auth("viewer", sub="user-a"), key=key)
+    )
     assert r2.json() == body and r2.headers.get("Idempotent-Replay") == "true"
 
     with client.app.state.db.sessions() as s:
@@ -414,7 +454,9 @@ def test_narrowing_selection_purges_outside_docs(paired_client: Any, auth: Auth,
     client.post(f"/search/v1/sources/{sid}/pause", headers=idem(admin))
     etag = client.get(f"/search/v1/sources/{sid}", headers=admin).headers["ETag"]
     r = client.patch(
-        f"/search/v1/sources/{sid}", json={"allowed_paths": [str(shares.a / "werk")]}, headers=idem(admin, **{"If-Match": etag})
+        f"/search/v1/sources/{sid}",
+        json={"allowed_paths": [str(shares.a / "werk")]},
+        headers=idem(admin, **{"If-Match": etag}),
     )
     assert r.status_code == 200, r.text
     assert r.json()["purge"]["counts"]["verwijderd"]["documenten"] == 1
