@@ -24,6 +24,7 @@ Veiligheid:
 from __future__ import annotations
 
 import hmac
+import html
 import logging
 import re
 import secrets
@@ -55,9 +56,11 @@ router = APIRouter(include_in_schema=False)
 
 CSRF_COOKIE = "sai_csrf"
 SERVICE_NAME = "Zoeken en persoonlijke AI"
+# Ontwerpreview (docs/ontwerp/PEIL_REVIEW.md): kort en feitelijk zoals het Peil-prototype; "alle schermen staan in de
+# Hub" staat al in het koppelblok en de voet van het sjabloon.
 SERVICE_DESCRIPTION = (
-    f"Persoonlijke zoekmachine en, later, spraak en persoonlijke AI (dienst {APP_ID} in de Hub). Alle schermen staan in "
-    "de Hub; dit is alleen de statuspagina."
+    "Persoonlijke zoekmachine voor je eigen bestanden op de NAS; spraak en persoonlijke AI volgen in fase P5. "
+    f"Dienst-ID in de Hub: {APP_ID}."
 )
 PAIRING_CODE_VALID = "60 minuten"  # contract 1.2 §3.6: koppelcode verloopt 60 min na aanmaak in de Hub
 WINDOW_S = 900.0
@@ -94,17 +97,20 @@ NOTICES: dict[str, Notice] = {
     "ongeldig_formulier": Notice(
         "fout",
         "Het formulier is verlopen",
-        "Het formulier is verlopen of ongeldig. Laad de pagina opnieuw en probeer het nog eens.",
+        "Het formulier is ouder dan een uur, of je browser stuurde de beveiligingscookie van deze pagina niet mee. "
+        "Er is niets naar de Hub gestuurd. Laad de pagina opnieuw en vul het formulier nog eens in.",
     ),
     "te_veel_pogingen": Notice(
         "fout",
         "Te veel pogingen",
-        "Te veel pogingen. Wacht een kwartier en probeer het opnieuw. Er is niets naar de Hub gestuurd.",
+        "In het afgelopen kwartier is te vaak geprobeerd te koppelen. Er is niets naar de Hub gestuurd. Wacht een "
+        "kwartier en probeer het dan opnieuw.",
     ),
     "koppelen_bezig": Notice(
         "fout",
         "Er loopt al een koppelpoging",
-        "Er loopt al een koppelpoging. Wacht tot die klaar is en laad de pagina daarna opnieuw.",
+        "Deze poging is niet naar de Hub gestuurd. Wacht tot de lopende poging klaar is en laad de pagina daarna "
+        "opnieuw.",
     ),
     "ongeldig_hub_adres": Notice(
         "fout",
@@ -134,14 +140,21 @@ NOTICES: dict[str, Notice] = {
         "hub",
         "Geen antwoord van een Hub op dit adres.",
     ),
+    # Statuspagina: de gebruiker vulde een koppelcode in (geen koppeltoken), dus de tekst noemt alleen de koppelcode
+    # (zoals het Peil-prototype). ERROR_MESSAGES blijft de algemene tekst voor last_error in de API.
     "hub_weigerde": Notice(
         "fout",
         _FAILED,
-        ERROR_MESSAGES["hub_weigerde"],
+        "De Hub weigerde de koppelcode: verlopen, al gebruikt of ongeldig. Maak in de Hub een nieuwe koppelcode en "
+        "probeer het opnieuw.",
         "koppelcode",
         "Deze koppelcode is verlopen, al gebruikt of ongeldig. Maak een nieuwe in de Hub.",
     ),
-    "hub_antwoord_ongeldig": Notice("fout", _FAILED, ERROR_MESSAGES["hub_antwoord_ongeldig"]),
+    "hub_antwoord_ongeldig": Notice(
+        "fout",
+        _FAILED,
+        ERROR_MESSAGES["hub_antwoord_ongeldig"] + " Controleer of dit adres de Hub is en probeer het opnieuw.",
+    ),
     "hub_vingerafdruk_onjuist": Notice(
         "fout",
         _FAILED,
@@ -152,7 +165,8 @@ NOTICES: dict[str, Notice] = {
     "enroll_endpoint_ontbreekt": Notice(
         "fout",
         _FAILED,
-        ERROR_MESSAGES["enroll_endpoint_ontbreekt"] + " Controleer of dit adres echt de Hub is.",
+        "Op dit adres draait geen Hub die koppelen met een koppelcode kent. Controleer het adres; is het de Hub, werk "
+        "de Hub dan bij en probeer het opnieuw.",
         "hub",
         "Op dit adres draait geen Hub die koppelen kent.",
     ),
@@ -313,14 +327,17 @@ def _readiness_rows(checks: list[dict[str, Any]], tijd: str, iso_: str) -> list[
     return rows
 
 
-def _hub_row(link: dict[str, Any], corrupt: bool) -> dict[str, str] | None:
+def _hub_row(link: dict[str, Any], corrupt: bool, shown_code: str | None = None) -> dict[str, str] | None:
     """Regel "Koppeling met de Hub" in de controles; ``None`` als de dienst gekoppeld is zonder melding (dan staat de
-    neutrale pil "Gekoppeld" in het koppelblok: verbonden is geen gezondheid, dus nooit groen)."""
+    neutrale pil "Gekoppeld" in het koppelblok: verbonden is geen gezondheid, dus nooit groen).
+
+    ``shown_code``: de foutcode van de melding bovenaan; dezelfde laatste melding wordt dan niet nog eens herhaald."""
     state = link.get("state")
     err = link.get("last_error") or {}
-    err_text = f" Laatste melding: {err.get('message_nl')} (code {err.get('code')})" if err.get("code") else ""
+    code = err.get("code")
+    err_text = f" Laatste melding: {err.get('message_nl')} (code {code})" if code and code != shown_code else ""
     if corrupt:
-        reden = f"{ERROR_MESSAGES['koppelstatus_onleesbaar']} (code koppelstatus_onleesbaar)"
+        reden = "Onleesbaar koppelbestand; de dienst weigert elke Hub-aanvraag (code koppelstatus_onleesbaar)."
         return {"toon": "storing", "label": "Onleesbaar", "reden": reden}
     if state == "gekoppeld":
         return {"toon": "beperkt", "label": "Beperkt", "reden": err_text.strip()} if err_text else None
@@ -376,35 +393,49 @@ def _sources_summary(per_status: dict[str, int] | None) -> str:
     return ", ".join(f"{n} {STATUS_NL.get(st, st)}" for st, n in sorted(per_status.items()))
 
 
+SHARE_HINT = "Een share toevoegen: in TrueNAS als Host Path met Read Only onder /bronnen."
+
+
+def _shares(n: int) -> str:
+    return f"{n} geldige share" if n == 1 else f"{n} geldige shares"
+
+
 def _service_rows(inp: PageInput) -> list[dict[str, str]]:
+    # Namen in gewone taal, zonder interne taak-ID's zoals B07/B15 (ontwerpreview, docs/ontwerp/PEIL_REVIEW.md).
+    # "Gekoppelde shares" (de leeswortels van ADR-0004) in gewone taal; geen share is geen storing maar een instelling
+    # die nog open staat ("Niet ingesteld", nooit groen, ONTWERPTAAL §4.1 regel 12).
     if inp.roots and not inp.root_warnings:
-        roots = ("gezond", "Gezond", f"{inp.roots} geldig.")
+        roots = ("gezond", "Gezond", f"{_shares(inp.roots)}. {SHARE_HINT}")
     elif inp.roots:
-        roots = ("beperkt", "Beperkt", f"{inp.roots} geldig, {inp.root_warnings} genegeerd (zie de app-log).")
+        roots = (
+            "beperkt",
+            "Beperkt",
+            f"{_shares(inp.roots)}, {inp.root_warnings} genegeerd (zie de app-log). {SHARE_HINT}",
+        )
     else:
-        roots = ("onbekend", "Geen", "Nog geen share gekoppeld.")
+        roots = ("onbekend", "Niet ingesteld", f"Nog geen share gekoppeld. {SHARE_HINT}")
     return [
         {
-            "naam": "Bronnen (B07)",
+            "naam": "Bronnen",
             "toon": "gate",
             "label": "Alleen met toestemming",
             "reden": f"{_sources_summary(inp.per_status)}. Zonder toestemming van de eigenaar wordt niets gelezen; "
             "indexdata verlaat de NAS niet.",
         },
         {
-            "naam": "Leeswortels",
+            "naam": "Gekoppelde shares",
             "toon": roots[0],
             "label": roots[1],
-            "reden": f"{roots[2]} Koppel shares als Host Path met Read Only onder /bronnen.",
+            "reden": roots[2],
         },
         {
-            "naam": "Indexeren en semantisch zoeken (B07)",
+            "naam": "Indexeren en semantisch zoeken",
             "toon": "onbekend",
             "label": "Nog niet beschikbaar",
             "reden": "Volgt in fase P5. Er wordt nu niets geïndexeerd (code capability_unavailable).",
         },
         {
-            "naam": "Spraak en persoonlijke AI (B15)",
+            "naam": "Spraak en persoonlijke AI",
             "toon": "onbekend",
             "label": "Nog niet beschikbaar",
             "reden": "Volgt in fase P5. Spraak en een lokaal taalmodel zijn optioneel en staan standaard uit; er wordt "
@@ -429,12 +460,19 @@ def page_data(inp: PageInput) -> dict[str, Any]:
     tijd, iso_ = fmt_time(inp.now)
     tijd_kort = tijd.split(", ", 1)[1] if ", " in tijd else tijd
 
+    linked = state == "gekoppeld" and not corrupt
+    notice = NOTICES.get(inp.melding or "")
+    if notice is not None and notice.toon == "info" and not linked:
+        notice = None  # een succesmelding uit de URL mag nooit iets beweren dat de koppelstatus tegenspreekt
+    shown = inp.melding if notice is not None and notice.toon == "fout" else None
+
     rows = _readiness_rows(inp.checks, tijd_kort, iso_)
-    hub = _hub_row(link, corrupt)
+    hub = _hub_row(link, corrupt, shown)
     if hub:
         rows.append({"naam": "Koppeling met de Hub", "tijd": tijd_kort, "iso": iso_, **hub})
-    linked = state == "gekoppeld" and not corrupt
     rows += [{**r, "tijd": tijd_kort, "iso": iso_} for r in _health_rows(inp.health, linked)]
+    service_rows = _service_rows(inp)
+    later = sum(1 for r in service_rows if r["label"] == "Nog niet beschikbaar")
     worst = max((r["toon"] for r in rows), key=SEVERITY.__getitem__)
     failing = [r["naam"] for r in rows[: len(CHECK_NAMES)] if r["toon"] == "storing"]
 
@@ -456,19 +494,29 @@ def page_data(inp: PageInput) -> dict[str, Any]:
     elif state == "nooit_gekoppeld":
         uitleg = "Deels onbekend — wacht op koppeling met de Hub."
     elif state == "ontkoppeld":
-        uitleg = "Deels onbekend — ontkoppeld door de Hub. Opnieuw koppelen gaat via de Hub."
+        uitleg = "Deels onbekend — ontkoppeld door de Hub."
     elif state == "ingetrokken":
-        uitleg = "Deels onbekend — de Hub heeft de koppeling ingetrokken. Opnieuw koppelen gaat via de Hub."
+        uitleg = "Deels onbekend — de Hub heeft de koppeling ingetrokken."
     elif worst == "gezond":
         uitleg = "Gereed en gekoppeld met de Hub."
     else:
         uitleg = "Gereed; een of meer controles vragen aandacht (zie hieronder)."
+    if inp.ready and linked and later:
+        # ONTWERPTAAL §4.3: "Nog niet beschikbaar" verslechtert het totaal niet, maar staat wel in de telling
+        uitleg += f" {later} {'functie is' if later == 1 else 'functies zijn'} nog niet beschikbaar."
+    eigen = "de eigen controles van /readyz zijn gezond"
     if inp.ready and linked:
         gereed = "Ja"
-    elif inp.ready:
-        gereed = "Nee — wacht op koppeling met de Hub (de eigen controles van /readyz zijn in orde)"
-    else:
+    elif not inp.ready:
         gereed = "Nee — /readyz meldt een storing of een controle die niet kon worden uitgevoerd"
+    elif corrupt:
+        gereed = f"Nee — de koppelstatus is onleesbaar ({eigen})"
+    elif state == "ontkoppeld":
+        gereed = f"Nee — ontkoppeld door de Hub ({eigen})"
+    elif state == "ingetrokken":
+        gereed = f"Nee — de Hub heeft de koppeling ingetrokken ({eigen})"
+    else:
+        gereed = f"Nee — wacht op koppeling met de Hub ({eigen})"
 
     data: dict[str, Any] = {
         "voorbeeld": False,
@@ -491,7 +539,7 @@ def page_data(inp: PageInput) -> dict[str, Any]:
         "koppelcode_geldig": PAIRING_CODE_VALID,
         "csrf_token": inp.csrf,
         "dienst_blok_titel": "Wat deze versie doet",
-        "dienst_blok": _service_rows(inp),
+        "dienst_blok": service_rows,
     }
     if linked:
         sinds, _ = fmt_time(link.get("linked_at"))
@@ -501,11 +549,12 @@ def page_data(inp: PageInput) -> dict[str, Any]:
             hub_vingerafdruk=link.get("keyset_fingerprint") or "onbekend",
         )
 
-    notice = NOTICES.get(inp.melding or "")
-    if notice is not None and notice.toon == "info" and not linked:
-        notice = None  # een succesmelding uit de URL mag nooit iets beweren dat de koppelstatus tegenspreekt
     if notice is None and corrupt:
-        tekst = f"{ERROR_MESSAGES['koppelstatus_onleesbaar']} (code koppelstatus_onleesbaar)"
+        # Het sjabloon heeft geen koppelblok voor deze toestand; de melding legt hem uit (zie PEIL_REVIEW.md).
+        tekst = (
+            "Het koppelbestand van deze dienst in /appdata/secrets is onleesbaar. Uit veiligheid weigert de dienst daarom "
+            "elke Hub-aanvraag. Koppel opnieuw via de Hub: Instellingen → Diensten (code koppelstatus_onleesbaar)."
+        )
         notice = Notice("fout", "Koppelstatus onleesbaar", tekst)
     if notice is not None:
         data.update(
@@ -554,15 +603,32 @@ def _template(app: FastAPI) -> PeilTemplate:
 
 def _fallback(request: Request, exc: Exception) -> Response:
     """Sjabloon onbruikbaar (bouwfout): eerlijke, minimale pagina met code + Trace-ID; de API werkt los hiervan."""
-    tid = trace_id_for(request)
+    tid = html.escape(trace_id_for(request))
     log.error("statuspagina-sjabloon onbruikbaar: %s", exc)
+    # Zonder sjabloon geen Peil-kleuren: alleen systeemkleuren (licht/donker via color-scheme), systeemfont, ≥ 14 px,
+    # 44 px-doelen en een selecteerbaar Trace-ID-blok (Foutpaneel op paginaniveau: wat, waarom, wat je kunt doen).
     body = (
-        '<!doctype html><html lang="nl"><head><meta charset="utf-8">'
+        '<!doctype html>\n<html lang="nl"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        f"<title>{SERVICE_NAME} — statuspagina niet beschikbaar</title></head><body><main><h1>{SERVICE_NAME}</h1>"
-        "<p>De statuspagina is niet beschikbaar: het sjabloon ontbreekt of is gewijzigd. De API, /healthz en /readyz "
-        "werken los hiervan.</p>"
-        f"<p>Code <code>peil_sjabloon_ongeldig</code> · Trace-ID (selecteer en kopieer) <code>{tid}</code></p>"
+        '<meta name="color-scheme" content="light dark"><meta name="robots" content="noindex">'
+        f"<title>{SERVICE_NAME} — statuspagina niet beschikbaar</title>"
+        "<style>html{background:Canvas;color:CanvasText}"
+        'body{margin:0;font:400 1rem/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",Arial,'
+        "sans-serif}main{max-width:47.5rem;margin:0 auto;padding:1.5rem 1rem 3rem}h1{font-size:1.5rem;line-height:2rem}"
+        'code{font-family:ui-monospace,"Cascadia Mono","Roboto Mono","DejaVu Sans Mono",Menlo,Consolas,'
+        "monospace;font-size:max(.9375em,.875rem);overflow-wrap:anywhere}.selecteer{display:block;margin-top:.25rem;"
+        "padding:.5rem .625rem;border:2px dashed;border-radius:.25rem;user-select:all;word-break:break-all}"
+        "ul{list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:0 1rem}"
+        "a{display:inline-flex;align-items:center;min-height:2.75rem;color:LinkText;text-underline-offset:3px}"
+        ":focus-visible{outline:3px solid;outline-offset:2px;box-shadow:0 0 0 2px Canvas}</style></head>"
+        f"<body><main><h1>{SERVICE_NAME}</h1>"
+        "<p><strong>De statuspagina is niet beschikbaar.</strong> Het sjabloon van de statuspagina in deze image ontbreekt "
+        "of is gewijzigd, dus de dienst toont hem niet. De dienst zelf (API, /healthz en /readyz) werkt los hiervan. "
+        "Werk de app bij naar een andere image-versie, of meld de fout met de code en de Trace-ID hieronder.</p>"
+        "<p>Code <code>peil_sjabloon_ongeldig</code> · Trace-ID (selecteer en kopieer)</p>"
+        f'<code class="selecteer">{tid}</code>'
+        '<ul><li><a href="/healthz">/healthz (proces leeft)</a></li>'
+        '<li><a href="/readyz">/readyz (afhankelijkheden)</a></li></ul>'
         "</main></body></html>"
     )
     return _with_headers(HTMLResponse(body, status_code=500))

@@ -135,5 +135,10 @@ def test_gewijzigde_kopie_geeft_eerlijke_500_en_de_api_werkt_door(
     r = client.get("/")
     assert r.status_code == 500 and "peil_sjabloon_ongeldig" in r.text and "HANDWERK" not in r.text
     assert str(uuid.UUID(r.headers["X-Trace-Id"])) in r.text
+    # ontwerpreview: licht/donker via systeemkleuren, selecteerbare Trace-ID, wat je kunt doen
+    assert '<meta name="color-scheme" content="light dark">' in r.text and 'class="selecteer"' in r.text
+    assert "Werk de app bij naar een andere image-versie" in r.text and r.text.startswith(
+        '<!doctype html>\n<html lang="nl">'
+    )
     assert "default-src 'none'" in r.headers["Content-Security-Policy"]
     assert client.get("/readyz").status_code == 200 and client.get("/healthz").status_code == 200

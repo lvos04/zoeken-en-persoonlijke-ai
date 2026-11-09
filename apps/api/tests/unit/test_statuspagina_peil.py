@@ -256,6 +256,58 @@ def test_tijd_in_nederlandse_notatie() -> None:
     assert data["checks"][0]["iso"].startswith("2026-11-09T")
 
 
+# ------------------------------------------------------------------ ontwerpreview (docs/ontwerp/PEIL_REVIEW.md)
+WOORDEN_BUITEN_PEIL = re.compile(r"\b(in orde|actueel|verminderd|verstoord|let op|gelukt)\b|!", re.I)
+
+
+@pytest.mark.parametrize("name", ALLE)
+def test_review_geen_interne_ids_en_alleen_peil_woorden(name: str) -> None:
+    """Geen taak-ID's (B07, B15) en geen woorden die Peil vervangen heeft (§11.1), in geen enkele toestand."""
+    page = _page(name)
+    tekst = re.sub(r"<style>.*?</style>|<[^>]+>", " ", page, flags=re.S)
+    assert not re.search(r"\bB\d\d\b", tekst), re.findall(r"\bB\d\d\b", tekst)
+    assert not WOORDEN_BUITEN_PEIL.search(tekst), WOORDEN_BUITEN_PEIL.findall(tekst)
+    assert "Leeswortels" not in tekst and "Gekoppelde shares" in tekst
+
+
+@pytest.mark.parametrize(
+    ("doc", "verwacht"),
+    [
+        ({"state": "nooit_gekoppeld"}, "Nee — wacht op koppeling met de Hub"),
+        ({"state": "ontkoppeld", "first_linked_at": "x"}, "Nee — ontkoppeld door de Hub"),
+        ({"state": "ingetrokken", "first_linked_at": "x"}, "Nee — de Hub heeft de koppeling ingetrokken"),
+        ({"state": "ontkoppeld", "corrupt": True}, "Nee — de koppelstatus is onleesbaar"),
+    ],
+)
+def test_review_gereed_noemt_de_echte_reden(doc: dict[str, Any], verwacht: str) -> None:
+    gereed = page_data(_inp(doc=doc))["gereed"]
+    assert gereed.startswith(verwacht) and gereed.endswith("(de eigen controles van /readyz zijn gezond)")
+
+
+def test_review_hub_weigerde_noemt_de_koppelcode_en_herhaalt_niet() -> None:
+    doc = {"state": "nooit_gekoppeld", "last_error": {"code": "hub_weigerde"}}  # tekst komt uit de vaste lijst
+    data = page_data(_inp(doc=doc, melding="hub_weigerde", trace_id="t-1"))
+    assert (
+        data["melding_tekst"].startswith("De Hub weigerde de koppelcode") and "koppeltoken" not in data["melding_tekst"]
+    )
+    hub = next(r for r in data["checks"] if r["naam"] == "Koppeling met de Hub")
+    assert "Laatste melding" not in hub["reden"]  # staat al in de melding bovenaan
+    # zonder melding (bv. later opnieuw geladen) blijft de laatste melding wél bij de controle staan
+    hub = next(r for r in page_data(_inp(doc=doc))["checks"] if r["naam"] == "Koppeling met de Hub")
+    assert "Laatste melding: De Hub weigerde" in hub["reden"] and hub["reden"].endswith("(code hub_weigerde)")
+
+
+def test_review_nog_niet_beschikbaar_staat_in_de_telling() -> None:
+    data = page_data(_inp(doc=_fixtures()._linked()))
+    assert data["totaal_label"] == "Alles gezond"
+    assert data["totaal_toelichting"] == "Gereed en gekoppeld met de Hub. 2 functies zijn nog niet beschikbaar."
+
+
+def test_review_geen_share_is_niet_ingesteld_en_nooit_groen() -> None:
+    rij = next(r for r in page_data(_inp(roots=0))["dienst_blok"] if r["naam"] == "Gekoppelde shares")
+    assert (rij["toon"], rij["label"]) == ("onbekend", "Niet ingesteld") and "Host Path met Read Only" in rij["reden"]
+
+
 # ------------------------------------------------------------------ poging-sleutel voor de Trace-ID
 def test_attempt_log() -> None:
     log = AttemptLog(ttl_s=10, max_items=3)
