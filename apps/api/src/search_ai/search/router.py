@@ -441,8 +441,17 @@ def reindex(
     )
 
 
-@router.get("/search", summary="Zoeken (full-text; ACL vóór ranking). Semantisch: 501 zonder lokaal model")
+@router.get(
+    "/search",
+    summary="Zoeken (full-text; ACL vóór ranking). Semantisch: 501 zonder lokaal model",
+    responses={
+        429: {"description": "rate_limited: te veel zoekopdrachten per gebruiker (met Retry-After)"},
+        501: {"description": "capability_unavailable: semantisch/hybride zoeken zonder lokaal model"},
+        503: {"description": "zoeken_tijdslimiet: de zoekopdracht duurde te lang en is afgebroken"},
+    },
+)
 def search(
+    request: Request,
     q: str = Query(min_length=1, max_length=300),
     mode: Literal["fulltext", "semantic", "hybrid"] = "fulltext",
     source_id: uuid.UUID | None = None,
@@ -452,13 +461,23 @@ def search(
     session: Session = Depends(get_session),
     principal: Principal = Depends(require_user_context),
 ) -> dict[str, Any]:
+    request.app.state.search_limiter.check(principal.audit_id)
     if mode != "fulltext":
         raise capability_unavailable(
             f"search.{mode}",
             "Semantisch/hybride zoeken vereist een lokaal embeddingmodel (optionele app, standaard uit) en volgt in "
             "B07-003.",
         )
-    return fulltext.search(session, principal, q, source_id=source_id, kind=kind, limit=limit, cursor=cursor)
+    return fulltext.search(
+        session,
+        principal,
+        q,
+        source_id=source_id,
+        kind=kind,
+        limit=limit,
+        cursor=cursor,
+        statement_timeout_ms=request.app.state.settings.search_statement_timeout_ms,
+    )
 
 
 @router.get("/privacy/coverage", summary="Privacydekking: per bron toestemming, scopes, toegang en afgeleide data")

@@ -12,7 +12,9 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import Float, cast, func, select
+from psycopg.errors import QueryCanceled
+from sqlalchemy import Float, and_, cast, func, select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from ..errors import ApiError
@@ -37,6 +39,7 @@ def search(
     kind: str | None,
     limit: int,
     cursor: str | None,
+    statement_timeout_ms: int = 5000,
 ) -> dict[str, Any]:
     query = q.strip()
     if not query:
@@ -66,8 +69,9 @@ def search(
             score,
             func.ts_headline(TS_CONFIG, Chunk.text, tsq, HEADLINE_OPTS).label("snippet"),
         )
-        .join(DocumentRef, DocumentRef.id == Chunk.document_id)
-        .join(IndexSource, IndexSource.id == Chunk.source_id)
+        # join op (id, source_id): de samengestelde sleutels (migratie 0002) houden chunk en document bij één bron
+        .join(DocumentRef, and_(DocumentRef.id == Chunk.document_id, DocumentRef.source_id == Chunk.source_id))
+        .join(IndexSource, IndexSource.id == DocumentRef.source_id)
         # ACL vóór ranking: alleen rijen die deze gebruiker mag zien komen bij ts_rank/ORDER BY/LIMIT.
         .where(acl.document_condition(principal))
         .where(Chunk.tsv.op("@@")(tsq))
@@ -76,13 +80,25 @@ def search(
         stmt = stmt.where(Chunk.source_id == source_id)
     if kind is not None:
         stmt = stmt.where(IndexSource.kind == kind)
-    rows = session.execute(stmt.order_by(score.desc(), Chunk.id).offset(offset).limit(limit + 1)).all()
+    # tijdlimiet (B07 §3) alleen voor deze transactie; een te zware zoekvraag geeft 503, nooit een half antwoord
+    session.execute(text("SELECT set_config('statement_timeout', :ms, true)"), {"ms": str(int(statement_timeout_ms))})
+    try:
+        rows = session.execute(stmt.order_by(score.desc(), Chunk.id).offset(offset).limit(limit + 1)).all()
+        readable_count = int(
+            session.scalar(select(func.count()).select_from(acl.readable_sources(principal).subquery())) or 0
+        )
+    except OperationalError as exc:
+        session.rollback()
+        if isinstance(exc.orig, QueryCanceled):
+            raise ApiError(
+                503,
+                "zoeken_tijdslimiet",
+                "De zoekopdracht duurde te lang en is afgebroken; maak de zoekvraag specifieker.",
+                {"timeout_ms": int(statement_timeout_ms)},
+            ) from exc
+        raise
     has_more = len(rows) > limit
     rows = rows[:limit]
-
-    readable_count = int(
-        session.scalar(select(func.count()).select_from(acl.readable_sources(principal).subquery())) or 0
-    )
     items = []
     for r in rows:
         item: dict[str, Any] = {

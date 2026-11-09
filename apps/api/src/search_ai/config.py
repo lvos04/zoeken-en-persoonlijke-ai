@@ -79,6 +79,10 @@ class Settings:
     allow_loopback_hub: bool = False
     # in-app-cache van de koppelstatus (API-proces leest de status die de worker schreef)
     link_cache_ttl_s: float = 5.0
+    # B07 §3: verzoeklimiet en tijdlimiet voor zoekopdrachten (per gebruiker, per API-proces)
+    search_rate_limit: int = 60
+    search_rate_window_s: float = 60.0
+    search_statement_timeout_ms: int = 5000
 
     @property
     def secrets_dir(self) -> Path:
@@ -103,6 +107,8 @@ class Settings:
             preview_max_files=_int(p + "PREVIEW_MAX_FILES", 20000),
             worker_interval_s=float(_int(p + "WORKER_INTERVAL_S", 10)),
             allow_loopback_hub=_bool(p + "ALLOW_LOOPBACK_HUB"),
+            search_rate_limit=_int(p + "SEARCH_RATE_LIMIT", 60),
+            search_statement_timeout_ms=_int(p + "SEARCH_STATEMENT_TIMEOUT_MS", 5000),
         )
 
 

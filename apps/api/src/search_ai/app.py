@@ -26,6 +26,7 @@ from .health import router as health_router
 from .hubclient import HubClient
 from .idempotency import idempotency_key, run_idempotent
 from .migrations import head_revision
+from .ratelimit import RateLimiter
 from .search.paths import validate_read_roots
 from .search.router import router as search_router
 from .security.auth import Authenticator, JwtPolicy, Principal, require_admin
@@ -190,6 +191,7 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
     app.state.alembic_head = head_revision(settings)
     app.state.unpair_code_sha256 = hashlib.sha256(unpair_code.encode()).hexdigest()
     app.state.pair_throttle = Throttle()
+    app.state.search_limiter = RateLimiter(max(1, settings.search_rate_limit), settings.search_rate_window_s)
     app.state.app_id = APP_ID
 
     install_handlers(app)

@@ -224,6 +224,8 @@ def postgres_child() -> Child:
             "-c",
             f"unix_socket_directories={SOCKET_DIR}",
             "-c",
+            "unix_socket_permissions=0700",  # alleen gebruiker 568 (de app zelf) kan de database bereiken
+            "-c",
             "max_connections=30",
             "-c",
             "shared_buffers=64MB",

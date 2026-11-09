@@ -1008,6 +1008,15 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "description": "rate_limited: te veel zoekopdrachten per gebruiker (met Retry-After)"
+          },
+          "501": {
+            "description": "capability_unavailable: semantisch/hybride zoeken zonder lokaal model"
+          },
+          "503": {
+            "description": "zoeken_tijdslimiet: de zoekopdracht duurde te lang en is afgebroken"
           }
         },
         "summary": "Zoeken (full-text; ACL vóór ranking). Semantisch: 501 zonder lokaal model",
