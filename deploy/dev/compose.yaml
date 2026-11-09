@@ -1,0 +1,28 @@
+# ALLEEN VOOR ONTWIKKELING EN CI — dit is GEEN installatiemethode.
+# Installeren op TrueNAS gebeurt uitsluitend als standaard Custom App (deploy/truenas/CUSTOM_APP.md).
+#
+#   docker compose -f deploy/dev/compose.yaml up --build
+#   → statuspagina op http://127.0.0.1:30450
+name: zoek-dev
+services:
+  zoeken-en-persoonlijke-ai:
+    build:
+      context: ../..
+      dockerfile: deploy/allinone/Dockerfile
+    image: zoeken-en-persoonlijke-ai:dev
+    ports:
+      - "127.0.0.1:30450:30450"
+    volumes:
+      - zoek-appdata:/appdata
+      # voorbeeld-share voor lokaal testen: altijd alleen-lezen
+      - ./voorbeeld-bron:/bronnen/voorbeeld:ro
+    environment:
+      # optioneel voor lokaal testen met een Hub; standaard leeg = eerlijk 'niet gekoppeld'
+      HUB_URL: ${HUB_URL:-}
+      HUB_ENROLLMENT_TOKEN: ${HUB_ENROLLMENT_TOKEN:-}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, FOWNER, DAC_OVERRIDE]  # alleen voor de eigenaarswissel van /appdata bij start
+volumes:
+  zoek-appdata:

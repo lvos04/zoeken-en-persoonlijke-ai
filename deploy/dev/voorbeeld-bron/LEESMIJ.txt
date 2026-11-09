@@ -1,0 +1,2 @@
+Voorbeeldbestand voor lokale ontwikkeling.
+Deze map wordt alleen-lezen gekoppeld onder /bronnen/voorbeeld.
