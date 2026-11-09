@@ -193,6 +193,8 @@ Zelfde machine (Ubuntu 26.04, uid 1000, gedeelde PostgreSQL 16 + pgvector 0.8.7,
 | negatieve controle van `statuspagina.mjs` (pagina met een 900 px breed blok, een veld zonder label en een externe afbeelding) | **FOUT** gemeld: axe `image-alt` + `label`, overloop 933 > 320, CSP-schending, extern verzoek, doel < 44 px |
 | `flock …/docker-build.lock nice -n 10 docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:dev .` | gebouwd (de bouw controleert de sha256 van de kopie) |
 | `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:dev` | **55 geslaagd, 0 mislukt** (52 + 3 nieuw: Peil 1.1.0, verplicht vingerafdrukveld, geen JavaScript) |
+| GitHub Actions `ci`, run 42654438103 (commit 9e812dc, branch `ccr-c133d7a0-kuz1cv`) | **groen**: job `python` (drift-stap 9 geslaagd tegen de bron op `172ee87f…`; 360 geslaagd + 8 overgeslagen — de vergelijking met de referentie-renderer draait alleen lokaal; E2E 7 geslaagd), job `statuspagina-ui` (80 controles, 0 mislukt, Chromium 158 op de runner) en job `image` (rooktest 55 geslaagd, 0 mislukt) |
+| na de reparatie "succesmelding uit de URL nooit in strijd met de koppelstatus" (commit ba3fba4): `cd apps/api && pytest -q` | **371 geslaagd** (3 nieuw: nooit gekoppeld, ontkoppeld, ingetrokken) |
 
 Wat de nieuwe tests aantonen (Sim-getest): rendering per toestand (niet gekoppeld, koppelen mislukt, gekoppeld,
 ingetrokken, niet gereed, plus gekoppeld-beperkt, ontkoppeld en een onleesbaar koppelbestand); formulier alleen zolang
