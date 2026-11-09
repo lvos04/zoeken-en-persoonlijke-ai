@@ -124,7 +124,8 @@ nooit audio op.
 | Melding in de app-log | Oplossing |
 |---|---|
 | `FOUT: /appdata bestaat niet` | Opslagregel ontbreekt of Mount Path is niet precies `/appdata`. |
-| `FOUT: geen schrijfrechten op /appdata/...` | *Custom User* staat aan met een andere gebruiker: zet het uit, of geef gebruiker 568 schrijfrechten. |
+| `FOUT: de app draait als gebruiker <uid>:<gid> ...` | *Custom User* staat aan met een andere gebruiker dan 568: zet het uit (aanbevolen), of zet User ID en Group ID allebei op `568`. |
+| `FOUT: geen schrijfrechten op /appdata/...` | De app draait als 568 maar de dataset is niet van 568: zet *Custom User* uit (dan regelt de app de rechten zelf), of geef gebruiker 568 schrijfrechten op de dataset. |
 | `share /bronnen/...: LET OP: schrijfbaar` | Zet bij die opslagregel **Read Only** aan; anders weigert de app toestemming voor die map. |
 | `geen shares gekoppeld onder /bronnen` | Geen fout: zonder shares is er niets te doorzoeken. |
 | `oude postmaster.pid ... verwijderd` | Geen fout: de vorige stop was onverwacht (stroom/kill). |

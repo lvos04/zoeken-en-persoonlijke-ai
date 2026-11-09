@@ -21,6 +21,10 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
   trekt spraakcontext op de bron in; de back-up vóór een upgrade bevat geen indexinhoud, zoekgeschiedenis of
   transcripten meer; verzoeklimiet (429) en tijdlimiet (503) op zoeken; database-socket alleen voor 568; rooktest
   toetst pgvector echt en databehoud na herstart, harde kill en nieuwe container (ADR-0008).
+- **P0 afmaken (CI groen, ADR-0009):** de rooktest bekijkt `/appdata/secrets` (bewust `0700/568`) via een
+  alleen-lezen wegwerpcontainer in plaats van als host-gebruiker, zodat hij ook op de niet-root GitHub-runner werkt;
+  testmappen zijn deterministisch van root; de bewaker geeft een duidelijke Nederlandse fout als de app als andere
+  gebruiker dan root of 568 start (*Custom User*), in plaats van een Engelse `initdb`-melding.
 
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).

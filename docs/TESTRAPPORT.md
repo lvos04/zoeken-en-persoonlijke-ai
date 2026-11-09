@@ -21,7 +21,34 @@ schrijft de test rijen rechtstreeks in de database en dat staat er expliciet bij
 | `jl-manifest validate deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml` (validator van appstore-en-fork, alleen gelezen) | GELDIG — 0 fouten, 1 verwachte melding `digest_pending_release` |
 | `docker compose -f deploy/dev/compose.yaml config -q` | geldig (alleen ontwikkeling) |
 | `nice -n 10 docker buildx build --network host --secret id=ca_bundle,… -f deploy/allinone/Dockerfile .` | gebouwd |
-| `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:review` | **32 geslaagd, 0 mislukt** |
+| `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:review` | 32 geslaagd, 0 mislukt — **alleen als root** gedraaid; als gewone gebruiker faalde deze versie (zie *P0 afmaken* hieronder) |
+
+## P0 afmaken — CI groen (2026-11-09, ADR-0009)
+Eigen Ubuntu 26.04-machine (22 CPU, 14,5 GiB RAM, gedeeld), Python 3.12 (venv), gedeelde PostgreSQL 16.15 +
+pgvector 0.8.7 op 127.0.0.1:5432, Docker Engine met buildx; tests als gewone gebruiker (uid 1000, groep docker).
+
+De GitHub-job `image` faalde bij elke push (runs 42601471254, 42602000622, 42605815492): de rooktest las
+`/appdata/secrets/vault.key` op de host als niet-root runner, terwijl `secrets/` bewust `0700/568` is. Lokaal als
+uid 1000 exact gereproduceerd (`Permission denied`, daarna afbreken door `set -e`). Reparatie in de test, niet in de
+rechten van de image; plus een duidelijke NL-fout als de app als andere gebruiker dan root/568 start.
+
+| Commando | Uitkomst |
+|---|---|
+| `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:ci` op de oude versie, als uid 1000 | **gereproduceerd**: `FOUT geheimen 0600 en eigenaar 568`, `sha256sum: … Permission denied`, exit 1 |
+| `nice -n 10 flock …/docker-build.lock docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:ci .` | gebouwd (zonder CA/proxy) |
+| `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:ci` (nieuwe versie, als uid 1000) | **37 geslaagd, 0 mislukt** |
+| `shellcheck deploy/allinone/smoke-test.sh` | geen bevindingen |
+| `cd apps/api && ruff check . && ruff format --check . && mypy` | geen bevindingen |
+| `cd apps/api && pytest -q` (gedeelde PostgreSQL 16.15 + pgvector 0.8.7) | **92 geslaagd** (incl. 5 nieuwe unittests) |
+| `pytest -q tests/e2e -p no:cacheprovider` | **4 geslaagd** |
+| `python -m search_ai migrate` → `--down base` → `migrate` (database `zoek_ci_mig`) | op/neer/op zonder fouten (revisie 0002) |
+| `python -m search_ai openapi --out …` + `git diff --exit-code docs/openapi/` | geen drift |
+| `pip-audit -r apps/api/requirements.lock` | geen bekende kwetsbaarheden |
+| `actionlint .github/workflows/*.yml` | geen bevindingen |
+| GitHub Actions `ci`, run 42619280743 (commit ef10e18, branch `ccr-c133d7a0-kuz1cv`) | **groen**: job `python` (92 + 4 geslaagd) en job `image` (rooktest 37 geslaagd, 0 mislukt) |
+
+Bijvangst: `test_pre_upgrade_backup_with_real_pg_dump` faalde lokaal doordat hier PostgreSQL-client 16 én 18 staan
+(`pg_wrapper` koos 18 voor `pg_dump`, 16 voor `pg_restore`); de test gebruikt nu de client van de serverversie.
 
 ## B07-001 — wat de tests aantonen (Sim-getest)
 - *Niet geselecteerde share indexeert niets*: de bronwizard ziet alleen share A; share B, symlinks naar B, `.ssh`,
@@ -66,9 +93,10 @@ index bouwen, KNN-zoekvraag via de index, in een teruggedraaide transactie); mig
 0700/568 en een andere gebruiker krijgt `Permission denied`; databasegegevens blijven na herstart, harde kill en in een
 **nieuwe container op dezelfde `/appdata`** (geen nieuwe database); statuspagina *niet gekoppeld*; 401 zonder token;
 geen proces als root behalve dumb-init/bewaker; PostgreSQL, API en worker als 568; geen TCP-poort voor PostgreSQL;
-geheimen 0600/568; ontkoppelcode in de log; share als alleen-lezen gemeld en **ongewijzigd** (eigenaar, rechten,
+`secrets/` 0700/568 en geheimen 0600/568 (bekeken via een alleen-lezen wegwerpcontainer, zodat de test als elke gebruiker werkt); ontkoppelcode in de log; share als alleen-lezen gemeld en **ongewijzigd** (eigenaar, rechten,
 inhoud, tijden); geen setuid-bestanden; herstart met behoud van geheimen; harde kill en herstart; start als 568;
-duidelijke NL-fout bij verkeerde rechten.
+duidelijke NL-fout bij verkeerde rechten (568 op een root-dataset, die onaangeroerd blijft) en bij een verkeerde
+gebruiker (*Custom User* 1000:1000 → NL-fout vóór `initdb`).
 
 ## Validatieniveau
 - **Sim-getest:** B07-001, koppelen (enrollment-token en koppelcode in het formaat van de echte Hub), fail-closed
@@ -78,5 +106,5 @@ duidelijke NL-fout bij verkeerde rechten.
   TrueNAS, echte Hub-koppeling, alle externe bronnen (Immich, Jellyfin), prestaties/resourcebudget.
 - **Niet gebouwd:** ingest, semantisch/hybride zoeken, mediamomenten, vraag-en-antwoord, opschoonrapport/export en
   alle spraakfuncties (eerlijk `capability_unavailable`).
-- De GitHub Actions-workflows zijn hier niet op GitHub zelf gedraaid; hun stappen zijn lokaal één voor één
-  uitgevoerd (tabel hierboven).
+- GitHub Actions: vóór *P0 afmaken* was de job `image` rood (zie boven); de runs na de reparatie staan in de
+  tabel *P0 afmaken*.
