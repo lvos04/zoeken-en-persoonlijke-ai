@@ -4,6 +4,7 @@ upgrade met echte pg_dump)."""
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import uuid
@@ -116,7 +117,26 @@ def test_request_size_limit(paired_client: Any, auth: Auth) -> None:
 
 
 @pytest.mark.skipif(shutil.which("pg_dump") is None, reason="pg_dump niet beschikbaar")
-def test_pre_upgrade_backup_with_real_pg_dump(tmp_path: Path) -> None:
+def _use_client_tools_of_server_version(url: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gebruik pg_dump én pg_restore van dezelfde hoofdversie als de server (zoals in de image: alleen PG 16).
+
+    Op een ontwikkelmachine met meerdere PostgreSQL-clients kiest Debians pg_wrapper anders voor pg_dump mét host de
+    nieuwste versie en voor pg_restore zonder host de standaardversie; dan kent pg_restore het dumpformaat niet.
+    """
+    from sqlalchemy import text
+
+    db = Database(url)
+    try:
+        with db.sessions() as s:
+            major = int(s.execute(text("SHOW server_version_num")).scalar_one()) // 10000
+    finally:
+        db.dispose()
+    bindir = Path(f"/usr/lib/postgresql/{major}/bin")
+    if (bindir / "pg_dump").exists() and (bindir / "pg_restore").exists():
+        monkeypatch.setenv("PATH", f"{bindir}:{os.environ.get('PATH', '')}")
+
+
+def test_pre_upgrade_backup_with_real_pg_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Een openstaande migratie (testrevisie bovenop de echte head) → pg_dump vooraf; de nieuwste 3 blijven bewaard.
 
     Review P0: de back-up bevat bronnen, toestemming en ACL, maar **niet** de inhoud van de afgeleide index, de
@@ -127,6 +147,7 @@ def test_pre_upgrade_backup_with_real_pg_dump(tmp_path: Path) -> None:
     from search_ai.migrations import BACKUP_SCHEMA_ONLY_TABLES, alembic_dir, head_revision, pre_upgrade_backup, upgrade
 
     url = recreate_database("zoek_test_backup")
+    _use_client_tools_of_server_version(url, monkeypatch)
     base = Settings(database_url=url)
     upgrade(base)
     head = head_revision(base)
