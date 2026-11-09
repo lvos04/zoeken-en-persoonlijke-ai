@@ -211,6 +211,13 @@ def test_onbekende_melding_wordt_niet_weerspiegeld() -> None:
     assert "melding" not in data and "trace_id" not in data
 
 
+@pytest.mark.parametrize("state", ["nooit_gekoppeld", "ontkoppeld", "ingetrokken"])
+def test_succesmelding_uit_de_url_spreekt_de_koppelstatus_nooit_tegen(state: str) -> None:
+    for code in ("gekoppeld", "gekoppeld_onbevestigd"):
+        assert "melding" not in page_data(_inp(doc={"state": state}, melding=code))
+    assert page_data(_inp(doc=_fixtures()._linked(), melding="gekoppeld"))["melding_titel"] == "Gekoppeld met de Hub"
+
+
 def test_trace_id_alleen_bij_een_foutmelding() -> None:
     assert "trace_id" not in page_data(_inp(melding="gekoppeld", trace_id="t"))
     data = page_data(_inp(melding="te_veel_pogingen", trace_id="t-1"))
@@ -233,8 +240,9 @@ def test_hub_adres_wordt_geescaped_en_alleen_http_s_is_een_link() -> None:
 
 @pytest.mark.parametrize("code", sorted(NOTICES))
 def test_elke_melding_rendert_met_vaste_tekst(code: str) -> None:
-    page = render_page(load_template(), _inp(melding=code, trace_id="0f0e0d0c-0000-4000-8000-000000000000"))
     notice = NOTICES[code]
+    doc = _fixtures()._linked() if notice.toon == "info" else {"state": "nooit_gekoppeld"}
+    page = render_page(load_template(), _inp(doc=doc, melding=code, trace_id="0f0e0d0c-0000-4000-8000-000000000000"))
     assert f"<strong>{notice.titel}</strong>" in page
     assert ("0f0e0d0c-0000-4000-8000-000000000000" in page) is (notice.toon == "fout")
     if notice.veld:

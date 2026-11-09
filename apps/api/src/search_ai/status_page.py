@@ -502,6 +502,8 @@ def page_data(inp: PageInput) -> dict[str, Any]:
         )
 
     notice = NOTICES.get(inp.melding or "")
+    if notice is not None and notice.toon == "info" and not linked:
+        notice = None  # een succesmelding uit de URL mag nooit iets beweren dat de koppelstatus tegenspreekt
     if notice is None and corrupt:
         tekst = f"{ERROR_MESSAGES['koppelstatus_onleesbaar']} (code koppelstatus_onleesbaar)"
         notice = Notice("fout", "Koppelstatus onleesbaar", tekst)
