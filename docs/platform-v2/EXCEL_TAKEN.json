@@ -247,7 +247,7 @@
   "Acceptatie": "Off: identiek aan klassiek; publieke en 100.64-URL zonder vlag 422; rebinding en redirect geweigerd; onbereikbaar: aanbevelingen blijven en status degraded met embedding_source_unavailable; proxylog bevat alleen itemmetadata; dezelfde text_sha256 één keer ingebed; bij een andere dimensie volledige herbouw zonder gemengde dimensies; zelftest geslaagd vóór gebruik",
   "Risico": "Laag",
   "Prioriteit": "P2",
-  "Afhankelijkheid": "Bewijs bij (tot Δ-ASM-EXCEL): B03-038",
+  "Afhankelijkheid": "Testrij (blad Testmatrix); startstatus Niet gestart; bewijs bij B03-038",
   "Bron": "02_BOUWPLANNEN/B03_UNIVERSELE_MEDIASERVER.md",
   "Document": "02_BOUWPLANNEN/B03_UNIVERSELE_MEDIASERVER.md"
  },
@@ -261,7 +261,7 @@
   "Acceptatie": "Zonder STT: NL-tekst getagd eng → subtitle_language_mismatch; Engelse audio getagd nld → 'onbekend' (stt_disabled), nooit 'in orde'; M&E-hoofdspoor → hooguit 'aanwijzing'; toolkit uit → 'onbekend' (toolkit_unavailable). Met STT: audio_language_mismatch en dialogue_missing_in_default_track; geen audio of transcript bewaard; homevideos niet naar STT",
   "Risico": "Middel",
   "Prioriteit": "P1",
-  "Afhankelijkheid": "Bewijs bij (tot Δ-ASM-EXCEL): B03-054, B03-059",
+  "Afhankelijkheid": "Testrij (blad Testmatrix); startstatus Niet gestart; bewijs bij B03-054, B03-059",
   "Bron": "02_BOUWPLANNEN/B03_UNIVERSELE_MEDIASERVER.md",
   "Document": "02_BOUWPLANNEN/B03_UNIVERSELE_MEDIASERVER.md"
  }
