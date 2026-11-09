@@ -281,8 +281,10 @@ Playwright 1.65.0, axe-core 4.14.0). **Verslag:** `docs/ontwerp/PEIL_REVIEW.md`.
 | `make ui` (renderer, zonder database, 9 toestanden × 5 breedtes × 2 thema's, nu met dezelfde Peil-controles en tekstafstand op 320 px) | **90 controles, 0 mislukt** (rapport en afdrukken in `build/statuspagina/`) |
 | GitHub Actions `ci`, run 42662368284 (eerste push van de review) | **mislukt in `statuspagina-ui`**: `koppelstatus-onleesbaar` 320 px licht, overloop van 4 px bij tekstafstand. Oorzaak: de code in de melding had geen breekpunt; het lettertype van de runner is breder. `python` en `image` waren groen. Hersteld als P-14; zie de volgende run hieronder. |
 | zelfde 9 toestanden op 320 px met `system-ui`, `DejaVu Sans` en `Liberation Sans`, normaal en met tekstafstand (losse controle) | na P-14: geen overloop en geen inhoud buiten zijn vak |
+| GitHub Actions `ci`, run 42663920380 (commit 6f317e9, na P-14) | **groen**. `python`: drift 9 geslaagd, 382 geslaagd + 9 overgeslagen (referentie-renderer alleen lokaal), E2E 7. `statuspagina-ui`: renderer 90 controles 0 mislukt, echte dienst 132 controles in 12 toestanden 0 mislukt. `image`: rooktest 55 geslaagd, 0 mislukt. |
+| `cd apps/api && pytest -q` na P-14 (lokaal) | **391 geslaagd** (387 + 4 voor de nieuwe toestand `veldfout-hub-adres`) |
 | negatieve controle: `statuspagina.mjs` op een opzettelijk foute pagina | **FOUT** gemeld, zie de opsomming onder de tabel |
-| `cd apps/api && PATH=/usr/lib/postgresql/16/bin:$PATH pytest -q` | **387 geslaagd** (371 + 16 nieuw; de vergelijking met de referentie-renderer draaide lokaal mee) |
+| `cd apps/api && PATH=/usr/lib/postgresql/16/bin:$PATH pytest -q` (vóór P-14) | **387 geslaagd** (371 + 16 nieuw; de vergelijking met de referentie-renderer draaide lokaal mee) |
 | `pytest -q tests/e2e -p no:cacheprovider` | **7 geslaagd** (simulator met de nieuwe `/sim/pairing-code`) |
 | `make lint` · `shellcheck deploy/allinone/smoke-test.sh` · `actionlint .github/workflows/*.yml` | geen bevindingen (mypy: 44 bronbestanden) |
 | OpenAPI-export + `git diff --exit-code docs/openapi/` | geen drift |
