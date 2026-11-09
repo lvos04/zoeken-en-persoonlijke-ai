@@ -29,6 +29,8 @@ def simulate_ingest(
     classification: str = "sensitive",
     with_embedding: bool = True,
     timecodes: list[tuple[int, int]] | None = None,
+    vectors: list[list[float]] | None = None,
+    model: tuple[str, str] = ("test-model", "0"),
 ) -> DocumentRef:
     sid = uuid.UUID(str(source_id))
     doc = DocumentRef(
@@ -59,14 +61,15 @@ def simulate_ingest(
         session.add(ch)
         session.flush()
         if with_embedding:
+            vec = vectors[i] if vectors else [0.1 * (i + 1), 0.2, 0.3]
             session.add(
                 Embedding(
                     chunk_id=ch.id,
                     source_id=sid,
-                    model_name="test-model",
-                    model_version="0",
-                    dimension=3,
-                    vector=[0.1 * (i + 1), 0.2, 0.3],
+                    model_name=model[0],
+                    model_version=model[1],
+                    dimension=len(vec),
+                    vector=vec,
                 )
             )
     if timecodes:

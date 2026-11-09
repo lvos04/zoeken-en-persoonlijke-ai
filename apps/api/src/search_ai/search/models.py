@@ -26,6 +26,7 @@ from sqlalchemy import (
     Computed,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -232,6 +233,8 @@ class DocumentRef(Timestamps, Base):
 
     __table_args__ = (
         UniqueConstraint("source_id", "external_id"),
+        # doel van de samengestelde FK's van chunk/transcript_ref: afgeleide rijen horen altijd bij dezelfde bron
+        UniqueConstraint("id", "source_id"),
         CheckConstraint(_in("classification", CLASSIFICATIONS), name="classification"),
         CheckConstraint(_in("visibility", ("source", "owner")), name="visibility"),
         CheckConstraint("visibility <> 'owner' OR owner_sub IS NOT NULL", name="owner_visibility_has_owner"),
@@ -244,9 +247,7 @@ class Chunk(Base):
 
     __tablename__ = "chunk"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
-    document_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("document_ref.id", ondelete="CASCADE"), nullable=False
-    )
+    document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     source_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("index_source.id", ondelete="CASCADE"), nullable=False
     )
@@ -263,7 +264,13 @@ class Chunk(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (
+        # (document_id, source_id) → document_ref(id, source_id): een chunk kan nooit aan een andere bron hangen dan
+        # zijn document; de ACL (op document_ref.source_id) en de purge (op source_id) zien dus dezelfde bron.
+        ForeignKeyConstraint(
+            ["document_id", "source_id"], ["document_ref.id", "document_ref.source_id"], ondelete="CASCADE"
+        ),
         UniqueConstraint("document_id", "ordinal"),
+        UniqueConstraint("id", "source_id"),
         CheckConstraint("(start_ms IS NULL) = (end_ms IS NULL)", name="timecode_pair"),
         CheckConstraint("start_ms IS NULL OR (start_ms >= 0 AND end_ms >= start_ms)", name="timecode_order"),
         Index("ix_chunk_source_id", "source_id"),
@@ -276,9 +283,7 @@ class Embedding(Base):
 
     __tablename__ = "embedding"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
-    chunk_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("chunk.id", ondelete="CASCADE"), nullable=False
-    )
+    chunk_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     source_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("index_source.id", ondelete="CASCADE"), nullable=False
     )
@@ -290,6 +295,8 @@ class Embedding(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (
+        # (chunk_id, source_id) → chunk(id, source_id): de vectorindex kan nooit een andere bron melden dan de chunk.
+        ForeignKeyConstraint(["chunk_id", "source_id"], ["chunk.id", "chunk.source_id"], ondelete="CASCADE"),
         UniqueConstraint("chunk_id", "model_name", "model_version"),
         CheckConstraint("dimension BETWEEN 1 AND 16000", name="dimension_range"),
         CheckConstraint("vector_dims(vector) = dimension", name="dimension_matches"),
@@ -352,9 +359,7 @@ class TranscriptRef(Base):
 
     __tablename__ = "transcript_ref"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
-    document_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("document_ref.id", ondelete="CASCADE"), nullable=False
-    )
+    document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     source_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("index_source.id", ondelete="CASCADE"), nullable=False
     )
@@ -366,6 +371,9 @@ class TranscriptRef(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["document_id", "source_id"], ["document_ref.id", "document_ref.source_id"], ondelete="CASCADE"
+        ),
         UniqueConstraint("document_id", "external_ref"),
         CheckConstraint(_in("kind", ("subtitle", "transcript", "asr")), name="kind"),
         CheckConstraint(_in("origin", ("existing", "asr_opt_in")), name="origin"),
