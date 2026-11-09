@@ -170,4 +170,7 @@ nooit audio op.
 | Formulier weigert de tag met `@sha256:` | Vul alleen de versie in; het platform controleert de digest na installatie (NIET GEVALIDEERD op een echte NAS). |
 | Statuspagina: *De vingerafdruk van de Hub klopt niet* | Er is niets opgeslagen. Vergelijk de vingerafdruk met de Hub-UI; bij twijfel niet koppelen. |
 | Statuspagina: *ingetrokken* of *ontkoppeld* | De Hub heeft de koppeling beëindigd. Opnieuw koppelen gaat via de Hub (nieuw koppeltoken). |
+| Statuspagina: melding met **Code** en **Trace-ID** | Selecteer en kopieer de Trace-ID; dezelfde ID staat in de app-log en het auditspoor van die poging. |
+| Statuspagina: *Niet gereed — Deels onbekend, wacht op koppeling* | Geen storing: de app werkt, maar doet niets tot hij gekoppeld is. `/readyz` geeft dan gewoon 200, zodat TrueNAS de app niet herstart. |
+| Statuspagina: code `peil_sjabloon_ongeldig` (HTTP 500) | Het sjabloon in de image ontbreekt of is gewijzigd. De API werkt door. Installeer dezelfde versie opnieuw (tag + digest). |
 | `HUB_KEY_FINGERPRINT heeft geen geldig formaat` | Vul de vingerafdruk exact over uit de Hub-UI (16 tekens in groepen van 4). |

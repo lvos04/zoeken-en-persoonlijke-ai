@@ -19,6 +19,13 @@ in `/appdata/secrets/hub-link.json` met gepinde Hub-sleutels en vingerafdruk, al
 `jti`-replaycache), ontkoppelen/opnieuw koppelen alleen via de Hub, geen root-proces in de container (ook PID 1 niet).
 Getest tegen een Hub-simulator, **niet** tegen de echte Hub.
 
+**Statuspagina in Peil** ([`docs/adr/ADR-0013-statuspagina-in-peil.md`](docs/adr/ADR-0013-statuspagina-in-peil.md)):
+`GET /` rendert het framework-vrije statuspagina-sjabloon van de ontwerptaal Peil 1.1.0 (versie-gepinde kopie met
+herkomstkop in [`design/ontwerptaal/`](design/ontwerptaal/HERKOMST.md); CI faalt bij drift met de bron in
+`ai-server-manager`). Geen JavaScript, CSP `default-src 'none'`, eerste signaal nooit groen als de dienst niet gereed is.
+Browsercontrole (axe-core 0 overtredingen, geen overloop op 320 px) en schermafdrukken in
+[`docs/screenshots/peil/statuspagina/`](docs/screenshots/peil/statuspagina/).
+
 ## Installeren
 Uitsluitend als **standaard TrueNAS Custom App** — zie [`deploy/truenas/CUSTOM_APP.md`](deploy/truenas/CUSTOM_APP.md)
 (image `ghcr.io/lvos04/zoeken-en-persoonlijke-ai`, poort 30450, opslag `/appdata`, shares optioneel als Read Only Host
@@ -29,6 +36,7 @@ compose, geen terminal.
 ```
 make venv            # .venv met de gepinde afhankelijkheden
 make lint test e2e   # ruff + mypy, unit/integratie (PostgreSQL + pgvector op 127.0.0.1:5432), dienst-E2E
+make ui              # statuspagina in de browser: axe-core, 320 px, CSP, schermafdrukken (Node 22, Playwright)
 make openapi         # docs/openapi/zoeken-en-persoonlijke-ai.openapi.json
 make image smoke     # alles-in-één image bouwen en de rooktest draaien
 ```

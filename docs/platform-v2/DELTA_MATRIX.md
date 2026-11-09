@@ -38,5 +38,11 @@ database-socket 0700, uitgebreide rooktest. Zie `docs/adr/ADR-0008-review-p0-res
 gewijzigd: koppelbestand i.p.v. vault, pinning i.p.v. JWKS-cache (`security/jwks.py` verwijderd), dienst-JWT en
 replaycache (migratie 0003), `hub-link`-routes, statuspagina zonder ontkoppelcode, bodygrens als ASGI-laag
 (`bodylimit.py`), bewaker als PID 1 zonder `dumb-init`, manifest §9, CUSTOM_APP.md en `.env.example`. ZA9 (CSS uit
-de ontwerptaaltokens) staat open tot de ontwerptaal in `ai-server-manager` er is (§13). B07/B15-functionaliteit is
+de ontwerptaaltokens) is gebouwd met ADR-0013 (zie hieronder). B07/B15-functionaliteit is
 niet aangeraakt.
+
+**ZA9 — statuspagina in Peil (2026-11-09, ADR-0013):** de eigen HTML/CSS van `GET /` is vervangen door het
+framework-vrije Peil-sjabloon als versie-gepinde kopie (`design/ontwerptaal/`, Peil 1.1.0, herkomstkop met sha256,
+O-14) met een CI-drift-controle tegen `ai-server-manager`. Geen nieuwe functie: koppelen, CSRF, throttle en meldingen
+blijven; de veldnamen van `POST /koppelen` volgen het sjabloon. Nieuw: Trace-ID van een mislukte poging op de pagina
+(zonder JS, niet uit de URL) en een totaal dat ook de connector-gezondheid meeneemt (nooit groener dan de Hub).

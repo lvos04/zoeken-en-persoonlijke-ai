@@ -172,8 +172,36 @@ Niet getoetst tegen de echte Hub: de Hub-route `POST /api/v1/services/{id}/unlin
 (D03 + inventaris via TrueNAS), en dat bestaat hier niet. De dienst-JWT is daarom met de sleutelring van de Hub zelf
 gemaakt. Een echte NAS is ook hier niet gebruikt.
 
-Niet gedaan (terecht): ZA9 (CSS uit de ontwerptaaltokens). `ONTWERPTAAL.md` en `design/ontwerptaal/` ontbreken nog
-in `ai-server-manager`, dus §13 laat de UI-ombouw niet starten. Niet getest: echte NAS en echte Hub.
+Niet gedaan (terecht, op dat moment): ZA9 (CSS uit de ontwerptaaltokens). `ONTWERPTAAL.md` en `design/ontwerptaal/`
+ontbraken toen nog in `ai-server-manager`; inmiddels gebouwd, zie hieronder (ADR-0013). Niet getest: echte NAS en echte
+Hub.
+
+## Statuspagina in Peil (ZA9, 2026-11-09, ADR-0013)
+Zelfde machine (Ubuntu 26.04, uid 1000, gedeelde PostgreSQL 16 + pgvector 0.8.7, Docker Engine, Node 22, Chromium
+158 uit Playwright 1.65.0). `GET /` gebruikt nu het Peil-sjabloon 1.1.0 (kopie van `ai-server-manager` @
+`172ee87f…`, sha256 html `be766cc4…62c8`, css `b1e3f789…b5af`).
+
+| Commando | Uitkomst |
+|---|---|
+| `make lint` (ruff + format + mypy in `apps/api`; ruff op `tests/e2e tests/interop tests/ui deploy/allinone`) · `shellcheck deploy/allinone/smoke-test.sh` · `actionlint .github/workflows/*.yml` | geen bevindingen (mypy: 44 bronbestanden) |
+| `cd apps/api && pytest -q` (unit + integratie) | **368 geslaagd** (284 + 84 nieuw) |
+| `pytest -q tests/unit/test_peil_kopie.py` met `PEIL_BRON_DIR` = bron van `raw.githubusercontent.com/lvos04/ai-server-manager/172ee87f…` en `PEIL_BRON_VERPLICHT=1` (zoals CI) | **9 geslaagd**; met één byte verschil in de bron: **1 faalt** (drift herkend); zonder bron: **2 falen** (nooit stil overslaan) |
+| `tests/unit/test_statuspagina_peil.py::test_zelfde_uitkomst_als_de_referentie_renderer` (8 toestanden, lokaal met `bouw/sjabloon.mjs` + Node) | byte-gelijk aan de referentie-renderer (op `&#x27;`/`&#39;` na) |
+| `pytest -q tests/e2e -p no:cacheprovider` | **7 geslaagd** |
+| OpenAPI-export + `git diff --exit-code docs/openapi/` | geen drift (de statuspagina staat niet in het schema) |
+| `make ui` (8 toestanden × 320/360/390/768/1440 × licht/donker, axe-core 4.14.0 met WCAG 2.0/2.1/2.2 A+AA en best practices) | **80 controles, 0 mislukt**: 0 axe-overtredingen, geen horizontale overloop (ook 320 px), geen `<script>`/`on…`, geen CSP-schending, geen extern verzoek, knoppen/velden ≥ 44 px; 30 schermafdrukken + `CONTROLE.json` in `docs/screenshots/peil/statuspagina/` |
+| negatieve controle van `statuspagina.mjs` (pagina met een 900 px breed blok, een veld zonder label en een externe afbeelding) | **FOUT** gemeld: axe `image-alt` + `label`, overloop 933 > 320, CSP-schending, extern verzoek, doel < 44 px |
+| `flock …/docker-build.lock nice -n 10 docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:dev .` | gebouwd (de bouw controleert de sha256 van de kopie) |
+| `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:dev` | **55 geslaagd, 0 mislukt** (52 + 3 nieuw: Peil 1.1.0, verplicht vingerafdrukveld, geen JavaScript) |
+
+Wat de nieuwe tests aantonen (Sim-getest): rendering per toestand (niet gekoppeld, koppelen mislukt, gekoppeld,
+ingetrokken, niet gereed, plus gekoppeld-beperkt, ontkoppeld en een onleesbaar koppelbestand); formulier alleen zolang
+nooit gekoppeld, drie verplichte velden; geen ontkoppelen/ontkoppelcode; foutmelding met code + de Trace-ID van díe
+poging (gelijk aan `X-Trace-Id` en het auditspoor; verzonnen/verlopen/andere sleutel → geen Trace-ID); het ingevulde
+Hub-adres komt nergens terug; eerste signaal nooit groen als niet gereed of niet gekoppeld; *Alles gezond* wordt
+*Beperkt* zodra de outbox vastloopt; een gewijzigde kopie → 500 `peil_sjabloon_ongeldig`, API werkt door.
+
+Niet getest: echte schermlezer, telefoon en tv; ontwerpreview door de design-agent; echte NAS — **NIET GEVALIDEERD**.
 
 ## B07-001 — wat de tests aantonen (Sim-getest)
 - *Niet geselecteerde share indexeert niets*: de bronwizard ziet alleen share A; share B, symlinks naar B (ook een

@@ -38,7 +38,7 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 
 - `PLATFORM_CONTRACTEN.md` — platformcontract `contracts 1.2`, byte-gelijke kopie van `lvos04/ai-server-manager`
   (bron van waarheid; bij verschil wint die repo)
-- `CONTRACT_1.2_CONFORMITEIT.md` — wat elke repo voor 1.2 moet veranderen (hier: A1–A7, ZA1–ZA9; zie ADR-0011)
+- `CONTRACT_1.2_CONFORMITEIT.md` — wat elke repo voor 1.2 moet veranderen (hier: A1–A7, ZA1–ZA9; zie ADR-0011, ZA9 in ADR-0013)
 
 ## Bewijs en inventaris (deze repo)
 

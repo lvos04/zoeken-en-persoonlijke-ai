@@ -53,6 +53,16 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
   secties 7/7b; na een 413 wordt de rest van de body begrensd weggelezen (4 MiB, 2 s), zodat de client de 413 krijgt in
   plaats van een verbindingsreset; interoptest tegen de echte Hub (`tests/interop`, alleen lokaal).
 
+- **Statuspagina in Peil (ZA9, ADR-0013):** `GET /` rendert het framework-vrije statuspagina-sjabloon van de
+  ontwerptaal Peil 1.1.0 als versie-gepinde kopie met herkomstkop (`design/ontwerptaal/`, O-14); de dienst en de
+  image-bouw controleren de sha256, CI faalt bij drift met de bron in `ai-server-manager`. Geen JavaScript, CSP
+  `default-src 'none'`. Koppelformulier alleen zolang nooit gekoppeld, met verplicht vingerafdrukveld (veldnamen van het
+  sjabloon: `hub_adres`, `koppelcode`, `hub_vingerafdruk`); geen ontkoppelen of ontkoppelcode. Foutmelding met vaste
+  code en de Trace-ID van die poging (selecteerbaar; niet uit de URL), veldfout met `aria-invalid`. Eerste signaal
+  nooit groen als de dienst niet gereed of niet gekoppeld is; *Alles gezond* alleen als ook de connector-gezondheid
+  gezond is. Browsercontrole (axe-core 0 overtredingen, geen overloop op 320 px, geen CSP-schending) in een eigen
+  CI-job en schermafdrukken in `docs/screenshots/peil/statuspagina/`.
+
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).
 Validatie op een echte NAS: **NIET GEVALIDEERD**.
