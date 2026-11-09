@@ -10,7 +10,10 @@ Drie lagen, alle drie fail-closed:
    altijd geldt, plus eigen patronen per bron.
 
 Bij elk bestand wordt bovendien het echte pad (symlinks opgelost) opnieuw gecontroleerd: een symlink in share A die
-naar share B wijst, wordt overgeslagen. De voorvertoning leest alleen namen/grootte/datum, nooit inhoud.
+naar share B wijst, wordt overgeslagen. Ook het gekozen bronpad zelf mag **nergens** onder de leeswortel via een
+symlink lopen (``/bronnen/a/link-naar-b/sub``): anders zou een geselecteerd pad stilletjes een niet-geselecteerde
+share (of een map buiten ``/bronnen``) openen. Zo'n pad wordt bij kiezen geweigerd en bij lezen overgeslagen
+(fail-closed, ADR-0010). De voorvertoning leest alleen namen/grootte/datum, nooit inhoud.
 """
 
 from __future__ import annotations
@@ -138,6 +141,30 @@ def validate_read_roots(roots: Iterable[str], data_dir: Path) -> tuple[tuple[str
     return tuple(valid), warnings
 
 
+def symlink_in_path(path: str, read_roots: Iterable[str]) -> str | None:
+    """Eerste onderdeel van ``path`` onder zijn leeswortel dat een symlink is (of niet te controleren), anders None.
+
+    Alleen de onderdelen **onder** de leeswortel tellen (de wortel zelf kiest de beheerder van de container, niet een
+    gebruiker van de share). Een pad dat (nog) niet bestaat, is geen symlink: de rest bestaat dan ook niet. Buiten
+    elke leeswortel → het pad zelf (fail-closed).
+    """
+    p = normalize_abs(path)
+    root = next((r for r in read_roots if _is_within(p, r)), None)
+    if root is None:
+        return p
+    current = root.rstrip("/") or "/"
+    for part in (x for x in p[len(root) :].split("/") if x):
+        current = posixpath.join(current, part)
+        try:
+            if os.path.islink(current):
+                return current
+            if not os.path.lexists(current):
+                return None
+        except (OSError, ValueError):
+            return current
+    return None
+
+
 def matches_exclude(rel_parts: tuple[str, ...], patterns: Iterable[str]) -> str | None:
     """Geeft het eerste patroon dat het relatieve pad uitsluit, of None."""
     lowered = tuple(p.lower() for p in rel_parts)
@@ -210,6 +237,13 @@ class PathGuard:
                 raise PathRuleError("pad_uitgesloten", f"Pad {p} valt onder een vaste uitsluiting ({hit}).", p)
             if any(_is_within(p, q) or _is_within(q, p) for q in out):
                 raise PathRuleError("pad_overlapt", f"Pad {p} overlapt met een ander gekozen pad.", p)
+            link = symlink_in_path(p, read_roots)
+            if link is not None:
+                raise PathRuleError(
+                    "pad_via_symlink",
+                    f"Pad {p} loopt via een symbolische koppeling ({link}); kies de echte map onder de leeswortel.",
+                    p,
+                )
             out.append(p)
         if not out:
             raise PathRuleError("geen_paden", "Kies minstens één map voor deze bron.")
@@ -236,6 +270,13 @@ class PathGuard:
             return False, "uitgesloten"
         return True, "toegestaan"
 
+    def base_is_genuine(self, base: str) -> bool:
+        """Het bronpad bestaat als echte map en loopt onder de leeswortel nergens via een symlink."""
+        try:
+            return os.path.isdir(base) and symlink_in_path(base, self.read_roots) is None
+        except PathRuleError:
+            return False
+
     def check_real(self, path: str) -> tuple[bool, str]:
         """Zoals ``check``, maar ook op het echte pad (symlinks opgelost) binnen het echte toegestane pad."""
         ok, reason = self.check(path)
@@ -245,6 +286,8 @@ class PathGuard:
         base = self._allowed_root_for(p)
         if base is None:  # pragma: no cover - check() hierboven garandeert een basis
             return False, "niet_geselecteerd"
+        if symlink_in_path(base, self.read_roots) is not None:
+            return False, "symlink_in_bronpad"
         real = os.path.realpath(p)
         real_base = os.path.realpath(base)
         if not _is_within(real, real_base):
@@ -276,8 +319,8 @@ class PreviewResult:
 def iter_candidates(guard: PathGuard, max_files: int, result: PreviewResult) -> Iterator[tuple[str, int, datetime]]:
     """Loopt de toegestane mappen af zonder symlinks te volgen en zonder bestanden te openen."""
     for base in guard.allowed_paths:
-        if not os.path.isdir(base) or os.path.islink(base):
-            continue
+        if not guard.base_is_genuine(base):
+            continue  # ontbreekt, of loopt via een symlink (mogelijk naar een niet-geselecteerde share): nooit lezen
 
         def _onerror(_err: OSError) -> None:
             result.unreadable += 1
@@ -326,9 +369,15 @@ def preview(guard: PathGuard, max_files: int, sample_size: int = 20) -> PreviewR
     """Bronwizard-voorvertoning: tellingen en een kleine steekproef van relatieve namen. Leest geen inhoud."""
     result = PreviewResult()
     for base in guard.allowed_paths:
-        exists = os.path.isdir(base) and not os.path.islink(base)
+        via_symlink = symlink_in_path(base, guard.read_roots) is not None
+        exists = guard.base_is_genuine(base)
         result.paths.append(
-            {"pad": base, "bereikbaar": exists, "alleen_lezen": is_readonly_mount(base) if exists else None}
+            {
+                "pad": base,
+                "bereikbaar": exists,
+                "via_symlink": via_symlink,
+                "alleen_lezen": is_readonly_mount(base) if exists else None,
+            }
         )
     for full, _size, _mtime in iter_candidates(guard, max_files, result):
         if len(result.sample) < sample_size:

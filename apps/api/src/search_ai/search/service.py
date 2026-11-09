@@ -47,7 +47,14 @@ from .models import (
     SearchQuery,
     TranscriptRef,
 )
-from .paths import PathGuard, PathRuleError, is_readonly_mount, validate_patterns, validate_read_roots
+from .paths import (
+    PathGuard,
+    PathRuleError,
+    is_readonly_mount,
+    symlink_in_path,
+    validate_patterns,
+    validate_read_roots,
+)
 from .retention import keep_days
 
 CONSENT_TEXT_VERSION = "b07-toestemming-1"
@@ -425,7 +432,12 @@ def _check_prerequisites(settings: Settings, src: IndexSource) -> None:
         if not src.allowed_paths:
             raise conflict("geen_paden", "Deze bron heeft nog geen mappen.")
         problems = []
+        roots = read_roots(settings)
         for p in src.allowed_paths:
+            # na het kiezen kan een map alsnog door een symlink zijn vervangen: dan nooit toestemming (ADR-0010)
+            if symlink_in_path(p, roots) is not None:
+                problems.append({"pad": p, "probleem": "via_symlink"})
+                continue
             ro = is_readonly_mount(p)
             if ro is None:
                 problems.append({"pad": p, "probleem": "niet_bereikbaar"})

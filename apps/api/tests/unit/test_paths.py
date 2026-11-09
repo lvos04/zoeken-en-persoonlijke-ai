@@ -16,6 +16,7 @@ from search_ai.search.paths import (
     matches_exclude,
     normalize_abs,
     preview,
+    symlink_in_path,
     validate_patterns,
     validate_read_roots,
 )
@@ -134,3 +135,30 @@ def test_walk_does_not_follow_symlinked_base(shares: Shares) -> None:
     os.symlink(shares.b, link)
     pv = preview(PathGuard((str(shares.root),), (str(link),)), 100)
     assert pv.files == 0 and pv.paths[0]["bereikbaar"] is False
+
+
+def test_selected_path_through_symlinked_ancestor_is_refused_and_never_walked(shares: Shares, tmp_path: Path) -> None:
+    """QA P0-afronding (ADR-0010): ``/bronnen/a/map-naar-b/sub`` lijkt binnen share A, maar opent share B."""
+    (shares.b / "sub").mkdir()
+    (shares.b / "sub" / "geheim.txt").write_text("Privé van B", encoding="utf-8")
+    roots = (str(shares.root),)
+    via = shares.a / "map-naar-b" / "sub"  # map-naar-b is een symlink naar share B
+    assert symlink_in_path(str(via), roots) == str(shares.a / "map-naar-b")
+    assert symlink_in_path(str(shares.a / "werk"), roots) is None
+    assert symlink_in_path(str(shares.a / "bestaat-nog-niet" / "x"), roots) is None  # niet bestaand ≠ symlink
+    assert symlink_in_path(str(tmp_path / "elders"), roots) == str(tmp_path / "elders")  # buiten wortel: fail-closed
+    # 1. kiezen in de bronwizard: geweigerd
+    with pytest.raises(PathRuleError) as exc:
+        PathGuard.validate_source_paths([str(via)], roots, tmp_path / "appdata")
+    assert exc.value.code == "pad_via_symlink"
+    # 2. ook als zo'n pad toch in een bron staat (bv. de map is na het kiezen door een symlink vervangen):
+    #    niets lezen, niets tonen
+    guard = PathGuard(roots, (str(via),))
+    assert guard.check(str(via / "geheim.txt"))[0] is True  # het logische pad lijkt toegestaan …
+    assert guard.check_real(str(via / "geheim.txt")) == (False, "symlink_in_bronpad")  # … maar is het niet
+    result = PreviewResult()
+    assert list(iter_candidates(guard, 100, result)) == []
+    pv = preview(guard, 100)
+    assert pv.files == 0 and pv.sample == []
+    assert pv.paths[0]["bereikbaar"] is False and pv.paths[0]["via_symlink"] is True
+    assert pv.paths[0]["alleen_lezen"] is None
