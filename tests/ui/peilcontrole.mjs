@@ -133,7 +133,7 @@ const FOCUS = () => {
   return {
     el: `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''} "${(el.innerText || el.name || '').replace(/\s+/g, ' ').trim().slice(0, 30)}"`,
     ring: heeft ? `${ow}px ${cs.outlineStyle}` : 'geen', ringR: heeft ? +ratio(over(rgba(cs.outlineColor), buiten), buiten).toFixed(2) : 0,
-    halo: cs.boxShadow !== 'none', inBeeld, zichtbaar,
+    halo: cs.boxShadow !== 'none', inBeeld, zichtbaar, spring: el.classList.contains('spring'),
   };
 };
 
@@ -175,7 +175,9 @@ export async function controleer(page, { metFocus = true } = {}) {
     if (zonder.length) problemen.push(`focusring ontbreekt of < 3:1: ${zonder.map((f) => `${f.el} ${f.ring} ${f.ringR}`).join('; ')}`);
     const bedekt = stops.filter((f) => f.inBeeld === 0 || f.zichtbaar === 0);
     if (bedekt.length) problemen.push(`focus buiten beeld of bedekt: ${bedekt.map((f) => f.el).join('; ')}`);
-    if (stops.length && !/^a /.test(stops[0].el)) problemen.push(`eerste tabstop is geen skiplink: ${stops[0].el}`);
+    const heeftSpring = await page.evaluate(() => !!document.querySelector('a.spring'));
+    if (heeftSpring && !(stops.length && stops[0].spring)) problemen.push(`eerste tabstop is niet de skiplink: ${stops[0]?.el}`);
+    if (heeftSpring && stops.length && stops[0].inBeeld === 0) problemen.push('skiplink niet zichtbaar bij focus');
   }
 
   await page.evaluate(AXE);

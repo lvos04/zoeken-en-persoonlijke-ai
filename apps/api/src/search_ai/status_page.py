@@ -582,7 +582,7 @@ def page_data(inp: PageInput) -> dict[str, Any]:
     if corrupt:
         staat = "koppelstatus onleesbaar"
     titel = f"{label.lower()}, {staat}"
-    if notice is not None and notice.toon == "fout":
+    if notice is not None and notice.toon == "fout" and notice.titel.lower() not in titel:  # niets dubbel in de titel
         titel = f"{notice.titel} · {titel}"
     data["titel_toestand"] = titel
     return data

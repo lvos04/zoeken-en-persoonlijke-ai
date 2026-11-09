@@ -28,12 +28,13 @@ ui:
 
 # Ontwerpreview tegen de ECHTE dienst (lokale PostgreSQL met pgvector, Hub-simulators, testdata): alle toestanden van
 # GET / op 320/360/390/768/1440 × licht/donker. Rapport en schermafdrukken naar docs (zie docs/ontwerp/PEIL_REVIEW.md).
+# De afdrukken in docs worden palet-PNG (pngquant, als aanwezig): tokenkleuren blijven exact, contrast is in de DOM
+# gemeten en niet op de afbeeldingen.
 SHOTS ?= docs/screenshots/peil/statuspagina
 ui-echt:
 	cd tests/ui && npm ci --no-audit --no-fund
 	rm -f $(SHOTS)/*.png
 	nice -n 10 $(PY) tests/ui/echte_dienst.py --out build/echte-dienst --rapport $(SHOTS)/CONTROLE.json --schermafdrukken $(SHOTS)
-	# kleiner in git: palet-PNG (tokenkleuren blijven exact; contrast is in de DOM gemeten, niet op de afbeeldingen)
 	if command -v pngquant >/dev/null; then pngquant --quality=90-100 --speed 1 --strip --force --ext .png $(SHOTS)/*.png; fi
 
 # ALLEEN lokaal: dienst tegen de ECHTE Hub (ai-server-manager) in een eigen venv; HUB_PY = Python van die venv.

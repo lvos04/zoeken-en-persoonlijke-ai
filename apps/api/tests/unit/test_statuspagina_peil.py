@@ -303,6 +303,13 @@ def test_review_nog_niet_beschikbaar_staat_in_de_telling() -> None:
     assert data["totaal_toelichting"] == "Gereed en gekoppeld met de Hub. 2 functies zijn nog niet beschikbaar."
 
 
+def test_review_paginatitel_herhaalt_niets() -> None:
+    titel = page_data(_inp(doc={"state": "ontkoppeld", "corrupt": True}))["titel_toestand"]
+    assert titel == "niet gereed, koppelstatus onleesbaar"
+    titel = page_data(_inp(melding="hub_weigerde", trace_id="t"))["titel_toestand"]
+    assert titel == "Koppelen is mislukt · niet gereed, niet gekoppeld"
+
+
 def test_review_geen_share_is_niet_ingesteld_en_nooit_groen() -> None:
     rij = next(r for r in page_data(_inp(roots=0))["dienst_blok"] if r["naam"] == "Gekoppelde shares")
     assert (rij["toon"], rij["label"]) == ("onbekend", "Niet ingesteld") and "Host Path met Read Only" in rij["reden"]
