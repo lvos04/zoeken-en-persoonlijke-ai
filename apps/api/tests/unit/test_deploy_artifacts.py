@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 import types
+from pathlib import Path
 
 import pytest
 import yaml
@@ -214,3 +215,52 @@ def test_reap_orphans_only_reaps_unknown_zombies() -> None:
 def test_healthcheck_drops_root_first() -> None:
     hc = (REPO_ROOT / "deploy/allinone/healthcheck.py").read_text()
     assert hc.index("os.setuid(UID)") < hc.index("urlopen") and "prctl(38, 1" in hc
+
+
+@pytest.mark.parametrize("sub", ["postgres", "secrets", "backups", "logs"])
+def test_supervisor_refuses_symlinked_own_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, sub: str) -> None:
+    """QA contract 1.2 §2.2: als root nooit een link in /appdata volgen; anders kan een 568-proces root bij de volgende
+    start laten chownen buiten /appdata (bv. in /usr/local) en zo weer root worden."""
+    sup = _load_supervisor()
+    errors: list[str] = []
+
+    def fake_fail(msg: str, code: int = 78) -> None:
+        errors.append(msg)
+        raise SystemExit(code)
+
+    elders = tmp_path / "elders"
+    elders.mkdir()
+    (elders / "bestand").write_text("niet aanraken", encoding="utf-8")
+    data = tmp_path / "appdata"
+    data.mkdir()
+    monkeypatch.setattr(sup, "fail", fake_fail)
+    monkeypatch.setattr(sup, "DATA", data)
+    sup.refuse_symlinks()  # zonder links: niets aan de hand
+    assert errors == []
+    (data / sub).symlink_to(elders, target_is_directory=True)
+    with pytest.raises(SystemExit):
+        sup.refuse_symlinks()
+    assert f"{data / sub} is een symbolische koppeling" in errors[0]
+    main_src = (REPO_ROOT / "deploy/allinone/supervisor.py").read_text()
+    prep = main_src[main_src.index("def prepare_dirs() -> None:") :]
+    assert prep.index("refuse_symlinks()") < prep.index("os.chown(DATA")  # vóór elke eigenaarschapsstap
+
+
+def test_supervisor_socket_dir_link_is_replaced_never_followed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    sup = _load_supervisor()
+    target = tmp_path / "usr-local-lib"
+    target.mkdir()
+    sock = tmp_path / "search-ai-pg"
+    sock.symlink_to(target, target_is_directory=True)
+    monkeypatch.setattr(sup, "SOCKET_DIR", sock)
+    chowned: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        sup.os, "chown", lambda p, u, g, follow_symlinks=True: chowned.append((str(p), follow_symlinks))
+    )
+    sup.prepare_socket_dir(root=True)
+    assert sock.is_dir() and not sock.is_symlink() and target.is_dir()
+    assert chowned == [(str(sock), False)]
+    sock.rmdir()
+    sock.write_text("geen map", encoding="utf-8")
+    sup.prepare_socket_dir(root=False)
+    assert sock.is_dir() and not sock.is_symlink()
