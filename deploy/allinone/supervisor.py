@@ -7,6 +7,8 @@ als gewone TrueNAS Custom App zonder YAML. Shares worden als Host Path met 'Read
 Regels (gebaseerd op het werkende MSO-voorbeeld):
 - Start als root alleen om /appdata (en alleen de eigen submappen) aan 568:568 te geven; daarna draait elk proces
   als 568 (PostgreSQL weigert root). **/bronnen wordt nooit aangeraakt** (geen chown/chmod: alleen lezen).
+- Na de gebruikerswissel zet de bewaker zelf ``no_new_privs`` (prctl) voor zichzelf en elk kindproces (contract §10
+  'no-new-privileges'): het standaard Custom App-formulier van TrueNAS kan die vlag niet zetten (ADR-0010).
 - First-start-init: ontbrekende geheimen in /appdata/secrets (0600, nooit overschrijven).
 - Duidelijke Nederlandse fout (en even wachten) als /appdata ontbreekt of niet schrijfbaar is, i.p.v. een crashloop.
 - Oude postmaster.pid na een harde stop wordt opgeruimd.
@@ -17,6 +19,7 @@ Regels (gebaseerd op het werkende MSO-voorbeeld):
 
 from __future__ import annotations
 
+import ctypes
 import grp
 import os
 import pwd
@@ -39,6 +42,7 @@ DB_NAME = "search_ai"
 DB_URL = f"postgresql+psycopg://{DB_USER}@/{DB_NAME}?host={SOCKET_DIR}"
 MANAGED = ("postgres", "secrets", "backups", "logs")
 STOP = threading.Event()
+PR_SET_NO_NEW_PRIVS = 38
 
 
 def log(msg: str) -> None:
@@ -51,11 +55,29 @@ def fail(msg: str, code: int = 78) -> None:
     sys.exit(code)
 
 
+def set_no_new_privs() -> bool:
+    """Contract §10 'no-new-privileges' in de image zelf: daarna wint dit proces (en elk kind) geen rechten meer, ook
+    niet via setuid-bestanden. Stil, zodat het ook als ``preexec_fn`` werkt; ``no_new_privs_active`` controleert."""
+    try:
+        return int(ctypes.CDLL(None, use_errno=True).prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) == 0
+    except (OSError, AttributeError):
+        return False
+
+
+def no_new_privs_active() -> bool:
+    try:
+        with open("/proc/self/status", encoding="ascii") as fh:
+            return any(line.split() == ["NoNewPrivs:", "1"] for line in fh)
+    except OSError:
+        return False
+
+
 def demote() -> None:
     if os.getuid() == 0:
         os.setgroups([])
         os.setgid(GID)
         os.setuid(UID)
+    set_no_new_privs()
 
 
 def _chown_tree(path: Path) -> None:
@@ -326,7 +348,9 @@ def main() -> None:
     log(f"Zoeken en persoonlijke AI (alles-in-één) · versie {version} · data {DATA} · poort {PORT}")
     check_run_user()
     prepare_dirs()
-    demote()  # vanaf hier draait niets meer als root
+    demote()  # vanaf hier draait niets meer als root, en met no_new_privs (erft over op alle kinderen)
+    if not no_new_privs_active():
+        log("WAARSCHUWING: no-new-privileges kon niet worden gezet (prctl); de processen draaien wel als 568")
     py = sys.executable
     if run_once("geheimen controleren (first-start-init)", [py, "-m", "search_ai", "init"]) != 0:
         fail("geheimen aanmaken in /appdata/secrets mislukt")

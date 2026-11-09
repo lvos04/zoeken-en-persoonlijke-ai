@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import subprocess
+import sys
 import types
 
 import pytest
@@ -118,3 +120,23 @@ def test_smoke_test_inspects_secrets_via_container_not_as_host_user() -> None:
     smoke = (REPO_ROOT / "deploy/allinone/smoke-test.sh").read_text()
     assert "$WORK/root/secrets" not in smoke
     assert 'on_disk() { docker run --rm --network none -v "$WORK:/w:ro"' in smoke
+
+
+def test_supervisor_sets_no_new_privs_for_itself_and_children() -> None:
+    """Contract §10 'no-new-privileges': het TrueNAS Custom App-formulier zet die vlag niet, dus de image zelf (ADR-0010)."""
+    sup = _load_supervisor()
+    out = subprocess.run(
+        [sys.executable, "-c", "print(open('/proc/self/status').read())"],
+        preexec_fn=sup.demote,  # precies zoals de bewaker zijn kinderen start
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert re.search(r"^NoNewPrivs:\s+1$", out, flags=re.M), out
+    main_src = (REPO_ROOT / "deploy/allinone/supervisor.py").read_text()
+    assert "demote()  # vanaf hier draait niets meer als root" in main_src
+    assert main_src.index("if not no_new_privs_active():") > main_src.index("demote()  # vanaf hier")
+    smoke = (REPO_ROOT / "deploy/allinone/smoke-test.sh").read_text()
+    run_fn = smoke[smoke.index("run() {") : smoke.index("}", smoke.index("run() {"))]
+    assert "no-new-privileges" not in run_fn.split("\n", 1)[1]  # rooktest start zoals het formulier: zonder de vlag
+    assert 'check "no-new-privileges door de image zelf gezet' in smoke

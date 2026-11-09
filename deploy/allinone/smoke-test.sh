@@ -6,6 +6,8 @@
 # netwerkpoort en socket alleen voor 568, geheimen 0600/568, databasegegevens en geheimen blijven na herstart, harde
 # kill én een nieuwe container op dezelfde /appdata (zoals bij een update), start als 568, duidelijke fouten bij
 # verkeerde maprechten en een verkeerde gebruiker, en dat een alleen-lezen share onder /bronnen NIET wordt aangeraakt.
+# Zoals het standaard TrueNAS Custom App-formulier start de test standaard ZONDER '--security-opt no-new-privileges':
+# de image moet die vlag zelf zetten voor elk proces van 568 (ADR-0010).
 # De test werkt met elke host-gebruiker (ook de niet-root 'runner' van GitHub Actions): /appdata/secrets is bewust
 # 0700/568, dus alles daaronder wordt bekeken via een wegwerpcontainer met een alleen-lezen mount (ADR-0009).
 set -euo pipefail
@@ -75,15 +77,33 @@ SQL
     && grep -qx 'dims=3' "$WORK/vec.txt"
 }
 
+# no_new_privs (contract §10) zelf gezet door de image: elk proces van 568 in de container heeft NoNewPrivs 1
+nnp_all_568() {
+  docker exec "$1" python -c '
+import os
+n = bad = 0
+for p in filter(str.isdigit, os.listdir("/proc")):
+    try:
+        lines = open(f"/proc/{p}/status").read().splitlines()
+    except OSError:
+        continue
+    f = {k: v.split() for k, _, v in (ln.partition(":") for ln in lines)}
+    if f.get("Uid", [""])[0] == "568":
+        n += 1
+        bad += f.get("NoNewPrivs") != ["1"]
+raise SystemExit(0 if n >= 3 and bad == 0 else 1)
+'
+}
+
 # markering in de echte database (service_state) om dataverlies na herstart/nieuwe container te zien
 MARKER="rooktest-$$-$RANDOM"
 marker_set() { sql "$1" -c "INSERT INTO service_state (key, value, updated_at) VALUES ('rooktest', '{\"m\": \"$MARKER\"}', now())" >/dev/null; }
 marker_ok() { [ "$(sql "$1" -c "SELECT value->>'m' FROM service_state WHERE key = 'rooktest'")" = "$MARKER" ]; }
 
-run() { # naam, datamap, extra args
+run() { # naam, datamap, extra args (geen --security-opt: dat kan het TrueNAS-formulier ook niet)
   local n="$1" d="$2"; shift 2
   docker run -d --name "$n" -p "127.0.0.1:$PORT:30450" -v "$d:/appdata" \
-    --security-opt no-new-privileges:true --health-interval 3s --health-start-period 60s "$@" "$IMAGE" >/dev/null
+    --health-interval 3s --health-start-period 60s "$@" "$IMAGE" >/dev/null
 }
 
 mkdir -p "$WORK/root" "$WORK/u568" "$WORK/bad" "$WORK/u1000" "$WORK/share/werk"
@@ -114,6 +134,8 @@ check "geen proces draait als root (behalve init/bewaker)" \
   "[ -z \"\$(awk 'NR>1 && \$2!=\"568\" && \$2!=\"apps\" && \$0 !~ /dumb-init|supervisor.py/' $WORK/ps.txt)\" ]"
 check "postgres, api en worker draaien als 568" \
   "[ \"\$(awk '(\$2==\"568\" || \$2==\"apps\") && /postgres -D|search_ai api|search_ai worker/' $WORK/ps.txt | wc -l)\" -ge 3 ]"
+check "no-new-privileges door de image zelf gezet voor postgres, api en worker (zonder --security-opt)" \
+  "nnp_all_568 $NAME"
 check "geen netwerkpoort voor PostgreSQL (alleen unix-socket)" \
   "! docker exec $NAME python -c 'import socket;s=socket.socket();s.settimeout(1);s.connect((\"127.0.0.1\",5432))' 2>/dev/null"
 check "database-socket alleen voor gebruiker 568 (rechten 0700)" \
@@ -156,8 +178,9 @@ docker rm -f "$NAME" >/dev/null
 
 echo "== 4. start direct als 568 op een 568-map"
 docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c 'chown 568:568 /w/u568' >/dev/null
-run "$NAME-568" "$WORK/u568" --user 568:568
-check "als 568 gestart en healthy" "wait_healthy $NAME-568"
+run "$NAME-568" "$WORK/u568" --user 568:568 --security-opt no-new-privileges:true
+check "als 568 gestart (ook met --security-opt no-new-privileges) en healthy" "wait_healthy $NAME-568"
+check "ook dan no-new-privileges voor alle processen van 568" "nnp_all_568 $NAME-568"
 docker rm -f "$NAME-568" >/dev/null
 
 echo "== 5. verkeerde rechten (568 op een root-dataset) geven een duidelijke Nederlandse fout"
