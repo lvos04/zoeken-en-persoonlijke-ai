@@ -44,3 +44,9 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 
 - `EVIDENCE.json` — status/validatie per Excel-ID (contract §11; nooit 'Gereed'/'Geslaagd' zonder echte NAS-run)
 - `DELTA_MATRIX.md` — inventaris bestaand / onvolledig / ontbrekend
+
+## B03 Universele mediaserver (2026-11-09)
+
+- `B03_DELTAVERZOEKEN.md` — wijzigingsverzoeken van B03 aan zoeken (Δ-ZK-1, Δ-ZK-2, Δ-CONTRACT-MODEL, Δ-CONTRACT-MT)
+  met besluit en status; optionele model-apps (één producent per soort); Emby en de HARDE EIS raken zoeken niet.
+- `EXCEL_TAKEN.json` bevat naast B07/B15 de B03-rijen en JLT-testen waarvoor zoeken iets levert.
