@@ -256,7 +256,13 @@ def _csrf(client: Any) -> str:
 
 
 def _post(client: Any, csrf: str, **form: str) -> str:
-    data = {"csrf": csrf, "hub_url": HUB_URL, "code": PAIR_CODE, "fingerprint": "", **form}
+    # veldnamen van het Peil-sjabloon (hub_adres, koppelcode, hub_vingerafdruk)
+    data = {
+        "csrf": csrf,
+        "hub_adres": form.get("hub_url", HUB_URL),
+        "koppelcode": form.get("code", PAIR_CODE),
+        "hub_vingerafdruk": form.get("fingerprint", ""),
+    }
     r = client.post("/koppelen", data=data, follow_redirects=False)
     assert r.status_code == 303
     return str(r.headers["location"])
@@ -268,7 +274,7 @@ def test_status_page_pairing_rules(client: Any, fake_hub: FakeHub) -> None:
     assert "ongeldig_formulier" in _post(client, "fout", fingerprint=fp)
     r = client.post(
         "/koppelen",
-        data={"csrf": csrf, "hub_url": HUB_URL, "code": PAIR_CODE, "fingerprint": fp},
+        data={"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": PAIR_CODE, "hub_vingerafdruk": fp},
         headers={"Origin": "http://elders.example"},
         follow_redirects=False,
     )

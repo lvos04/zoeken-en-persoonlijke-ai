@@ -45,7 +45,7 @@ def test_health_ready_and_status_page_not_paired(client: Any) -> None:
     page = client.get("/")
     assert page.status_code == 200 and "niet gekoppeld" in page.text and 'lang="nl"' in page.text
     assert "default-src 'none'" in page.headers["Content-Security-Policy"]
-    assert "Koppelcode" in page.text and "Hub-vingerafdruk" in page.text and "Spraak" in page.text
+    assert "Koppelcode" in page.text and "Vingerafdruk van de Hub" in page.text and "Spraak" in page.text
 
 
 def test_unauthenticated_and_error_format(client: Any) -> None:

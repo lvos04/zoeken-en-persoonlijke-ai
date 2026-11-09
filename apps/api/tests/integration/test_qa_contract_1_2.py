@@ -104,7 +104,7 @@ def test_concurrent_code_pairings_only_one_reaches_the_hub(client: Any, fake_hub
     csrf = _csrf(client)
     r = client.post(
         "/koppelen",
-        data={"csrf": csrf, "hub_url": HUB_URL, "code": second, "fingerprint": fake_hub.fingerprint()},
+        data={"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": second, "hub_vingerafdruk": fake_hub.fingerprint()},
         follow_redirects=False,
     )
     assert "koppelen_bezig" in r.headers["location"] and enroll_calls(fake_hub) == 1
@@ -191,11 +191,11 @@ def test_status_page_rate_limit_ignores_x_forwarded_for(client: Any, fake_hub: F
     for i in range(7):
         r = client.post(
             "/koppelen",
-            data={"csrf": csrf, "hub_url": HUB_URL, "code": "X", "fingerprint": fake_hub.fingerprint()},
+            data={"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": "X", "hub_vingerafdruk": fake_hub.fingerprint()},
             headers={"X-Forwarded-For": f"10.9.9.{i}", "X-Real-IP": f"10.8.8.{i}", "Forwarded": f"for=10.7.7.{i}"},
             follow_redirects=False,
         )
-        locations.append(r.headers["location"])
+        locations.append(re.sub(r"&poging=[\w-]+$", "", r.headers["location"]))
     assert locations[:5] == ["/?melding=koppelcode_ongeldig"] * 5
     assert locations[5:] == ["/?melding=te_veel_pogingen"] * 2  # elke poging telt voor hetzelfde TCP-adres
     assert enroll_calls(fake_hub) == 0
@@ -215,7 +215,7 @@ def test_no_pairing_on_the_status_page_after_revocation(paired_client: Any, fake
     code = fake_hub.sim.add_pairing_code()
     r = client.post(
         "/koppelen",
-        data={"csrf": csrf, "hub_url": HUB_URL, "code": code, "fingerprint": fake_hub.fingerprint()},
+        data={"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": code, "hub_vingerafdruk": fake_hub.fingerprint()},
         follow_redirects=False,
     )
     assert "al_gekoppeld" in r.headers["location"] and enroll_calls(fake_hub) == calls

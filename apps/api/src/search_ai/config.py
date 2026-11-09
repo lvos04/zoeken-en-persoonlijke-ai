@@ -62,6 +62,8 @@ class Settings:
     hub_key_fingerprint: str | None = None
     public_url: str | None = None
     alembic_dir: Path | None = None
+    # map met de versie-gepinde kopie van het Peil-statuspagina-sjabloon (leeg = design/ontwerptaal in de bronboom)
+    peil_dir: Path | None = None
     # Hub-JWT (contract 1.2 §4.2–§4.7): iss=hub, aud=<dienst>, exp - iat <= 120 s, 30 s klokspeling
     jwt_issuer: str = "hub"
     jwt_audience: str = "zoeken-en-persoonlijke-ai"
@@ -102,6 +104,7 @@ class Settings:
     def from_env(cls) -> Settings:
         p = ENV_PREFIX
         alembic_dir = _opt(p + "ALEMBIC_DIR")
+        peil_dir = _opt(p + "PEIL_DIR")
         token = _opt("HUB_ENROLLMENT_TOKEN")
         if token is None and _opt("ENROLLMENT_TOKEN"):
             log.warning(
@@ -117,6 +120,7 @@ class Settings:
             hub_key_fingerprint=_opt("HUB_KEY_FINGERPRINT"),
             public_url=_normalize_url(_opt(p + "PUBLIC_URL")),
             alembic_dir=Path(alembic_dir) if alembic_dir else None,
+            peil_dir=Path(peil_dir) if peil_dir else None,
             read_roots=_paths(_opt(p + "READ_ROOTS"), DEFAULT_READ_ROOTS),
             require_readonly_mounts=_bool(p + "REQUIRE_READONLY_MOUNTS", True),
             preview_max_files=_int(p + "PREVIEW_MAX_FILES", 20000),
