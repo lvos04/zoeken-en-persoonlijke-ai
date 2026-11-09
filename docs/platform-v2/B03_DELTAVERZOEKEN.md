@@ -23,8 +23,8 @@ klassieke terugval.
 
 - **Δ-ZK-1:** `transcript_ref.origin` staat nu op `existing` of `asr_opt_in`
   (`apps/api/src/search_ai/search/models.py:379`, migratie `0001_basisschema.py:545-550`, kolom `String(20)`). De nieuwe
-  waarde past in de kolom maar vraagt een nieuwe migratie van de controle-constraint. Let op: het plan noemt in het
-  F3-hoofdstuk één keer `machine_translated`; hoofdstuk 18 (bindend) zegt `machine_translation`.
+  waarde past in de kolom maar vraagt een nieuwe migratie van de controle-constraint. De waarde is overal
+  `machine_translation` (hoofdstuk 18, bindend); de ene keer `machine_translated` in het F3-hoofdstuk is rechtgezet.
 - **Δ-ZK-2:** de bronsoort `jellyfin` heeft nu de mogelijkheden `metadata.read`, `transcripts.read` en
   `embeddings.local` (`apps/api/src/search_ai/search/service.py:81-82`). Valt BG-06 op "Jelly Leon maakt de
   itemvectoren", dan leest zoeken die via een gescopete leesroute in plaats van ze zelf te maken; nooit beide.
