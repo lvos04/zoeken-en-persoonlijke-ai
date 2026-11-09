@@ -104,6 +104,7 @@ peildatum nog niet gecommit; tegen de echte Hub is dus **niet** getest.
 | `nice -n 10 flock …/docker-build.lock docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:dev .` | gebouwd (zonder CA/proxy) |
 | `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:dev` (als uid 1000, zonder `--security-opt`/`--cap-drop`) | **43 geslaagd, 0 mislukt** |
 | negatieve controle: de nieuwe rooktestfuncties tegen een container met `python` als root-PID 1 | alle drie falen zoals bedoeld (`Uid 0`, `CapEff 00000000a80425fb`, `NoNewPrivs 0`; PID 1 geen bewaker; zombie blijft staan) |
+| GitHub Actions `ci`, run 42638210849 (commit 2f79922, branch `ccr-c133d7a0-kuz1cv`) | **groen**: job `python` (258 + 7 geslaagd, pip-audit schoon) en job `image` (rooktest 43 geslaagd, 0 mislukt, o.a. "elk proces (ook PID 1): Uid 568, CapEff 0 en NoNewPrivs 1") |
 
 Wat de rooktest sinds 1.2 extra controleert: **elk** proces in de container, ook PID 1, heeft `Uid 568`,
 `CapEff 0000000000000000` en `NoNewPrivs 1` (alleen `docker exec`-sessies van buitenaf zoals de healthcheck tellen niet
