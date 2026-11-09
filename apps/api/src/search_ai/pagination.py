@@ -27,10 +27,22 @@ def decode_cursor(cursor: str | None) -> Any:
         raise ApiError(400, "invalid_cursor", "De cursor is ongeldig; begin opnieuw zonder cursor.") from exc
 
 
-def offset_page(items: list[Any], cursor: str | None, limit: int) -> dict[str, Any]:
-    start = decode_cursor(cursor) or 0
-    if not isinstance(start, int) or start < 0:
+def decode_int_cursor(cursor: str | None, maximum: int | None = None) -> int:
+    """Cursor met een geheel getal ≥ 0 (offset of volgnummer); ontbreekt hij → 0.
+
+    ``True``/``False`` zijn in Python ook ``int``; die (en elk ander type) geven 400 i.p.v. een stille offset of een
+    databasefout (QA P0-afronding).
+    """
+    value = decode_cursor(cursor)
+    if value is None:
+        return 0
+    if type(value) is not int or value < 0 or (maximum is not None and value > maximum):
         raise ApiError(400, "invalid_cursor", "De cursor is ongeldig; begin opnieuw zonder cursor.")
+    return value
+
+
+def offset_page(items: list[Any], cursor: str | None, limit: int) -> dict[str, Any]:
+    start = decode_int_cursor(cursor)
     chunk = items[start : start + limit]
     nxt = encode_cursor(start + limit) if start + limit < len(items) else None
     return {"items": chunk, "next_cursor": nxt}

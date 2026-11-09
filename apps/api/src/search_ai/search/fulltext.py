@@ -18,7 +18,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from ..errors import ApiError
-from ..pagination import decode_cursor, encode_cursor
+from ..pagination import decode_int_cursor, encode_cursor
 from ..security.auth import Principal
 from ..timeutil import iso, utcnow
 from . import acl
@@ -46,9 +46,7 @@ def search(
         raise ApiError(422, "lege_zoekvraag", "Vul een zoekterm in.")
     if len(query) > MAX_QUERY_LEN:
         raise ApiError(422, "zoekvraag_te_lang", f"De zoekvraag is te lang (max. {MAX_QUERY_LEN} tekens).")
-    offset = decode_cursor(cursor) or 0
-    if not isinstance(offset, int) or offset < 0 or offset > 10_000:
-        raise ApiError(400, "invalid_cursor", "De cursor is ongeldig; begin opnieuw zonder cursor.")
+    offset = decode_int_cursor(cursor, maximum=10_000)
 
     tsq = func.websearch_to_tsquery(TS_CONFIG, query)
     score = cast(func.ts_rank_cd(Chunk.tsv, tsq), Float).label("score")

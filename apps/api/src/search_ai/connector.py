@@ -20,7 +20,7 @@ from .errors import ApiError, capability_unavailable, forbidden, not_found
 from .events import envelope
 from .health import connector_health
 from .models import AuditEvent, OutboxEvent
-from .pagination import MAX_LIMIT, decode_cursor, encode_cursor, offset_page
+from .pagination import MAX_LIMIT, decode_int_cursor, encode_cursor, offset_page
 from .redact import redact
 from .search import service as search_service
 from .search.models import IndexRun, IndexSource
@@ -198,9 +198,7 @@ def poll_events(
     session: Session = Depends(get_session),
     _p: Principal = Depends(require_admin_or_service),
 ) -> dict[str, Any]:
-    after = decode_cursor(cursor) or 0
-    if not isinstance(after, int):
-        raise ApiError(400, "invalid_cursor", "De cursor is ongeldig; begin opnieuw zonder cursor.")
+    after = decode_int_cursor(cursor)
     rows = list(
         session.scalars(select(OutboxEvent).where(OutboxEvent.seq > after).order_by(OutboxEvent.seq).limit(limit))
     )

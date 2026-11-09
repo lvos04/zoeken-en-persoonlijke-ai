@@ -7,12 +7,11 @@ Alle mutaties vereisen ``Idempotency-Key``; wijzigen van een bestaande bron vere
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -30,6 +29,9 @@ router = APIRouter(prefix=SEARCH_PREFIX, tags=["zoeken (B07)"])
 
 SourceKind = Literal["files", "immich", "jellyfin", "logs"]
 Classification = Literal["internal", "sensitive"]
+# Witruimte eromheen telt niet: een naam of gebruiker van alleen spaties is leeg en wordt geweigerd (422).
+Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+Subject = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 
 class Strict(BaseModel):
@@ -38,9 +40,9 @@ class Strict(BaseModel):
 
 class SourceCreate(Strict):
     kind: SourceKind
-    name: str = Field(min_length=1, max_length=120)
+    name: Name
     description: str = Field(default="", max_length=2000)
-    owner_sub: str | None = Field(default=None, min_length=1, max_length=200, description="Gegevenseigenaar (Hub-sub)")
+    owner_sub: Subject | None = Field(default=None, description="Gegevenseigenaar (Hub-sub)")
     allowed_paths: list[str] = Field(default_factory=list, max_length=50)
     exclude_patterns: list[str] = Field(default_factory=list, max_length=50)
     base_url: str | None = Field(default=None, max_length=500)
@@ -49,7 +51,7 @@ class SourceCreate(Strict):
 
 
 class SourcePatch(Strict):
-    name: str | None = Field(default=None, min_length=1, max_length=120)
+    name: Name | None = None
     description: str | None = Field(default=None, max_length=2000)
     allowed_paths: list[str] | None = Field(default=None, max_length=50)
     exclude_patterns: list[str] | None = Field(default=None, max_length=50)
@@ -62,7 +64,8 @@ class ConsentIn(Strict):
     scopes: list[str] = Field(min_length=1, max_length=10)
     consent_text_version: str = Field(max_length=40)
     bevestiging: Literal[True] = Field(description="Moet true zijn: de eigenaar heeft de toestemmingstekst gelezen")
-    expires_at: datetime | None = None
+    # Contract §5: tijden in ISO-8601 met tijdzone (bv. …Z); zonder tijdzone → 422 i.p.v. een interne fout.
+    expires_at: AwareDatetime | None = None
 
 
 class RevokeIn(Strict):
@@ -71,7 +74,7 @@ class RevokeIn(Strict):
 
 class AccessIn(Strict):
     principal_type: Literal["user", "role"]
-    principal_id: str = Field(min_length=1, max_length=200)
+    principal_id: Subject
 
 
 class ReindexIn(Strict):
