@@ -55,6 +55,20 @@ gebouwd en getest; ZA9 is terecht niet gedaan (§13: `ONTWERPTAAL.md` en `design
   Hub-sleutel wordt zonder rotatie nooit vertrouwd, en herkoppelen met de oude `HUB_KEY_FINGERPRINT` slaat niets op.
   De rooktest controleert de link-gevallen in de echte image (secties 7 en 7b).
 
+## Interop met de echte Hub
+`ai-server-manager` heeft H1–H4 inmiddels op zijn branch. `tests/interop/test_real_hub.py` start de echte Hub-API (eigen
+venv uit `git archive`, eigen database) en deze dienst als processen. De test doorloopt de hele levenscyclus:
+verkeerde vingerafdruk geweigerd, koppelen en bevestigen, gebruikers-JWT en `jti`-replay, `key-rotations`, rotatie op
+verzoek van de beheerder, dienst-JWT met ontkoppelen, opnieuw koppelen, intrekken. De test hoort niet in de CI (hij
+vraagt een checkout van een andere repo) en wordt overgeslagen zonder `SEARCH_AI_REAL_HUB_PYTHON`.
+
+Daarbij viel een **contractpunt** op (gemeld aan de contracteigenaar, niet hier op te lossen). Bij een nieuwe
+geslaagde enrollment trekt de Hub meteen alle oude tokens van de registratie in (§3.6, "Bestaat de dienst al …"). Dat
+gebeurt ook als de dienst het antwoord daarna weigert (verkeerde vingerafdruk) of een gelijktijdige koppelcode-poging
+verliest. "Mislukt het, dan blijft een bestaande koppeling ongewijzigd" (§3.8) geldt dan alleen lokaal: bij de volgende
+controle wordt de bestaande koppeling `ingetrokken` (fail-closed, veilig, maar wel een herkoppeling). Voorstel: oude
+tokens pas intrekken bij het eerste gebruik van het nieuwe token, zoals bij rotatie.
+
 ## Gevolgen
 - Clients die zonder token een kapotte body sturen, krijgen nu 401 in plaats van 422/400. De Hub stuurt altijd een
   token, dus voor de Hub verandert niets.
@@ -62,5 +76,5 @@ gebouwd en getest; ZA9 is terecht niet gedaan (§13: `ONTWERPTAAL.md` en `design
   pagina opnieuw (daarna is er geen formulier meer).
 - Een dataset waarin iemand `postgres`, `secrets`, `backups` of `logs` door een link heeft vervangen, start niet meer.
   De app-log noemt de map.
-- Niet gevalideerd: alles is Sim-getest (Hub-simulator, lokale Docker). Niets is getest op een echte NAS of tegen de
-  echte Hub.
+- Niet gevalideerd: alles is Sim-getest (Hub-simulator, lokale Docker), plus één lokale interop-run tegen de echte
+  Hub-code (be7d593). Niets is getest op een echte NAS.

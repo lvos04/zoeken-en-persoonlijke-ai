@@ -145,6 +145,29 @@ dienst fail-closed `ingetrokken` (`::test_swapped_hub_key_is_never_trusted_witho
 | `nice -n 10 flock …/docker-build.lock docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:qa .` | gebouwd |
 | `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:qa` (als uid 1000, zonder `--security-opt`/`--cap-drop`) | **52 geslaagd, 0 mislukt** (43 + 9 nieuw in secties 7/7b) |
 | negatieve controle: image met de vorige `supervisor.py` op een `/appdata` met `backups → /usr/local/lib` | `/usr/local/lib` en `search_ai/app.py` werden eigendom van 568 (lek bevestigd); met de nieuwe bewaker: fout in de log, eigenaar blijft 0 |
+| GitHub Actions `ci`, run 42642241110 (commit aaf7722, branch `ccr-c133d7a0-kuz1cv`) | **groen**: job `python` (278 + 7 geslaagd, pip-audit schoon) en job `image` (rooktest 52 geslaagd, 0 mislukt) |
+
+**Interop tegen de echte Hub (lokaal, niet in CI).** `ai-server-manager` levert inmiddels H1–H4 (enroll 1.2,
+`services/self`, `self/rotate`, dienst-JWT, `key-rotations`). De Hub-API is uit `git archive be7d593` (remote-branch,
+hun werkmap niet aangeraakt) in een eigen venv gestart, met een eigen database (`zoek_interop_hub`). Deze dienst
+draaide als echte processen (API + worker, database `zoek_interop_dienst`): `tests/interop/test_real_hub.py`
+(`SEARCH_AI_REAL_HUB_PYTHON=… pytest -q tests/interop`, of `make interop HUB_PY=…`).
+
+| Stap | Uitkomst |
+|---|---|
+| eerste beheerder met de setupcode uit `hub init`; enrollment-token + `keyset_fingerprint` uit de Hub | 201 |
+| env-token met een **verkeerde** `HUB_KEY_FINGERPRINT` | `hub_vingerafdruk_onjuist`, niets opgeslagen, token afgehandeld |
+| env-token met de juiste vingerafdruk | gekoppeld en bevestigd (`services/self`); gepinde `kid` = JWKS van de Hub; de Hub ziet het token als gebruikt |
+| gebruikers-JWT van de Hub (`/api/v1/auth/service-jwt`) | `discover`/`hub-link` 200; dezelfde `jti` voor een tweede mutatie → 401 `token_replayed`; `svc_`-token inkomend → 401 `service_token_not_accepted` |
+| `key-rotations` (`{"items":[]}`) | geen fout, `rotation_sequence` 0 |
+| rotatie aangevraagd door de beheerder (`POST /api/v1/services/{id}/rotate`) | de dienst roteerde zelf en bevestigde het nieuwe token |
+| dienst-JWT van de Hub (`token_use: hub_service`, gemaakt met `hub.keys.KeyRing` van deze Hub) | `hub-link` 200, `unlink` 200 → `ontkoppeld`; daarna 401 `not_linked`, ook een herhaalde `unlink` |
+| nieuw env-token, daarna `POST /api/v1/services/{id}/revoke` | opnieuw gekoppeld (zelfde `service_id`), daarna fail-closed `ingetrokken` → 401 `revoked` |
+| `pytest -q tests/interop` | **1 geslaagd** (14,8 s); zonder `SEARCH_AI_REAL_HUB_PYTHON` overgeslagen |
+
+Niet getoetst tegen de echte Hub: de Hub-route `POST /api/v1/services/{id}/unlink`. Die vraagt een gemeten dienstadres
+(D03 + inventaris via TrueNAS), en dat bestaat hier niet. De dienst-JWT is daarom met de sleutelring van de Hub zelf
+gemaakt. Een echte NAS is ook hier niet gebruikt.
 
 Niet gedaan (terecht): ZA9 (CSS uit de ontwerptaaltokens). `ONTWERPTAAL.md` en `design/ontwerptaal/` ontbreken nog
 in `ai-server-manager`, dus §13 laat de UI-ombouw niet starten. Niet getest: echte NAS en echte Hub.
