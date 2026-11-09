@@ -4,8 +4,10 @@
 # Controleert: start als root op een lege /appdata → processen als 568, healthcheck 'healthy', /healthz, /readyz (incl.
 # pgvector 0.8.7), pgvector werkt echt (HNSW-index + KNN-zoekvraag), statuspagina 'niet gekoppeld', geen PostgreSQL-
 # netwerkpoort en socket alleen voor 568, geheimen 0600/568, databasegegevens en geheimen blijven na herstart, harde
-# kill én een nieuwe container op dezelfde /appdata (zoals bij een update), start als 568, duidelijke fout bij
-# verkeerde maprechten, en dat een alleen-lezen share onder /bronnen NIET wordt aangeraakt (eigenaar en inhoud).
+# kill én een nieuwe container op dezelfde /appdata (zoals bij een update), start als 568, duidelijke fouten bij
+# verkeerde maprechten en een verkeerde gebruiker, en dat een alleen-lezen share onder /bronnen NIET wordt aangeraakt.
+# De test werkt met elke host-gebruiker (ook de niet-root 'runner' van GitHub Actions): /appdata/secrets is bewust
+# 0700/568, dus alles daaronder wordt bekeken via een wegwerpcontainer met een alleen-lezen mount (ADR-0009).
 set -euo pipefail
 
 IMAGE="${1:-zoeken-en-persoonlijke-ai:dev}"
@@ -16,7 +18,7 @@ PASS=0
 FAIL=0
 
 cleanup() {
-  docker rm -f "$NAME" "$NAME-568" "$NAME-bad" >/dev/null 2>&1 || true
+  docker rm -f "$NAME" "$NAME-568" "$NAME-bad" "$NAME-uid" >/dev/null 2>&1 || true
   docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c 'rm -rf /w/* /w/.[!.]* 2>/dev/null || true' >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
@@ -27,8 +29,8 @@ nok() { echo "FOUT $*"; FAIL=$((FAIL + 1)); }
 check() { if eval "$2"; then ok "$1"; else nok "$1"; fi; }
 
 wait_healthy() {
-  local c="$1" i
-  for i in $(seq 1 60); do
+  local c="$1"
+  for _ in $(seq 1 60); do
     case "$(docker inspect -f '{{.State.Health.Status}}' "$c" 2>/dev/null || echo weg)" in
       healthy) return 0 ;;
       weg) return 1 ;;
@@ -42,6 +44,14 @@ wait_healthy() {
 # zonder pipes (pipefail + grep -q geeft anders vals-negatieve SIGPIPE-fouten)
 http_has() { curl -fsS "http://127.0.0.1:$PORT$1" -o "$WORK/http.txt" && grep -q -- "$2" "$WORK/http.txt"; }
 log_has() { docker logs "$1" > "$WORK/log.txt" 2>&1; grep -q -- "$2" "$WORK/log.txt"; }
+# wacht (hooguit 30 s) tot een melding in de log staat, i.p.v. een vaste slaaptijd
+wait_log() { for _ in $(seq 1 30); do log_has "$1" "$2" && return 0; sleep 1; done; docker logs "$1" 2>&1 | tail -10; return 1; }
+
+# Bestanden op de host-map bekijken zoals ze op schijf staan, via een wegwerpcontainer (root in de container,
+# alleen-lezen mount). Nodig omdat /appdata/secrets 0700/568 is: de host-gebruiker mag daar terecht niet in.
+on_disk() { docker run --rm --network none -v "$WORK:/w:ro" --entrypoint "$1" "$IMAGE" "${@:2}"; }
+disk_mode() { on_disk stat -c '%a %u' "/w/$1"; }
+disk_sum() { on_disk sha256sum "/w/$1" | cut -d' ' -f1; }
 
 # psql in de container als 568 (de enige gebruiker die de unix-socket mag gebruiken)
 sql() { local c="$1"; shift; docker exec -u 568 -i "$c" psql -h /tmp/search-ai-pg -U search_ai -d search_ai -v ON_ERROR_STOP=1 -tAq "$@"; }
@@ -76,9 +86,12 @@ run() { # naam, datamap, extra args
     --security-opt no-new-privileges:true --health-interval 3s --health-start-period 60s "$@" "$IMAGE" >/dev/null
 }
 
-mkdir -p "$WORK/root" "$WORK/u568" "$WORK/bad" "$WORK/share/werk"
+mkdir -p "$WORK/root" "$WORK/u568" "$WORK/bad" "$WORK/u1000" "$WORK/share/werk"
 echo "offerte keuken" > "$WORK/share/werk/offerte.txt"
-docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c 'chown -R 1000:1000 /w/share' >/dev/null
+# root-eigendom-map zoals een nieuwe TrueNAS-dataset; 'bad' is van root (0755) zodat 568 er nooit in mag schrijven
+# en 'u1000' is van 1000 — ongeacht de uid van de host-gebruiker die de test draait
+docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c \
+  'chown -R 1000:1000 /w/share /w/u1000 && chown 0:0 /w/root /w/bad && chmod 0755 /w/root /w/bad' >/dev/null
 SHARE_BEFORE="$(cd "$WORK/share" && find . -printf '%p %u %g %m %s %T@\n' | sort | sha256sum)"
 
 echo "== 1. start als root op een root-eigendom-map, met een alleen-lezen share onder /bronnen"
@@ -107,21 +120,23 @@ check "database-socket alleen voor gebruiker 568 (rechten 0700)" \
   "[ \"\$(docker exec $NAME stat -c '%a %u' /tmp/search-ai-pg/.s.PGSQL.5432)\" = '700 568' ]"
 check "andere gebruiker in de container kan de database niet bereiken" \
   "! docker exec -u nobody $NAME psql -h /tmp/search-ai-pg -U search_ai -d search_ai -tAc 'SELECT 1' > $WORK/nobody.txt 2>&1 && grep -q 'Permission denied' $WORK/nobody.txt"
+check "secrets-map 0700 en eigenaar 568" "[ \"\$(disk_mode root/secrets)\" = '700 568' ]"
 check "geheimen 0600 en eigenaar 568" \
-  "[ \"\$(stat -c '%a %u' $WORK/root/secrets/vault.key)\" = '600 568' ] && [ \"\$(stat -c '%a %u' $WORK/root/secrets/identity.ed25519)\" = '600 568' ]"
+  "[ \"\$(disk_mode root/secrets/vault.key)\" = '600 568' ] && [ \"\$(disk_mode root/secrets/identity.ed25519)\" = '600 568' ]"
 check "ontkoppelcode staat in de app-log" "log_has $NAME 'Lokale ontkoppelcode'"
 check "share wordt als alleen-lezen gemeld" "log_has $NAME 'documenten: alleen-lezen'"
 check "share ongewijzigd (eigenaar, rechten, inhoud, tijden)" \
   "[ \"\$(cd $WORK/share && find . -printf '%p %u %g %m %s %T@\n' | sort | sha256sum)\" = '$SHARE_BEFORE' ]"
 check "geen setuid/setgid-bestanden in de image" \
   "[ -z \"\$(docker exec $NAME sh -c 'find / -xdev -perm /6000 -type f 2>/dev/null')\" ]"
-SUM1="$(sha256sum "$WORK/root/secrets/vault.key" | cut -d' ' -f1)"
+SUM1="$(disk_sum root/secrets/vault.key)" || SUM1=""
+check "vault.key leesbaar voor de controle (via container)" "[ \${#SUM1} -eq 64 ]"
 check "markering in de database geschreven" "marker_set $NAME && marker_ok $NAME"
 
 echo "== 2. herstart: data en geheimen blijven"
 docker restart "$NAME" >/dev/null
 check "na herstart weer healthy" "wait_healthy $NAME"
-check "vault.key ongewijzigd na herstart" "[ \"\$(sha256sum $WORK/root/secrets/vault.key | cut -d' ' -f1)\" = '$SUM1' ]"
+check "vault.key ongewijzigd na herstart" "[ -n '$SUM1' ] && [ \"\$(disk_sum root/secrets/vault.key)\" = '$SUM1' ]"
 check "databasegegevens behouden na herstart" "marker_ok $NAME"
 
 echo "== 3. harde kill (stroomuitval) en opnieuw starten"
@@ -135,7 +150,7 @@ echo "== 3b. nieuwe container op dezelfde /appdata (zoals TrueNAS bij een update
 run "$NAME" "$WORK/root" -v "$WORK/share:/bronnen/documenten:ro"
 check "nieuwe container healthy" "wait_healthy $NAME"
 check "databasegegevens behouden in een nieuwe container" "marker_ok $NAME"
-check "vault.key ongewijzigd in een nieuwe container" "[ \"\$(sha256sum $WORK/root/secrets/vault.key | cut -d' ' -f1)\" = '$SUM1' ]"
+check "vault.key ongewijzigd in een nieuwe container" "[ -n '$SUM1' ] && [ \"\$(disk_sum root/secrets/vault.key)\" = '$SUM1' ]"
 check "geen nieuwe database aangemaakt (geen 'eerste start' in de log)" "! log_has $NAME 'eerste start: database aanmaken'"
 docker rm -f "$NAME" >/dev/null
 
@@ -145,10 +160,17 @@ run "$NAME-568" "$WORK/u568" --user 568:568
 check "als 568 gestart en healthy" "wait_healthy $NAME-568"
 docker rm -f "$NAME-568" >/dev/null
 
-echo "== 5. verkeerde rechten geven een duidelijke Nederlandse fout"
-docker run -d --name "$NAME-bad" -v "$WORK/bad:/appdata" --user 1000:1000 "$IMAGE" >/dev/null
-sleep 8
-check "fout 'geen schrijfrechten' in de log" "log_has $NAME-bad 'FOUT: geen schrijfrechten'"
+echo "== 5. verkeerde rechten (568 op een root-dataset) geven een duidelijke Nederlandse fout"
+docker run -d --name "$NAME-bad" -v "$WORK/bad:/appdata" --user 568:568 "$IMAGE" >/dev/null
+check "fout 'geen schrijfrechten' in de log" "wait_log $NAME-bad 'FOUT: geen schrijfrechten'"
+check "root-dataset niet aangeraakt" "[ \"\$(disk_mode bad)\" = '755 0' ] && [ -z \"\$(ls -A $WORK/bad)\" ]"
+docker rm -f "$NAME-bad" >/dev/null
+
+echo "== 6. verkeerde gebruiker ('Custom User' 1000) geeft een duidelijke Nederlandse fout, geen initdb-fout"
+docker run -d --name "$NAME-uid" -v "$WORK/u1000:/appdata" --user 1000:1000 "$IMAGE" >/dev/null
+check "fout 'draait als gebruiker 1000:1000' in de log" "wait_log $NAME-uid 'FOUT: de app draait als gebruiker 1000:1000'"
+check "geen initdb gestart" "! log_has $NAME-uid 'initdb'"
+docker rm -f "$NAME-uid" >/dev/null
 
 echo
 echo "Resultaat: $PASS geslaagd, $FAIL mislukt"

@@ -70,6 +70,21 @@ def _chown_tree(path: Path) -> None:
                 pass
 
 
+def check_run_user() -> None:
+    """Alleen root (die daarna naar 568 gaat) of 568 zelf kan de ingebouwde database starten.
+
+    Elke andere gebruiker (bv. 'Custom User' 1000 in het TrueNAS-formulier) laat initdb anders vastlopen met een
+    onduidelijke Engelse melding ('could not look up effective user ID'); geef in plaats daarvan een duidelijke fout.
+    """
+    uid, gid = os.getuid(), os.getgid()
+    if uid != 0 and (uid, gid) != (UID, GID):
+        fail(
+            f"de app draait als gebruiker {uid}:{gid}, maar de ingebouwde database kan alleen als {UID}:{GID} (apps) "
+            f"draaien. Zet in de app-instellingen 'Custom User' uit (dan regelt de app de rechten zelf) of gebruik "
+            f"gebruiker en groep {UID}."
+        )
+
+
 def prepare_dirs() -> None:
     if not DATA.exists():
         fail(f"{DATA} bestaat niet. Koppel in de app-instellingen een dataset (Host Path) aan {DATA}.")
@@ -309,6 +324,7 @@ def wait_for_db(pg: Child, timeout: float = 90) -> None:
 def main() -> None:
     version = os.environ.get("SEARCH_AI_VERSION", "?")
     log(f"Zoeken en persoonlijke AI (alles-in-één) · versie {version} · data {DATA} · poort {PORT}")
+    check_run_user()
     prepare_dirs()
     demote()  # vanaf hier draait niets meer als root
     py = sys.executable

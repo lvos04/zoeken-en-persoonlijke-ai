@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import re
+import types
 
+import pytest
 import yaml
 
 from tests.conftest import REPO_ROOT
@@ -73,3 +76,45 @@ def test_workflow_actions_pinned_by_sha() -> None:
         for ref in re.findall(r"uses:\s*(\S+)", wf.read_text()):
             assert re.search(r"@[0-9a-f]{40}$", ref), f"{wf.name}: {ref} niet op SHA gepind"
         assert ":latest" not in wf.read_text()
+
+
+def _load_supervisor() -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location("sai_supervisor", REPO_ROOT / "deploy/allinone/supervisor.py")
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize(
+    ("uid", "gid", "allowed"), [(0, 0, True), (568, 568, True), (1000, 1000, False), (568, 0, False)]
+)
+def test_supervisor_refuses_other_run_user_with_clear_dutch_error(
+    monkeypatch: pytest.MonkeyPatch, uid: int, gid: int, allowed: bool
+) -> None:
+    sup = _load_supervisor()
+    errors: list[str] = []
+
+    def fake_fail(msg: str, code: int = 78) -> None:
+        errors.append(msg)
+        raise SystemExit(code)
+
+    monkeypatch.setattr(sup, "fail", fake_fail)
+    monkeypatch.setattr(sup.os, "getuid", lambda: uid)
+    monkeypatch.setattr(sup.os, "getgid", lambda: gid)
+    if allowed:
+        sup.check_run_user()
+        assert errors == []
+    else:
+        with pytest.raises(SystemExit):
+            sup.check_run_user()
+        assert f"de app draait als gebruiker {uid}:{gid}" in errors[0] and "Custom User" in errors[0]
+    main_src = (REPO_ROOT / "deploy/allinone/supervisor.py").read_text()
+    assert main_src.index("check_run_user()\n    prepare_dirs()") > 0  # vóór de mappen en vóór initdb
+
+
+def test_smoke_test_inspects_secrets_via_container_not_as_host_user() -> None:
+    # /appdata/secrets is 0700/568: de niet-root host-gebruiker (bv. de GitHub-runner) mag er terecht niet in
+    smoke = (REPO_ROOT / "deploy/allinone/smoke-test.sh").read_text()
+    assert "$WORK/root/secrets" not in smoke
+    assert 'on_disk() { docker run --rm --network none -v "$WORK:/w:ro"' in smoke
