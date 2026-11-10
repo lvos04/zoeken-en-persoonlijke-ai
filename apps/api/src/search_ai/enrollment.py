@@ -1,4 +1,4 @@
-"""Koppelen met de Hub en de levenscyclus van die koppeling (contract 1.2 §3.2–§3.8, §4.5).
+"""Koppelen met de Hub en de levenscyclus van die koppeling (contract 1.3 §3.2–§3.8, §4.5).
 
 Twee manieren van koppelen:
 1. **Eenmalig enrollment-token** uit de omgeving (``HUB_URL`` + ``HUB_ENROLLMENT_TOKEN`` [+ ``HUB_KEY_FINGERPRINT``]),
@@ -6,10 +6,15 @@ Twee manieren van koppelen:
 2. **Koppelcode + vingerafdruk** op de statuspagina, alleen zolang de dienst nog **nooit** gekoppeld is (§3.7).
 
 Verzoek ``POST {HUB_URL}/api/v1/services/enroll`` exact volgens §3.3: ``{"app_id", "enrollment_token" | "pairing_code",
-"version", "base_url", "public_key_jwk": {kty, crv, x, kid=RFC 7638-thumbprint}}``. Het antwoord wordt volledig
-gecontroleerd (alle velden, types, ``schema_version`` major 1, Ed25519-sleutels met ``use``/``alg``/unieke ``kid``,
-zelf berekende sleutelset-vingerafdruk) vóór er iets wordt opgeslagen. Opslag: ``/appdata/secrets/hub-link.json``
-(``hublink.py``), nooit de database. Daarna bevestigt de dienst met ``GET /api/v1/services/self``.
+"version", "base_url", "public_key_jwk": {kty, crv, x, kid=RFC 7638-thumbprint}}``; ``base_url`` alleen als hij voldoet
+aan de adresregels, anders ``null`` (1.3). Het antwoord wordt volledig gecontroleerd (alle velden, types,
+``schema_version`` major 1, Ed25519-sleutels met ``use``/``alg``/unieke ``kid``, zelf berekende sleutelset-vingerafdruk,
+``rotation_sequence`` een geheel getal ≥ 0 of afwezig bij een Hub 1.2) vóór er iets wordt opgeslagen. Opslag:
+``/appdata/secrets/hub-link.json`` (``hublink.py``), nooit de database. Daarna bevestigt de dienst met ``GET /api/v1/services/self``.
+
+Een poging met een **nieuw env-token** vervangt een onleesbaar koppelbestand bij haar eerste schrijfactie (``pending``
+of ``last_error``), vóór het verzoek aan de Hub; het origineel blijft bewaard (§3.5, RV6). Koppelcode-pogingen van de
+statuspagina loggen hier niets: de statuspagina schrijft per poging precies één logregel met code en Trace-ID (§3.7).
 
 Deze module praat alleen met de Hub en het koppelbestand; audit en events legt de aanroeper vast.
 """
@@ -32,7 +37,7 @@ from sqlalchemy.orm import Session
 from . import APP_ID, __version__
 from .config import Settings
 from .db import Database
-from .hubclient import HubClient, HubUrlError, validate_hub_url
+from .hubclient import HubClient, HubUrlError, validate_base_url, validate_hub_url
 from .hublink import HubLinkStore, empty_doc, error, public_view
 from .models import ServiceState
 from .security.auth import sha256_hex
@@ -77,6 +82,13 @@ RESPONSE_FIELDS: dict[str, type] = {
     "events_inbox_url": str,
     "key_rotation_url": str,
     "enrollment_replayed": bool,
+}
+# HTTP-status van de Hub op ``POST /enroll`` → vaste ``last_error``-code voor een definitieve weigering (§3.3, RV6)
+DEFINITIVE_HTTP = {
+    401: "hub_weigerde",
+    404: "enroll_endpoint_ontbreekt",
+    413: "hub_incompatibel",
+    422: "hub_incompatibel",
 }
 
 
@@ -136,6 +148,9 @@ def parse_enroll_response(data: Any, expected_fingerprint: str | None) -> dict[s
     kids = [k["kid"] for k in jwt_keys]
     if len(set(kids)) != len(kids):
         raise InvalidResponse("kid niet uniek binnen jwks.keys")
+    rotation_sequence = data.get("rotation_sequence", 0)  # Hub 1.2 stuurt het niet: dan 0 (§3.3)
+    if not isinstance(rotation_sequence, int) or isinstance(rotation_sequence, bool) or rotation_sequence < 0:
+        raise InvalidResponse("rotation_sequence is geen geheel getal ≥ 0")
     if normalize_fingerprint(data["keyset_fingerprint"]) != computed:
         raise FingerprintMismatch("keyset_fingerprint in het antwoord ≠ zelf berekend")
     if expected_fingerprint is not None and normalize_fingerprint(expected_fingerprint) != computed:
@@ -147,6 +162,7 @@ def parse_enroll_response(data: Any, expected_fingerprint: str | None) -> dict[s
         "policy": policy,
         "fingerprint": computed,
         "replayed": data["enrollment_replayed"],
+        "rotation_sequence": rotation_sequence,
     }
 
 
@@ -233,19 +249,20 @@ class EnrollmentService:
         if token_hash in (doc.get("used_enrollment_token_sha256") or []):
             return None
         if not ENROLLMENT_TOKEN.fullmatch(token):
-            # een token dat de Hub sowieso met 422 weigert: niet versturen, wel definitief afhandelen
-            return self._definitive("token", token_hash, Outcome(False, "hub_weigerde"))
+            # een token dat de Hub sowieso met 422 weigert: niet versturen, wel definitief afhandelen (§3.5)
+            return self._definitive("token", token_hash, Outcome(False, "token_ongeldig"))
         try:
             hub_url = validate_hub_url(s.hub_url or "", s.allow_loopback_hub)
         except HubUrlError:
-            self._note_config_error("ongeldig_hub_adres")
-            return Outcome(False, "ongeldig_hub_adres")
+            # §3.5: de Hub niet aanspreken en het token niet als afgehandeld markeren (de beheerder kan het verbeteren)
+            self._note_config_error("hub_adres_ongeldig")
+            return Outcome(False, "hub_adres_ongeldig")
         expected = None
         if s.hub_key_fingerprint:
             expected = normalize_fingerprint(s.hub_key_fingerprint)
             if expected is None:
-                self._note_config_error("ongeldige_vingerafdruk")
-                return Outcome(False, "ongeldige_vingerafdruk")
+                self._note_config_error("vingerafdruk_ongeldig")
+                return Outcome(False, "vingerafdruk_ongeldig")
         pending = doc.get("pending") or {}
         started = pending.get("started_at") if pending.get("secret_sha256") == token_hash else None
         if started:
@@ -284,6 +301,11 @@ class EnrollmentService:
 
         self.store.update(fn)
 
+    def _log(self, kind: str, level: int, msg: str, *args: Any) -> None:
+        """Alleen voor env-token-pogingen (worker); de statuspagina logt één regel per koppelcode-poging (§3.7)."""
+        if kind == "token":
+            log.log(level, msg, *args)
+
     def _attempt(self, kind: str, secret: str, secret_hash: str, hub_url: str, expected: str | None) -> Outcome:
         now = self._iso()
 
@@ -302,12 +324,15 @@ class EnrollmentService:
                 }
             return doc
 
-        self.store.update(set_pending)
+        # eerste schrijfactie van deze poging: vóór het verzoek aan de Hub (een onleesbaar bestand wordt hier alleen
+        # bij een env-token vervangen, met behoud van het origineel; §3.5, RV6)
+        self.store.update(set_pending, replace_unreadable=kind == "token")
         body: dict[str, Any] = {
             "app_id": APP_ID,
             "enrollment_token" if kind == "token" else "pairing_code": secret,
             "version": __version__,
-            "base_url": self.settings.public_url,
+            # §3.3 (1.3): alleen een geldige base_url, anders null; de Hub weigert nooit om deze waarde
+            "base_url": validate_base_url(self.settings.public_url, self.settings.allow_loopback_hub),
             "public_key_jwk": dict(self.identity_jwk),
         }
         try:
@@ -320,24 +345,31 @@ class EnrollmentService:
             return self._retry(kind, secret_hash, outcome)
         if 300 <= status < 400 or status >= 500:  # redirects volgen we nooit: storing
             return self._retry(kind, secret_hash, Outcome(False, "hub_onbereikbaar", retryable=True))
-        if status == 404:
-            return self._definitive(kind, secret_hash, Outcome(False, "enroll_endpoint_ontbreekt"))
-        if status != 200:  # 401 invalid_enrollment, 413, 422 en andere 4xx: definitief voor dit geheim
-            return self._definitive(kind, secret_hash, Outcome(False, "hub_weigerde", detail={"http": status}))
+        if status != 200:
+            # 401 invalid_enrollment → hub_weigerde; 404 → enroll_endpoint_ontbreekt; 413/422 en andere 4xx →
+            # hub_incompatibel (de Hub kan dit verzoek niet aannemen): definitief voor dit geheim (§3.3, §3.5)
+            code = DEFINITIVE_HTTP.get(status, "hub_incompatibel")
+            return self._definitive(kind, secret_hash, Outcome(False, code, detail={"http": status}))
         try:
             parsed = parse_enroll_response(resp.json(), expected)
         except FingerprintMismatch as exc:
-            log.warning("koppelen geweigerd: %s", exc)
+            self._log(kind, logging.WARNING, "koppelen geweigerd: %s", exc)
             return self._definitive(kind, secret_hash, Outcome(False, "hub_vingerafdruk_onjuist"))
         except (InvalidResponse, ValueError) as exc:
-            log.warning("koppelen geweigerd: ongeldig antwoord van de Hub (%s)", exc)
+            self._log(kind, logging.WARNING, "koppelen geweigerd: ongeldig antwoord van de Hub (%s)", exc)
             return self._definitive(kind, secret_hash, Outcome(False, "hub_antwoord_ongeldig"))
         if not self._store_link(kind, secret_hash, hub_url, parsed):
             # §3.7: een koppelcode koppelt alleen een dienst die nog nooit gekoppeld was. Een gelijktijdige poging die
             # intussen slaagde (of een env-token) gaat voor; deze uitgifte van de Hub wordt nooit gebruikt.
-            log.warning("koppelcode-antwoord van de Hub niet opgeslagen: de dienst is intussen al gekoppeld")
             return Outcome(False, "al_gekoppeld")
-        log.info("gekoppeld met de Hub op %s via %s (vingerafdruk %s)", hub_url, kind, parsed["fingerprint"])
+        self._log(
+            kind,
+            logging.INFO,
+            "gekoppeld met de Hub op %s via %s (vingerafdruk %s)",
+            hub_url,
+            kind,
+            parsed["fingerprint"],
+        )
         confirmed = self.confirm()
         return Outcome(
             True,
@@ -365,7 +397,8 @@ class EnrollmentService:
                 "jwt": [make_pin(k, source="enroll", pinned_at=now) for k in parsed["jwt_keys"]],
                 "policy": [make_pin(parsed["policy"], source="enroll", pinned_at=now)],
                 "keyset_fingerprint": parsed["fingerprint"],
-                "rotation_sequence": 0,
+                # §3.3/§4.5 (1.3): beginnen bij de reeks van de Hub (statements met al ingetrokken sleutels overslaan)
+                "rotation_sequence": int(parsed["rotation_sequence"]),
             }
             token = parsed["service_token"]
             new.update(
@@ -381,6 +414,8 @@ class EnrollmentService:
                 pins=pins,
                 pending=None,
                 last_error=None,
+                token_rotation_requested_at=None,
+                key_rotation_blocked_sequence=None,
             )
             if old_pins:
                 new["previous_pins"] = old_pins
@@ -391,7 +426,7 @@ class EnrollmentService:
                 new["used_enrollment_token_sha256"] = used
             return new
 
-        self.store.update(fn)
+        self.store.update(fn, replace_unreadable=kind == "token")
         return stored["ok"]
 
     def _clear_pending(self, doc: dict[str, Any], secret_hash: str) -> bool:
@@ -415,8 +450,8 @@ class EnrollmentService:
                 doc["used_enrollment_token_sha256"] = used
             return doc
 
-        self.store.update(fn)
-        log.warning("koppelen met de Hub definitief mislukt: %s", outcome.code)
+        self.store.update(fn, replace_unreadable=kind == "token")
+        self._log(kind, logging.WARNING, "koppelen met de Hub definitief mislukt: %s", outcome.code)
         return outcome
 
     def _retry(self, kind: str, secret_hash: str, outcome: Outcome) -> Outcome:
@@ -430,8 +465,8 @@ class EnrollmentService:
             doc["last_error"] = error(outcome.code, now)
             return doc
 
-        self.store.update(fn)
-        log.warning("koppelen met de Hub lukte nog niet: %s", outcome.code)
+        self.store.update(fn, replace_unreadable=kind == "token")
+        self._log(kind, logging.WARNING, "koppelen met de Hub lukte nog niet: %s", outcome.code)
         if kind == "koppelcode":
             outcome.retryable = False
         return outcome
@@ -444,7 +479,26 @@ class EnrollmentService:
         )
         if resp.headers.get(ROTATION_HEADER, "").strip().lower() == "required":
             self.rotation_required = True
+            self._note_rotation_request(token)
         return resp
+
+    def _note_rotation_request(self, token: str) -> None:
+        """Een aangevraagde rotatie overleeft een herstart: ``token_rotation_requested_at`` (§3.5/§3.8)."""
+        now = self._iso()
+
+        def fn(doc: dict[str, Any]) -> dict[str, Any] | None:
+            if doc.get("state") != "gekoppeld" or doc.get("service_token") != token:
+                return None
+            if doc.get("token_rotation_requested_at"):
+                return None
+            doc["token_rotation_requested_at"] = now
+            return doc
+
+        self.store.update(fn)
+
+    def rotation_pending(self) -> bool:
+        """Rotatie nodig: gezien in dit proces of eerder vastgelegd in het koppelbestand (ook na een herstart)."""
+        return self.rotation_required or bool(self.store.read_safe().get("token_rotation_requested_at"))
 
     def authed_request(self, method: str, path: str, *, json: Any = None) -> httpx.Response | None:
         """Voor andere modules (events): ``None`` als de dienst niet gekoppeld is. Een 401 → ``check_revoked``."""
@@ -558,7 +612,12 @@ class EnrollmentService:
         def fn(d: dict[str, Any]) -> dict[str, Any] | None:
             if d.get("state") != "gekoppeld" or d.get("service_token") != old:
                 return None
-            d.update(service_token=new, service_token_last4=str(new)[-4:], confirmed_at=None)
+            d.update(
+                service_token=new,
+                service_token_last4=str(new)[-4:],
+                confirmed_at=None,
+                token_rotation_requested_at=None,
+            )
             return d
 
         self.store.update(fn)
@@ -626,8 +685,14 @@ class EnrollmentService:
             if result["applied"] == 0 and result["error"] is None:
                 return None
             doc["pins"] = pins
+            result["rotation_sequence"] = int(pins.get("rotation_sequence") or 0)
             if result["error"] is not None:
                 doc["last_error"] = error("sleutelrotatie_ongeldig", now)
+                # een geweigerde rotatie blijft zichtbaar (extra veld, §3.5): de reeks die niet toegepast kon worden
+                result["blocked_sequence"] = int(pins.get("rotation_sequence") or 0) + 1
+                doc["key_rotation_blocked_sequence"] = result["blocked_sequence"]
+            else:
+                doc["key_rotation_blocked_sequence"] = None
             return doc
 
         self.store.update(fn)
@@ -684,7 +749,7 @@ def _legacy_doc(
             raise InvalidResponse("onvolledig")
         fp = keyset_fingerprint(jwt_keys, policy_jwk)
     except (InvalidResponse, PinError, HubUrlError, AttributeError, TypeError):
-        doc.update(state="ontkoppeld", last_error=error("migratie_onvolledig", str(iso(utcnow()))))
+        doc.update(state="ontkoppeld", last_error=error("overzetten_onvolledig", str(iso(utcnow()))))
         return doc
     at = str(state.get("enrolled_at") or iso(utcnow()))
     doc.update(

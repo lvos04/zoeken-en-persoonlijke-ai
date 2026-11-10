@@ -1,4 +1,4 @@
-"""Hub-simulator volgens platformcontract 1.2 (§3.3–§3.8, §4.2–§4.5). ALLEEN voor tests; geen productiecode.
+"""Hub-simulator volgens platformcontract 1.3 (§3.3–§3.8, §4.2–§4.5, §7). ALLEEN voor tests; geen productiecode.
 
 Eén framework-vrije kern (``HubSim.handle``) die zowel in-proces (``httpx.MockTransport``, integratietests) als in een eigen
 proces (``tests/e2e/sim_hub.py``, dienst-E2E) draait. Gedrag zoals het contract het vastlegt:
@@ -11,7 +11,12 @@ proces (``tests/e2e/sim_hub.py``, dienst-E2E) draait. Gedrag zoals het contract 
 - ``GET /api/v1/services/self``, ``POST /api/v1/services/self/rotate`` (oude tokens tot 10 min na het eerste gebruik van
   het nieuwe, max. 24 uur), ``Hub-Token-Rotation: required`` bij een rotatieverzoek of als een ouder token wordt gebruikt
   terwijl het nieuwste nooit gebruikt is.
-- ``POST /api/v1/events/inbox`` (Bearer service-token, dedupe op ``event_id``).
+- 1.3: het antwoord heeft ``schema_version: "1.3"`` en ``rotation_sequence`` (met ``hub_version="1.2"`` ontbreekt dat
+  veld, zoals bij een oudere Hub); een ``base_url`` die niet aan de regels voldoet wordt ``null`` met een waarschuwing
+  (nooit een weigering); bij opnieuw koppelen vervallen de oude tokens pas bij het eerste gebruik van het nieuwe.
+- ``POST /api/v1/events/inbox`` (Bearer service-token, dedupe op ``event_id``) met de grenzen van §7: onbekende
+  velden, een ``event_type`` zonder precies drie segmenten, een te lange ``entity``/``actor`` of een te grote payload
+  → 422; ``source_app`` ≠ de ``app_id`` van het token → 403 ``source_mismatch``.
 - ``GET /api/v1/auth/key-rotations?after=n`` (zonder authenticatie) en ``GET /api/v1/auth/jwks`` (alleen diagnose).
 """
 
@@ -48,6 +53,23 @@ ROTATION_GRACE_S = 600
 ROTATION_CAP_S = 24 * 3600
 RATE_WINDOW_S = 900
 RATE_MAX_FAILURES = 10
+EVENT_FIELDS = {
+    "schema_version",
+    "event_id",
+    "source_app",
+    "source_event_id",
+    "event_type",
+    "entity",
+    "timestamp_utc",
+    "trace_id",
+    "correlation_id",
+    "actor",
+    "classification",
+    "payload",
+    "payload_ref",
+}
+EVENT_TYPE_RE = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+\.[a-z0-9_]+$")
+ENTITY_TYPE_RE = re.compile(r"^[a-z0-9_.-]{1,64}$")
 
 Response = tuple[int, dict[str, str], Any]
 
@@ -125,6 +147,7 @@ class TokenRec:
     revoked_at: float | None = None
     expires_at: float | None = None
     superseded_at: float | None = None
+    revoke_others_on_first_use: bool = False  # opnieuw koppelen (§3.6, 1.3)
 
 
 @dataclass
@@ -154,6 +177,9 @@ class HubSim:
     issued: list[str] = field(default_factory=list)  # uitgegeven service-tokens (alleen voor tests)
     inbox_status: int = 202
     lose_enroll_response: bool = False  # simuleer: Hub verwerkt het verzoek, het antwoord gaat verloren
+    hub_version: str = "1.3"  # "1.2": geen rotation_sequence in het enroll-antwoord
+    base_url_warnings: list[str] = field(default_factory=list)
+    inbox_rejections: list[dict[str, Any]] = field(default_factory=list)
 
     # ------------------------------------------------------------------ sleutels
     def jwks(self) -> dict[str, Any]:
@@ -313,6 +339,10 @@ class HubSim:
                 return self._rotate(token, rec)
             if method == "POST" and path == "/api/v1/events/inbox":
                 event = json.loads(body)
+                problem = self._inbox_problem(event, self._svc(rec).app_id)
+                if problem is not None:
+                    self.inbox_rejections.append({"event": event, "problem": problem[1]})
+                    return error(problem[0], "source_mismatch" if problem[0] == 403 else "validation_error", problem[1])
                 if any(e["event_id"] == event["event_id"] for e in self.inbox):
                     return 202, hdrs, {"status": "duplicaat"}
                 self.inbox.append(event)
@@ -333,6 +363,10 @@ class HubSim:
         now = self.clock()
         if rec.first_used_at is None:
             rec.first_used_at = now
+            if rec.revoke_others_on_first_use:  # opnieuw koppelen: pas nu de oude tokens intrekken (§3.6, 1.3)
+                for other in self.tokens.values():
+                    if other is not rec and other.service_id == rec.service_id and other.revoked_at is None:
+                        other.revoked_at = now
             # eerste gebruik van het nieuwe token: oudere tokens nog 10 min geldig (binnen de bovengrens van 24 uur)
             for other in self.tokens.values():
                 if other is not rec and other.service_id == rec.service_id and other.superseded_at is not None:
@@ -412,17 +446,22 @@ class HubSim:
             if svc is None:
                 svc = Service(str(uuid.uuid4()), data["app_id"], data["version"], now)
                 self.services[data["app_id"]] = svc
-            else:  # opnieuw koppelen: service_id blijft, alle oude tokens vervallen
-                for rec in self.tokens.values():
-                    if rec.service_id == svc.service_id and rec.revoked_at is None:
-                        rec.revoked_at = now
+            else:  # opnieuw koppelen: service_id blijft; oude tokens vervallen bij het eerste gebruik van het nieuwe
                 svc.enrolled_at, svc.status = now, "active"
         svc.version, svc.rotation_requested = data["version"], False
         token = self._issue(svc)
+        if not replayed and any(
+            r.service_id == svc.service_id and r.revoked_at is None and r is not self.tokens[sha(token)]
+            for r in self.tokens.values()
+        ):
+            self.tokens[sha(token)].revoke_others_on_first_use = True
         grant.token_hash = sha(token)
         self.failures.pop(ip, None)
+        base = data["base_url"]
+        if isinstance(base, str) and (len(base) > 512 or not BASE_URL_RE.fullmatch(base)):
+            self.base_url_warnings.append(base)  # 1.3: nooit weigeren om base_url; bewaren als null + waarschuwing
         body_out = {
-            "schema_version": "1.2",
+            "schema_version": self.hub_version,
             "service_id": svc.service_id,
             "app_id": svc.app_id,
             "service_token": token,
@@ -436,10 +475,41 @@ class HubSim:
             "key_rotation_url": "/api/v1/auth/key-rotations",
             "enrollment_replayed": replayed,
         }
+        if self.hub_version != "1.2":
+            body_out["rotation_sequence"] = max((int(r["sequence"]) for r in self.rotations), default=0)
         if self.lose_enroll_response:
             self.lose_enroll_response = False
             return error(502, "service_unavailable", "antwoord kwijt (simulatie)")
         return 200, {"Cache-Control": "no-store"}, body_out
+
+    @staticmethod
+    def _inbox_problem(event: Any, app_id: str) -> tuple[int, str] | None:
+        """Grenzen van de Hub-inbox (§7, 1.3)."""
+        if not isinstance(event, dict) or set(event) != EVENT_FIELDS:
+            return 422, "onbekende of ontbrekende velden"
+        if event["schema_version"] != "1.0":
+            return 422, "schema_version"
+        et = event["event_type"]
+        if not isinstance(et, str) or len(et) > 128 or not EVENT_TYPE_RE.fullmatch(et):
+            return 422, "event_type"
+        sid = event["source_event_id"]
+        if not isinstance(sid, str) or not 1 <= len(sid) <= 200:
+            return 422, "source_event_id"
+        ent, actor = event["entity"], event["actor"]
+        if not isinstance(ent, dict) or not ENTITY_TYPE_RE.fullmatch(str(ent.get("type"))):
+            return 422, "entity.type"
+        if not isinstance(ent.get("id"), str) or not 1 <= len(ent["id"]) <= 200:
+            return 422, "entity.id"
+        if not isinstance(actor, dict) or not isinstance(actor.get("id"), str) or not 1 <= len(actor["id"]) <= 128:
+            return 422, "actor.id"
+        if len(json.dumps(event["payload"]).encode()) > 16 * 1024:
+            return 422, "payload te groot"
+        ts = event["timestamp_utc"]
+        if not isinstance(ts, str) or not (ts.endswith("Z") or "+" in ts[10:]):
+            return 422, "timestamp_utc zonder tijdzone"
+        if event["source_app"] != app_id:
+            return 403, "source_app wijkt af van het service-token"
+        return None
 
     @staticmethod
     def _schema_problem(data: dict[str, Any]) -> str | None:
@@ -454,8 +524,8 @@ class HubSim:
             return "app_id ongeldig"
         if not isinstance(version, str) or not (1 <= len(version) <= 64) or not VERSION_RE.fullmatch(version):
             return "version ongeldig"
-        if base is not None and (not isinstance(base, str) or len(base) > 512 or not BASE_URL_RE.fullmatch(base)):
-            return "base_url ongeldig"
+        if base is not None and not isinstance(base, str):
+            return "base_url moet string of null zijn"  # alleen een ander type → 422 (§3.3, 1.3)
         tok = data.get("enrollment_token")
         if tok is not None and (not isinstance(tok, str) or not TOKEN_RE.fullmatch(tok)):
             return "enrollment_token ongeldig"

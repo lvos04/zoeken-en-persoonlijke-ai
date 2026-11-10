@@ -229,7 +229,7 @@ def test_invalid_fingerprint_format_blocks_tofu(tmp_path: Path) -> None:
     hub = FakeHub()
     svc = _service(tmp_path, hub, hub_url=HUB_URL, enrollment_token=ENV_TOKEN, hub_key_fingerprint="geen-vingerafdruk")
     out = svc.enroll_with_env_token()
-    assert out is not None and out.code == "ongeldige_vingerafdruk"
+    assert out is not None and out.code == "vingerafdruk_ongeldig"
     assert not hub.all_requests  # er gaat niets naar de Hub
     assert svc.store.read()["used_enrollment_token_sha256"] == []  # na het repareren van de instelling mag het token
 

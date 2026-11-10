@@ -66,7 +66,7 @@ def _bron(naam: str) -> bytes | None:
     sibling = REPO_ROOT.parent / "ai-server-manager"
     git = shutil.which("git")
     if git and (sibling / ".git").exists():
-        r = subprocess.run(  # noqa: S603 - vaste opdracht, geen shell
+        r = subprocess.run(
             [git, "-C", str(sibling), "show", f"{BRON_COMMIT}:docs/platform-v2/{naam}"],
             capture_output=True,
             check=False,

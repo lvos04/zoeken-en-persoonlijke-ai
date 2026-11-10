@@ -77,7 +77,8 @@ def test_allowed_replay_after_lost_answer_and_worker_restart(
 
 @pytest.mark.parametrize(
     ("status", "code"),
-    [(401, "hub_weigerde"), (413, "hub_weigerde"), (422, "hub_weigerde"), (404, "enroll_endpoint_ontbreekt")],
+    # contract 1.3 §3.5: 413/422 van de Hub → hub_incompatibel
+    [(401, "hub_weigerde"), (413, "hub_incompatibel"), (422, "hub_incompatibel"), (404, "enroll_endpoint_ontbreekt")],
 )
 def test_definitive_failures_are_never_retried(
     app_factory: Callable[..., Any], fake_hub: FakeHub, status: int, code: str
@@ -241,7 +242,7 @@ def test_link_confirmed_later_when_hub_drops_after_enroll(app_factory: Callable[
     doc = client.app.state.hub_link.read()
     assert doc["state"] == "gekoppeld" and doc["confirmed_at"] is None
     health = client.get("/connector/v1/health", headers=fake_hub.service()).json()
-    assert {c["name"]: c["status"] for c in health["checks"]}["hub_koppeling"] == "degraded"
+    assert {c["name"]: c["status"] for c in health["checks"]}["hub_link"] == "degraded"  # vaste naam (1.3 §6)
     fake_hub.override = None
     w.state.next_confirm_at = 0
     w.link_step(100.0)
@@ -651,7 +652,7 @@ def test_incomplete_or_unpaired_legacy_never_reopens_the_form(
     _legacy_rows(client, fake_hub, with_policy=False)
     assert migrate_legacy_link(state.hub_link, state.db, state.vault) == "overgezet:ontkoppeld"
     doc = state.hub_link.read()
-    assert doc["last_error"]["code"] == "migratie_onvolledig" and doc["service_token"] is None
+    assert doc["last_error"]["code"] == "overzetten_onvolledig" and doc["service_token"] is None
     assert 'action="/koppelen"' not in client.get("/").text
     other = app_factory(data_dir=tmp_path / "andere-appdata")
     _legacy_rows(other, fake_hub, status="niet_gekoppeld")
