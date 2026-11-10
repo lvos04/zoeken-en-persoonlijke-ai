@@ -6,7 +6,8 @@ als ``SEARCH_AI_REAL_HUB_PYTHON`` (de Python van een venv waarin het pakket ``hu
 
     SEARCH_AI_REAL_HUB_PYTHON=/pad/naar/hub-venv/bin/python pytest -q tests/interop -p no:cacheprovider
 
-Getoetst (contract 1.2): eerste beheerder met de setupcode uit de log; een verkeerde ``HUB_KEY_FINGERPRINT`` slaat
+Getoetst (contract 1.2, en sinds de QA van 1.3 tegen een Hub met contract 1.3: schema 1.3 en ``rotation_sequence`` in
+het koppelbestand, ``service.hub_link.linked`` en ``service.token.rotated`` in de inbox van de echte Hub): eerste beheerder met de setupcode uit de log; een verkeerde ``HUB_KEY_FINGERPRINT`` slaat
 niets op; enrollment-token + ``HUB_KEY_FINGERPRINT`` uit de Hub; de dienst koppelt (§3.3), controleert de vingerafdruk en bevestigt met ``services/self`` (§3.6); gepinde
 sleutels = de JWKS van de Hub (§4.5); gebruikers-JWT van de Hub wordt geaccepteerd, hergebruik van de ``jti`` voor
 een tweede mutatie niet (§4.6); ``key-rotations`` (lege lijst) zonder fout; rotatie op verzoek van de beheerder (§3.8);
@@ -179,6 +180,12 @@ class Lab:
     def link(self) -> dict[str, Any]:
         return dict(json.loads((self.svc_data / "secrets" / "hub-link.json").read_text()))
 
+    def hub_events(self, event_type: str) -> list[dict[str, Any]]:
+        """Events die de echte Hub van deze dienst in zijn inbox heeft (contract 1.3 §7)."""
+        r = self.http.get("/api/v1/events", params={"source_app": APP_ID, "event_type": event_type, "limit": 50})
+        assert r.status_code == 200, r.text
+        return list(r.json()["items"])
+
     def api(self, method: str, path: str, token: str, idem: bool = False) -> httpx.Response:
         headers = {"Authorization": f"Bearer {token}"}
         if idem:
@@ -227,6 +234,11 @@ def test_real_hub_lifecycle(lab: Lab) -> None:
     record = lab.service_record()
     assert record["status"] == "active" and record["id"] == link["service_id"]
     assert any(t["eerst_gebruikt"] for t in record["tokens"])  # services/self bevestigd met het nieuwe token
+    # contract 1.3: het koppelbestand heeft schema 1.3 en rotation_sequence uit het enroll-antwoord (§3.3, §3.5)
+    assert link["schema_version"] == "1.3" and link["pins"]["rotation_sequence"] == 0
+    # §7 (1.3): service.hub_link.linked met entiteit service/<app_id> komt door de inbox van de echte Hub
+    linked = _wait(lambda: lab.hub_events("service.hub_link.linked"))
+    assert linked[0]["entity"] == {"type": "service", "id": APP_ID} and linked[0]["payload"] == {"via": "token"}
 
     # 2. gebruikers-JWT van de Hub; jti-hergebruik voor een tweede mutatie geweigerd (§4.2, §4.6)
     tok = lab.user_jwt()
@@ -251,6 +263,8 @@ def test_real_hub_lifecycle(lab: Lab) -> None:
     assert r.status_code == 202, r.text
     _wait(lambda: (d := lab.link())["service_token_last4"] != old_last4 and d.get("confirmed_at"))
     assert lab.service_record()["rotatie"]["aangevraagd_op"] is None
+    rotated = _wait(lambda: lab.hub_events("service.token.rotated"))  # §7 (1.3): vaste naam, met het nieuwe token
+    assert rotated[0]["entity"] == {"type": "service", "id": APP_ID}
 
     # 5. dienst-JWT van de Hub: hub-link lezen en ontkoppelen; daarna weigert de dienst elke Hub-JWT (§3.8, §4.3)
     assert lab.api("GET", "/connector/v1/hub-link", lab.hub_service_jwt(link["service_id"])).status_code == 200
