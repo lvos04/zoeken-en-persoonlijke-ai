@@ -43,16 +43,22 @@ jobs:
       - name: Mypy
         working-directory: apps/api
         run: mypy
-      - name: Peil-bron op de gepinde commit ophalen (O-14)
+      - name: Peil-bron op de gepinde commit en de werkbranch ophalen (O-14, pinregel E08)
         run: |
           commit="$(sed -n '1s/.* @ \([0-9a-f]\{40\}\) .*/\1/p' design/ontwerptaal/statuspagina.html)"
           test -n "$commit"
-          mkdir -p "$RUNNER_TEMP/peil-bron"
+          raw="https://raw.githubusercontent.com/lvos04/ai-server-manager"
+          mkdir -p "$RUNNER_TEMP/peil-bron" "$RUNNER_TEMP/peil-werkbranch"
           for f in statuspagina.html statuspagina.css; do
-            curl -fsSL --retry 4 --retry-delay 2 -o "$RUNNER_TEMP/peil-bron/$f" \
-              "https://raw.githubusercontent.com/lvos04/ai-server-manager/$commit/design/ontwerptaal/$f"
+            curl -fsSL --retry 4 --retry-delay 2 -o "$RUNNER_TEMP/peil-bron/$f" "$raw/$commit/design/ontwerptaal/$f"
+            curl -fsSL --retry 4 --retry-delay 2 -o "$RUNNER_TEMP/peil-werkbranch/$f" \
+              "$raw/ccr-c133d7a0-kuz1cv/design/ontwerptaal/$f"
           done
+          # referentie-renderer (Peil 1.1.1, E07) op dezelfde commit, voor de byte-vergelijking met de eigen renderer
+          curl -fsSL --retry 4 --retry-delay 2 -o "$RUNNER_TEMP/peil-bron/sjabloon.py" \
+            "$raw/$commit/design/ontwerptaal/bouw/sjabloon.py"
           echo "PEIL_BRON_DIR=$RUNNER_TEMP/peil-bron" >> "$GITHUB_ENV"
+          echo "PEIL_WERKBRANCH_DIR=$RUNNER_TEMP/peil-werkbranch" >> "$GITHUB_ENV"
           echo "PEIL_BRON_VERPLICHT=1" >> "$GITHUB_ENV"
       - name: Drift van de Peil-kopie met de bron (faalt bij drift)
         working-directory: apps/api

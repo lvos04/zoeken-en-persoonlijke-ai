@@ -1,10 +1,13 @@
-"""O-14 / ONTWERPTAAL §14: ``design/ontwerptaal/statuspagina.{html,css}`` is een versie-gepinde kopie van Peil.
+"""O-14 / ONTWERPTAAL §14 (Peil 1.1.1, E08): ``design/ontwerptaal/statuspagina.{html,css}`` is een versie-gepinde kopie.
 
-- De herkomstkop (twee regels) noemt versie 1.1.0, de bron-commit in ``lvos04/ai-server-manager`` en de sha256 van het
+- De herkomstkop (twee regels) noemt versie 1.1.1, de bron-commit in ``lvos04/ai-server-manager`` en de sha256 van het
   bronbestand; de rest van de kopie heeft precies die sha256 (geen handwerk in de kopie).
-- **Drift met de bron:** de inhoud is byte-gelijk aan het bestand in ``ai-server-manager`` op de gepinde commit. CI haalt
-  die bron op (``PEIL_BRON_DIR``) en zet ``PEIL_BRON_VERPLICHT=1``: zonder bron faalt de test dan in plaats van over te
-  slaan. Lokaal wordt de naastgelegen checkout ``../ai-server-manager`` gebruikt (``git show <commit>:<pad>``).
+- **Pin- en driftregel (E08):** CI faalt bij (1) een afwijking van de gepinde inhoud (de kopie ≠ de bron op de gepinde
+  commit) en (2) dezelfde versie met andere inhoud op de werkbranch van de bron. Een **nieuwere** bronversie op de
+  werkbranch geeft alleen een waarschuwing: bijwerken is een bewuste stap, geen rode CI.
+- CI haalt de bron op de gepinde commit op (``PEIL_BRON_DIR``) en de werkbranch (``PEIL_WERKBRANCH_DIR``) en zet
+  ``PEIL_BRON_VERPLICHT=1``: zonder bron faalt de test dan in plaats van over te slaan. Lokaal wordt de naastgelegen
+  checkout ``../ai-server-manager`` gebruikt (``git show <commit>:<pad>`` en ``git show HEAD:<pad>``).
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import os
 import re
 import shutil
 import subprocess
+import warnings
 from pathlib import Path
 
 import pytest
@@ -33,7 +37,7 @@ def _copy(name: str) -> bytes:
 @pytest.mark.parametrize("name", BESTANDEN)
 def test_kopie_heeft_herkomstkop_en_ongewijzigde_inhoud(name: str) -> None:
     prov, body = verify_copy(_copy(name))
-    assert prov.version == PEIL_VERSION == "1.1.0"
+    assert prov.version == PEIL_VERSION == "1.1.1"
     assert prov.repo == BRON_REPO and prov.path == f"design/ontwerptaal/{name}"
     assert hashlib.sha256(body).hexdigest() == prov.sha256
     assert "Versie-gepinde kopie (O-14)" in _copy(name).split(b"\n", 2)[1].decode()
@@ -49,7 +53,7 @@ def test_inline_css_in_het_sjabloon_is_statuspagina_css() -> None:
     _, css_body = split_copy(_copy("statuspagina.css"))
     m = re.search(rb"<style>(/\*!.*?)</style>", html_body, flags=re.S)
     assert m and m.group(1) == css_body.strip()
-    assert b"Peil statuspagina.css 1.1.0" in m.group(1)
+    assert b"Peil statuspagina.css 1.1.1" in m.group(1)
 
 
 @pytest.mark.parametrize("name", BESTANDEN)
@@ -73,14 +77,14 @@ def test_load_template_weigert_gewijzigde_ontbrekende_en_andere_versie(tmp_path:
     with pytest.raises(PeilTemplateError, match="wijkt af"):
         load_template(tmp_path)
     (tmp_path / "statuspagina.html").write_bytes(
-        raw.replace(b"Peil 1.1.0 \xc2\xb7 bron", b"Peil 1.0.0 \xc2\xb7 bron", 1)
+        raw.replace(b"Peil 1.1.1 \xc2\xb7 bron", b"Peil 1.0.0 \xc2\xb7 bron", 1)
     )
     with pytest.raises(PeilTemplateError, match=r"versie 1\.0\.0"):
         load_template(tmp_path)
 
 
-def _bron(name: str, commit: str) -> bytes | None:
-    env = os.environ.get("PEIL_BRON_DIR")
+def _bron(name: str, commit: str, env_var: str = "PEIL_BRON_DIR") -> bytes | None:
+    env = os.environ.get(env_var)
     if env:
         return (Path(env) / name).read_bytes()
     sibling = REPO_ROOT.parent / "ai-server-manager"
@@ -106,3 +110,47 @@ def test_geen_drift_met_de_bron_op_de_gepinde_commit(name: str) -> None:
         pytest.skip("bron (ai-server-manager) niet beschikbaar; CI controleert dit met PEIL_BRON_DIR")
     assert hashlib.sha256(bron).hexdigest() == prov.sha256, f"bron {name} @ {prov.commit[:12]} heeft een andere sha256"
     assert body == bron, f"drift: kopie {name} wijkt af van de bron"
+
+
+BRONVERSIE = {
+    "statuspagina.html": re.compile(rb"<!-- Peil statuspagina-sjabloon (\d+\.\d+\.\d+) \xc2\xb7 "),
+    "statuspagina.css": re.compile(rb"^/\*! Peil statuspagina\.css (\d+\.\d+\.\d+) \xc2\xb7 "),
+}
+
+
+def _versie(name: str, data: bytes) -> tuple[int, ...]:
+    m = BRONVERSIE[name].search(data[:800])
+    assert m, f"{name}: versie van de bron onleesbaar"
+    return tuple(int(x) for x in m.group(1).decode().split("."))
+
+
+@pytest.mark.parametrize("name", BESTANDEN)
+def test_pinregel_ten_opzichte_van_de_werkbranch_van_de_bron(name: str) -> None:
+    """E08: dezelfde versie met andere inhoud op de werkbranch = fout; een nieuwere versie = alleen een waarschuwing."""
+    prov, body = split_copy(_copy(name))
+    bron = _bron(name, "HEAD", env_var="PEIL_WERKBRANCH_DIR")
+    if bron is None:
+        if os.environ.get("PEIL_BRON_VERPLICHT") == "1":
+            pytest.fail(f"werkbranch-bron van {name} niet beschikbaar (PEIL_WERKBRANCH_DIR)")
+        pytest.skip("werkbranch van ai-server-manager niet beschikbaar")
+    eigen, daar = _versie(name, body), _versie(name, bron)
+    assert eigen == tuple(int(x) for x in prov.version.split("."))
+    if daar == eigen:
+        assert hashlib.sha256(bron).hexdigest() == prov.sha256, (
+            f"drift: {name} {prov.version} heeft op de werkbranch andere inhoud dan de gepinde kopie"
+        )
+    elif daar > eigen:
+        warnings.warn(
+            f"Peil {'.'.join(map(str, daar))} staat op de werkbranch; deze kopie pint {prov.version} (bewust bijwerken)",
+            stacklevel=1,
+        )
+    else:
+        pytest.fail(f"de werkbranch heeft een oudere Peil-versie ({daar}) dan de gepinde kopie ({eigen})")
+
+
+def test_pinregel_zelftest_zelfde_versie_andere_inhoud_wordt_herkend() -> None:
+    """Negatief: een bron met dezelfde versie en één byte anders geeft een andere sha256 (de test hierboven faalt)."""
+    prov, body = split_copy(_copy("statuspagina.css"))
+    anders = body.replace(b"--background:#EEF1F5", b"--background:#EEF1F6", 1)
+    assert _versie("statuspagina.css", anders) == _versie("statuspagina.css", body)
+    assert hashlib.sha256(anders).hexdigest() != prov.sha256
