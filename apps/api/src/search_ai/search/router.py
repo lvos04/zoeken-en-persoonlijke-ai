@@ -450,7 +450,10 @@ def reindex(
     responses={
         429: {"description": "rate_limited: te veel zoekopdrachten per gebruiker (met Retry-After)"},
         501: {"description": "capability_unavailable: semantisch/hybride zoeken zonder lokaal model"},
-        503: {"description": "zoeken_tijdslimiet: de zoekopdracht duurde te lang en is afgebroken"},
+        503: {
+            "description": "dependency_unavailable (details.reason zoeken_tijdslimiet): de zoekopdracht duurde te lang "
+            "en is afgebroken (met Retry-After)"
+        },
     },
 )
 def search(

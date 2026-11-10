@@ -2,7 +2,8 @@
 
 - Header ``Idempotency-Key`` (UUID) is verplicht op elke mutatie; ontbreekt hij → 400 ``idempotency_key_required``.
 - Zelfde principal + key + zelfde verzoek → hetzelfde opgeslagen resultaat (header ``Idempotent-Replay: true``),
-  géén tweede uitvoering. Zelfde key met een ánder verzoek → 409 ``idempotency_key_conflict``.
+  géén tweede uitvoering. Zelfde key met een ánder verzoek → 422 ``idempotency_key_reused`` (foutcatalogus, contract
+  1.3 §5).
 - Gelijktijdige dubbele verzoeken: de unieke index in PostgreSQL laat er één winnen; de verliezer draait zijn
   wijzigingen terug en krijgt het resultaat van de winnaar.
 - De verzoek-hash is een HMAC met een sleutel uit de vault. Mislukte verzoeken (fout) worden niet opgeslagen en hebben
@@ -71,8 +72,8 @@ def run_idempotent(
     if existing is not None:
         if existing.request_hash != req_hash:
             raise ApiError(
-                409,
-                "idempotency_key_conflict",
+                422,
+                "idempotency_key_reused",
                 "Deze Idempotency-Key is al gebruikt voor een ander verzoek; gebruik een nieuwe key.",
             )
         return _replay(existing)
@@ -105,9 +106,7 @@ def run_idempotent(
         session.rollback()
         winner = session.get(IdempotencyRecord, pk)
         if winner is None or winner.request_hash != req_hash:
-            raise ApiError(
-                409, "idempotency_key_conflict", "Deze Idempotency-Key is al gebruikt voor een ander verzoek."
-            )
+            raise ApiError(422, "idempotency_key_reused", "Deze Idempotency-Key is al gebruikt voor een ander verzoek.")
         return _replay(winner)
     session.commit()
     return JSONResponse(body_json, status_code=status_code, headers=headers)

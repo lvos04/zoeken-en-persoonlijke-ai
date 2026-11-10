@@ -6,12 +6,14 @@ spraakfunctie ``501 capability_unavailable`` en blijft getypte invoer in de Hub-
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
 
 from .. import VOICE_PREFIX
 from ..errors import capability_unavailable
+from ..idempotency import idempotency_key
 from ..security.auth import Principal, current_principal, require_user_context
 from ..timeutil import iso, utcnow
 
@@ -50,7 +52,9 @@ def status(_p: Principal = Depends(current_principal)) -> dict[str, Any]:
     summary="Sessie starten (volgt in P5)",
     responses={501: {"description": "capability_unavailable"}},
 )
-def start_session(_p: Principal = Depends(require_user_context)) -> None:
+def start_session(_p: Principal = Depends(require_user_context), _key: uuid.UUID = Depends(idempotency_key)) -> None:
+    """Mutatie: ``Idempotency-Key`` verplicht (contract 1.3 §5), pas ná authenticatie en rol (RV9). Er bestaat geen
+    uitzondering voor een 501-route buiten ``connector/v1/propose|apply|rollback``."""
     raise capability_unavailable(
         "voice.session", "Spraak- en chatsessies volgen in fase P5; er wordt nu niets opgenomen of verwerkt."
     )

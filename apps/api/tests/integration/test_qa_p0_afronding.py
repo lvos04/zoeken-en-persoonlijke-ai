@@ -139,7 +139,8 @@ def test_cursor_must_be_a_plain_non_negative_integer(paired_client: Any, auth: A
         ("/connector/v1/items", {"type": "search.source"}),
     ):
         r = paired_client.get(path, params={**params, "cursor": cur}, headers=admin)
-        assert r.status_code == 400 and r.json()["code"] == "invalid_cursor", (path, value, r.text)
+        assert r.status_code == 422 and r.json()["code"] == "validation_error", (path, value, r.text)
+        assert r.json()["details"]["fouten"][0]["veld"] == "cursor"
 
 
 # ------------------------------------------------------------------ onbekend is nooit groen

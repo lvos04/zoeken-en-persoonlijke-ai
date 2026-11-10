@@ -88,11 +88,13 @@ def search(
     except OperationalError as exc:
         session.rollback()
         if isinstance(exc.orig, QueryCanceled):
+            # foutcatalogus (contract 1.3 §5): 503 dependency_unavailable; de eigen situatie staat in details.reason
             raise ApiError(
                 503,
-                "zoeken_tijdslimiet",
+                "dependency_unavailable",
                 "De zoekopdracht duurde te lang en is afgebroken; maak de zoekvraag specifieker.",
-                {"timeout_ms": int(statement_timeout_ms)},
+                {"reason": "zoeken_tijdslimiet", "timeout_ms": int(statement_timeout_ms)},
+                {"Retry-After": "5"},
             ) from exc
         raise
     has_more = len(rows) > limit

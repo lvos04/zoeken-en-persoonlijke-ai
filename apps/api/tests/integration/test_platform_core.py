@@ -111,7 +111,7 @@ def test_idempotency_required_replay_and_conflict(paired_client: Any, auth: Auth
     assert r2.headers["Idempotent-Replay"] == "true"
     assert len(paired_client.get("/search/v1/sources", headers=admin).json()["items"]) == 1
     r3 = paired_client.post("/search/v1/sources", json={**body, "name": "Anders"}, headers=idem(admin, key=key))
-    assert r3.status_code == 409 and r3.json()["code"] == "idempotency_key_conflict"
+    assert r3.status_code == 422 and r3.json()["code"] == "idempotency_key_reused"
 
 
 def test_connector_contract(paired_client: Any, auth: Auth, svc: Auth, shares: Any) -> None:
@@ -182,4 +182,6 @@ def test_voice_capabilities_are_honest(paired_client: Any, auth: Auth) -> None:
     assert set(st["capabilities"].values()) == {"capability_unavailable"}
     assert st["privacy"]["ruwe_audio_opslaan"] is False
     r = paired_client.post("/voice/v1/sessions", headers=auth("viewer"))
+    assert r.status_code == 400 and r.json()["code"] == "idempotency_key_required"  # contract 1.3 §5
+    r = paired_client.post("/voice/v1/sessions", headers=idem(auth("viewer")))
     assert r.status_code == 501

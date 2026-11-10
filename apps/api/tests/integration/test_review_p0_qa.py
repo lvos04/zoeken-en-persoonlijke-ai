@@ -420,7 +420,8 @@ def test_search_rate_limit_and_statement_timeout(
         fulltext.search(
             s, user("u1"), "keuken", source_id=None, kind=None, limit=5, cursor=None, statement_timeout_ms=1
         )
-    assert exc.value.status_code == 503 and exc.value.code == "zoeken_tijdslimiet"
+    assert exc.value.status_code == 503 and exc.value.code == "dependency_unavailable"
+    assert exc.value.details["reason"] == "zoeken_tijdslimiet" and exc.value.headers["Retry-After"] == "5"
 
 
 def test_migration_0002_keeps_valid_rows_and_drops_cross_source_rows() -> None:

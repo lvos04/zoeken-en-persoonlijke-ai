@@ -1017,7 +1017,7 @@
             "description": "capability_unavailable: semantisch/hybride zoeken zonder lokaal model"
           },
           "503": {
-            "description": "zoeken_tijdslimiet: de zoekopdracht duurde te lang en is afgebroken"
+            "description": "dependency_unavailable (details.reason zoeken_tijdslimiet): de zoekopdracht duurde te lang en is afgebroken (met Retry-After)"
           }
         },
         "summary": "Zoeken (full-text; ACL vóór ranking). Semantisch: 501 zonder lokaal model",
@@ -1875,7 +1875,26 @@
     },
     "/voice/v1/sessions": {
       "post": {
+        "description": "Mutatie: ``Idempotency-Key`` verplicht (contract 1.3 §5), pas ná authenticatie en rol (RV9). Er bestaat geen\nuitzondering voor een 501-route buiten ``connector/v1/propose|apply|rollback``.",
         "operationId": "start_session_voice_v1_sessions_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1884,6 +1903,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           },
           "501": {
             "description": "capability_unavailable"

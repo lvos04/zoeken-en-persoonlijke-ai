@@ -11,6 +11,16 @@ from .errors import ApiError
 MAX_LIMIT = 200
 
 
+def invalid_cursor() -> ApiError:
+    """Foutcatalogus (contract 1.3 §5): een ongeldige queryparameter is een schemafout → 422 ``validation_error``."""
+    return ApiError(
+        422,
+        "validation_error",
+        "De cursor is ongeldig; begin opnieuw zonder cursor.",
+        {"fouten": [{"veld": "cursor", "probleem": "ongeldige cursor", "type": "invalid_cursor"}]},
+    )
+
+
 def encode_cursor(value: Any) -> str:
     raw = json.dumps({"k": value}, separators=(",", ":")).encode("utf-8")
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
@@ -24,7 +34,7 @@ def decode_cursor(cursor: str | None) -> Any:
         data = json.loads(base64.urlsafe_b64decode(cursor + pad))
         return data["k"]
     except (ValueError, KeyError, TypeError) as exc:
-        raise ApiError(400, "invalid_cursor", "De cursor is ongeldig; begin opnieuw zonder cursor.") from exc
+        raise invalid_cursor() from exc
 
 
 def decode_int_cursor(cursor: str | None, maximum: int | None = None) -> int:
@@ -37,7 +47,7 @@ def decode_int_cursor(cursor: str | None, maximum: int | None = None) -> int:
     if value is None:
         return 0
     if type(value) is not int or value < 0 or (maximum is not None and value > maximum):
-        raise ApiError(400, "invalid_cursor", "De cursor is ongeldig; begin opnieuw zonder cursor.")
+        raise invalid_cursor()
     return value
 
 
