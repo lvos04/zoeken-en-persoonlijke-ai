@@ -262,9 +262,9 @@
  {
   "id": "C1.3-ZPA-04",
   "status": "Bezig",
-  "validatie": "Sim-getest",
-  "bewijs": "commit 83489a7; apps/api/tests/unit/test_koppelbestand_1_3.py::test_rotation_sequence_uit_het_enroll_antwoord; apps/api/tests/unit/test_koppelbestand_1_3.py::test_hub_1_2_zonder_rotation_sequence_geeft_0; apps/api/tests/unit/test_koppelbestand_1_3.py::test_schrijft_schema_1_3_en_leest_elke_1_x_met_extra_velden; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
-  "blokkade": "De echte Hub stuurt rotation_sequence nog niet (C1.3-ASM-02 open); getest tegen de simulator, die 1.3 volgt.",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit 83489a7; apps/api/tests/unit/test_koppelbestand_1_3.py::test_rotation_sequence_uit_het_enroll_antwoord; apps/api/tests/unit/test_koppelbestand_1_3.py::test_hub_1_2_zonder_rotation_sequence_geeft_0; apps/api/tests/unit/test_koppelbestand_1_3.py::test_schrijft_schema_1_3_en_leest_elke_1_x_met_extra_velden; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db; commit 6f9767b (QA contract 1.3): tests/interop/test_real_hub.py::test_real_hub_lifecycle lokaal tegen de echte Hub-code ai-server-manager@5e21775 (contract 1.3, C1.3-ASM-02): schema_version 1.3 en rotation_sequence 0 uit het enroll-antwoord in hub-link.json (1 geslaagd)",
+  "blokkade": "Getest tegen de simulator (CI) en lokaal tegen de Hub-code met contract 1.3, niet tegen een op een NAS geïnstalleerde Hub: NIET GEVALIDEERD (echte NAS).",
   "opmerking": "",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-10"
@@ -272,10 +272,10 @@
  {
   "id": "C1.3-ZPA-05",
   "status": "Bezig",
-  "validatie": "Sim-getest",
-  "bewijs": "commit fc5d708; apps/api/tests/unit/test_events_1_3.py::test_verboden_event_types; apps/api/tests/unit/test_events_1_3.py::test_service_events_hebben_entiteit_service_en_de_eigen_app_id; apps/api/tests/unit/test_events_1_3.py::test_inboxgrenzen_voor_verzending; apps/api/tests/integration/test_connector_events_1_3.py::test_service_events_komen_ongeweigerd_door_de_inbox; apps/api/tests/integration/test_connector_events_1_3.py::test_ongeldig_event_gaat_niet_over_het_lan_maar_direct_naar_dead_letter; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
-  "blokkade": "De inbox van de echte Hub met domeinen/werkwoorden (C1.3-ASM-09) is nog niet gebouwd; de simulator dwingt de grenzen van §7 af.",
-  "opmerking": "",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit fc5d708; apps/api/tests/unit/test_events_1_3.py::test_verboden_event_types; apps/api/tests/unit/test_events_1_3.py::test_service_events_hebben_entiteit_service_en_de_eigen_app_id; apps/api/tests/unit/test_events_1_3.py::test_inboxgrenzen_voor_verzending; apps/api/tests/integration/test_connector_events_1_3.py::test_service_events_komen_ongeweigerd_door_de_inbox; apps/api/tests/integration/test_connector_events_1_3.py::test_ongeldig_event_gaat_niet_over_het_lan_maar_direct_naar_dead_letter; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db; commit 8704fee (QA contract 1.3, ADR-0017): apps/api/tests/integration/test_qa_contract_1_3.py::test_rotatie_via_de_achtergrondpoll_van_de_api_wordt_vastgelegd; apps/api/tests/integration/test_qa_contract_1_3.py::test_geweigerde_rotatie_wordt_een_keer_gemeld_niet_bij_elke_poll; apps/api/tests/integration/test_qa_contract_1_3.py::test_401_van_de_inbox_door_intrekking_telt_geen_poging; apps/api/tests/integration/test_qa_contract_1_3.py::test_inbox_429_met_retry_after_stopt_de_ronde_en_wacht; commit 6f9767b: tests/interop/test_real_hub.py::test_real_hub_lifecycle (service.hub_link.linked en service.token.rotated met entiteit service/<app_id> in de inbox van de echte Hub-code ai-server-manager@5e21775)",
+  "blokkade": "De inbox met domeinen en werkwoorden (C1.3-ASM-09) is lokaal getest tegen de Hub-code, niet tegen een op een NAS geïnstalleerde Hub: NIET GEVALIDEERD (echte NAS).",
+  "opmerking": "QA contract 1.3: service.key_rotation.applied ook als de achtergrondpoll van de API de rotatie toepast; rejected één keer per geblokkeerde reeks; een 401 die een intrekking blijkt telt geen poging (RV12); na 429/503 met Retry-After niet eerder (§5).",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-10"
  },
@@ -283,7 +283,7 @@
   "id": "C1.3-ZPA-06",
   "status": "Bezig",
   "validatie": "Sim-getest",
-  "bewijs": "commit 83489a7; apps/api/tests/unit/test_koppelbestand_1_3.py::test_onleesbaar_is_fail_closed; apps/api/tests/unit/test_koppelbestand_1_3.py::test_verkeerde_rechten_zijn_onleesbaar_en_worden_direct_opgemerkt; apps/api/tests/unit/test_koppelbestand_1_3.py::test_nieuw_env_token_vervangt_onleesbaar_bestand_vooraf_met_behoud_van_het_origineel; apps/api/tests/unit/test_koppelbestand_1_3.py::test_geweigerd_token_na_vervangen_wordt_na_herstart_niet_opnieuw_geprobeerd; apps/api/tests/unit/test_koppelbestand_1_3.py::test_definitieve_weigering_per_http_status; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
+  "bewijs": "commit 83489a7; apps/api/tests/unit/test_koppelbestand_1_3.py::test_onleesbaar_is_fail_closed; apps/api/tests/unit/test_koppelbestand_1_3.py::test_verkeerde_rechten_zijn_onleesbaar_en_worden_direct_opgemerkt; apps/api/tests/unit/test_koppelbestand_1_3.py::test_nieuw_env_token_vervangt_onleesbaar_bestand_vooraf_met_behoud_van_het_origineel; apps/api/tests/unit/test_koppelbestand_1_3.py::test_geweigerd_token_na_vervangen_wordt_na_herstart_niet_opnieuw_geprobeerd; apps/api/tests/unit/test_koppelbestand_1_3.py::test_definitieve_weigering_per_http_status; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db; commit 8704fee (QA contract 1.3): apps/api/tests/integration/test_qa_contract_1_3.py::test_enroll_503_met_retry_after_wacht_minstens_die_tijd; apps/api/tests/unit/test_hubclient_retry_after.py::test_korte_retry_after_wordt_afgewacht; apps/api/tests/unit/test_hubclient_retry_after.py::test_lange_retry_after_geeft_het_antwoord_direct_terug",
   "blokkade": "",
   "opmerking": "Origineel bewaard als hub-link.json.onleesbaar-<UTC-tijd>; extra velden unreadable_replaced_at, token_rotation_requested_at, key_rotation_blocked_sequence.",
   "repo": "zoeken-en-persoonlijke-ai",
@@ -313,7 +313,7 @@
   "id": "C1.3-ZPA-09",
   "status": "Bezig",
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
-  "bewijs": "commit 385525a; deploy/allinone/smoke-test.sh 58/58 lokaal (Docker, zonder --security-opt/--cap-drop); apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_leegt_de_bounding_set_voor_de_wissel; apps/api/tests/unit/test_deploy_artifacts.py::test_healthcheck_drops_root_first; apps/api/tests/unit/test_deploy_artifacts.py::test_healthcheck_controlevlag_faalt_buiten_568; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
+  "bewijs": "commit 385525a; deploy/allinone/smoke-test.sh 58/58 lokaal (Docker, zonder --security-opt/--cap-drop); apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_leegt_de_bounding_set_voor_de_wissel; apps/api/tests/unit/test_deploy_artifacts.py::test_healthcheck_drops_root_first; apps/api/tests/unit/test_deploy_artifacts.py::test_healthcheck_controlevlag_faalt_buiten_568; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db; commit 699ac92 (QA contract 1.3): apps/api/tests/unit/test_deploy_artifacts.py::test_doelgebruiker_root_via_omgeving_wordt_geweigerd (SEARCH_AI_UID/GID 0 → bewaker stopt met een NL-fout, healthcheck exit 1; ook in de gebouwde image nagegaan); deploy/allinone/smoke-test.sh 58/58 opnieuw na de reparatie",
   "blokkade": "Gedrag van de ix-app op een echte TrueNAS (capabilities, healthcheck als root): NIET GEVALIDEERD (echte NAS).",
   "opmerking": "",
   "repo": "zoeken-en-persoonlijke-ai",
@@ -351,11 +351,11 @@
  },
  {
   "id": "C1.3-ZPA-13",
-  "status": "Niet gestart",
-  "validatie": "Niet getest",
-  "bewijs": "",
-  "blokkade": "Wacht op de validator van appstore-en-fork (C1.3-ASF-08) voor healthcheck.monitor en de kop 'platformcontract 1.3'.",
-  "opmerking": "Al conform: geen HUB_* in parameters of custom_app.env.",
+  "status": "Bezig",
+  "validatie": "Unit-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit d4829c5 (QA contract 1.3, ADR-0017); deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml (kop platformcontract 1.3, healthcheck.monitor /readyz 200/10 s/60 s, licentie GPL-3.0, alleen digest_pending_release met reden in accepted_findings, geen HUB_* in parameters of env); apps/api/tests/unit/test_deploy_artifacts.py::test_manifest_follows_contract_1_3_section_9; apps/api/tests/unit/test_deploy_artifacts.py::test_manifest_strict_geldig_met_de_validator_van_appstore_en_fork (jl-manifest validate --strict met de validator van appstore-en-fork cca4403: 0 fouten; negatief: HUB_URL in env → reserved_env); .github/workflows/ci.yml (validator op een vaste commit, verplicht in CI)",
+  "blokkade": "Installatie via dit manifest op een echte TrueNAS en de monitor in Uptime Kuma: NIET GEVALIDEERD (echte NAS). De digest volgt pas met de eerste release (digest_pending_release, de vertaling blokkeert tot dan).",
+  "opmerking": "Was Niet gestart omdat de validator (C1.3-ASF-08) ontbrak; die is intussen gebouwd (appstore-en-fork 1090fc9). Gebouwd in de QA-ronde van contract 1.3.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-10"
  },
@@ -386,6 +386,16 @@
   "bewijs": "commit 1045860; docs/screenshots/peil/statuspagina/CONTROLE.json; docs/ontwerp/PEIL_REVIEW.md; tests/ui/echte_dienst.mjs (320, 360, 390, 768, 1024, 1440 px × licht/donker; reflow met DejaVu Sans; axe 0); GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
   "blokkade": "Echte schermlezer, telefoon en tv: NIET GEVALIDEERD (hardware).",
   "opmerking": "Ontwerpreview van de statuspagina na Peil 1.1.1 en contract 1.3, tegen de echte dienst met Hub-simulators.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "REVIEW-zoeken-en-persoonlijke-ai-contract-1.3",
+  "status": "Bezig",
+  "validatie": "Unit-getest; Sim-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit 8704fee, d4829c5, 6f9767b, 699ac92, 285b4cc; docs/adr/ADR-0017-qa-contract-1-3.md; docs/TESTRAPPORT.md (QA contract 1.3); apps/api/tests/integration/test_qa_contract_1_3.py::test_sleutelpoll_met_503_en_retry_after_pollt_niet_eerder; apps/api/tests/integration/test_qa_contract_1_3.py::test_401_zonder_intrekking_telt_wel_een_poging; apps/api/tests/unit/test_hubclient_retry_after.py::test_retry_after_als_http_datum_en_onleesbaar; lokaal: cd apps/api && pytest -q 747 geslaagd (0 overgeslagen; validator, Peil- en contractbron verplicht), tests/e2e 7, tests/interop 1 (echte Hub-code 5e21775), statuspagina-ui 192/0 en 208/0, smoke-test.sh 58/58",
+  "blokkade": "Een echte NAS, een geïnstalleerde Hub en echte accounts zijn hier niet beschikbaar: NIET GEVALIDEERD (echte NAS).",
+  "opmerking": "Onafhankelijke QA van de bouwronde contract 1.3 en Peil 1.1.1. Zeven bevindingen (ADR-0017), alle met een test die zonder de reparatie faalt. Kopieën van contract, conformiteitslijst en Peil byte-gelijk met de bron.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-10"
  }
