@@ -440,6 +440,7 @@ Dezelfde machine en dezelfde omgeving als hierboven. **Geen** echte NAS, geen ac
 | image opnieuw gebouwd + `smoke-test.sh` | 58/58 |
 | `docker run -e SEARCH_AI_UID=0 …` (negatief) | de bewaker stopt met "SEARCH_AI_UID en SEARCH_AI_GID mogen nooit 0 (root) zijn"; `healthcheck.py --controle` geeft exit 1 |
 | `make lint`, actionlint, shellcheck, OpenAPI-export, `pip-audit` | geen bevindingen; OpenAPI ongewijzigd; geen bekende kwetsbaarheden |
+| GitHub Actions ci run 42788684178 (commit c5cfba9) | **groen**: python 750 geslaagd (+3 door de nieuwe REVIEW-regel in EVIDENCE), E2E 7, contractdrift 7, Peil-drift 12, manifest `--strict` GELDIG, pip-audit schoon; statuspagina-ui 192/0 en 208/0; image rooktest 58/58 |
 
 **NIET GEVALIDEERD:**
 - de echte NAS (installatie via het manifest, monitor in Uptime Kuma, Host/Origin achter de poortdoorsturing, bron-IP,
