@@ -1,5 +1,6 @@
-"""Contract 1.2 §4.5: thumbprint, sleutelset-vingerafdruk (testvectoren van het contract), normalisatie en
-ondertekende sleutelrotatie (in volgorde, zonder gaten, per doel, nooit de laatste sleutel)."""
+"""Contract 1.3 §4.5: thumbprint, sleutelset-vingerafdruk (testvectoren van het contract, ook over twee
+policy-sleutels), normalisatie en ondertekende sleutelrotatie (in volgorde, zonder gaten, per doel, nooit de laatste
+sleutel)."""
 
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ from search_ai.security.pins import (
 )
 from tests.hubsim import HubSim, fingerprint, hub_jwk
 
-# Testvectoren uit PLATFORM_CONTRACTEN.md 1.2 §4.5 (publieke sleutels; alleen voor tests)
+# Testvectoren uit PLATFORM_CONTRACTEN.md 1.3 §4.5 (publieke sleutels; alleen voor tests)
 X_JWT = "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"  # RFC 8037 A.1
 X_POLICY = "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg"
 X_JWT2 = "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc"
@@ -45,6 +46,34 @@ def test_contract_fingerprint_vectors_and_order_independence() -> None:
     assert keyset_fingerprint([_okp(X_JWT2), _okp(X_JWT)], _okp(X_POLICY)) == "CYRC-JS8C-14AN-JR17"
     # onafhankelijke implementatie in de simulator (andere bit-extractie) geeft hetzelfde
     assert fingerprint([_okp(X_JWT), _okp(X_JWT2)], _okp(X_POLICY)) == "CYRC-JS8C-14AN-JR17"
+
+
+def test_contract_1_3_vector_with_two_policy_keys_in_any_order() -> None:
+    """Nieuw in 1.3: één jwt-sleutel en twee policy-sleutels (A6EH…Mbg én Kay6…bdc) → HN69-2PHK-XV2D-X85W."""
+    for policies in ([_okp(X_POLICY), _okp(X_JWT2)], [_okp(X_JWT2), _okp(X_POLICY)]):
+        assert keyset_fingerprint([_okp(X_JWT)], policies) == "HN69-2PHK-XV2D-X85W"
+        assert fingerprint([_okp(X_JWT)], policies) == "HN69-2PHK-XV2D-X85W"
+    # één policy-sleutel in een lijst = de 1.2-uitkomst
+    assert keyset_fingerprint([_okp(X_JWT)], [_okp(X_POLICY)]) == "MEGG-8GFG-2E4Y-K2RQ"
+    # negatief: alleen de laatst gepinde policy-sleutel (het 1.2-gedrag van deze dienst) geeft iets anders
+    assert keyset_fingerprint([_okp(X_JWT)], _okp(X_JWT2)) != "HN69-2PHK-XV2D-X85W"
+    with pytest.raises(PinError):
+        keyset_fingerprint([_okp(X_JWT)], [])
+
+
+def test_pins_fingerprint_counts_every_pinned_policy_key() -> None:
+    """Na een policy-rotatie met alleen ``add`` (twee policy-sleutels) telt elke gepinde sleutel mee, nooit alleen de
+    laatst gepinde (C1.3-ZPA-03)."""
+    pins = {
+        "jwt": [make_pin({**_okp(X_JWT), "kid": "j1"}, source="enroll", pinned_at="t")],
+        "policy": [
+            make_pin({**_okp(X_JWT2), "kid": "p2"}, source="rotation:1", pinned_at="t"),
+            make_pin({**_okp(X_POLICY), "kid": "p1"}, source="enroll", pinned_at="t"),
+        ],
+    }
+    assert pins_fingerprint(pins) == "HN69-2PHK-XV2D-X85W"
+    pins["policy"].reverse()
+    assert pins_fingerprint(pins) == "HN69-2PHK-XV2D-X85W"
 
 
 def test_fingerprint_normalization() -> None:
@@ -140,6 +169,19 @@ def test_rotation_rejections() -> None:
     with pytest.raises(PinError):
         verify_rotation_statement(f"{head}.{forged_body}.{sig}", pins, 1)
     assert body
+
+
+def test_policy_rotation_with_only_add_changes_fingerprint_over_both_keys() -> None:
+    """Een policy-rotatie die alleen toevoegt: daarna staan er twee policy-sleutels en is de vingerafdruk die over
+    beide (zoals de Hub hem toont), niet over de laatste alleen."""
+    sim = HubSim()
+    pins = _pins(sim)
+    new = Ed25519PrivateKey.generate()
+    stmt = sim.rotation_statement(1, "policy", [hub_jwk(new)], [], sim.policy_key)
+    pins2 = apply_rotation(pins, verify_rotation_statement(stmt, pins, 1), now="t")
+    assert len(pinned_keys(pins2, "policy")) == 2
+    assert pins2["keyset_fingerprint"] == fingerprint(sim.jwks()["keys"], [sim.policy_jwk(), hub_jwk(new)])
+    assert pins2["keyset_fingerprint"] != fingerprint(sim.jwks()["keys"], hub_jwk(new))
 
 
 def test_replace_key_in_one_statement_is_allowed() -> None:

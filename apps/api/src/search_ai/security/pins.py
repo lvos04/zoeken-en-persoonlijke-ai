@@ -1,11 +1,13 @@
-"""Gepinde Hub-sleutels, thumbprint en sleutelset-vingerafdruk (contract 1.2 §4.5).
+"""Gepinde Hub-sleutels, thumbprint en sleutelset-vingerafdruk (contract 1.3 §4.5).
 
 - **Vertrouwensset** = de gepinde sleutels in ``/appdata/secrets/hub-link.json`` (``pins.jwt`` voor JWT's,
   ``pins.policy`` voor ``ExecutionRequest``s). Een via HTTP opgehaalde JWKS voegt **nooit** vertrouwen toe; deze dienst
   haalt de JWKS daarom helemaal niet meer op.
 - **Thumbprint** = RFC 7638 over ``{"crv","kty","x"}``.
-- **Sleutelset-vingerafdruk** = SHA-256 over ``"jl-hub-keyset-v1\\njwt:<thumbprints gesorteerd>\\npolicy:<thumbprint>"``,
-  eerste 80 bit als Crockford-base32, ``XXXX-XXXX-XXXX-XXXX``.
+- **Sleutelset-vingerafdruk** = SHA-256 over
+  ``"jl-hub-keyset-v1\\njwt:<thumbprints gesorteerd>\\npolicy:<thumbprints gesorteerd>"``, eerste 80 bit als
+  Crockford-base32, ``XXXX-XXXX-XXXX-XXXX``. Sinds 1.3 tellen **alle** gepinde policy-sleutels mee (tijdens een
+  policy-rotatie zijn dat er twee); met één policy-sleutel is de uitkomst gelijk aan 1.2.
 - **Rotatie** alleen via een met een op dat moment gepinde sleutel van hetzelfde doel ondertekend statement
   (``GET /api/v1/auth/key-rotations``), in volgorde, zonder gaten; nooit de laatste sleutel van een doel intrekken.
 """
@@ -74,17 +76,29 @@ def _crockford(data: bytes) -> str:
     return "".join(CROCKFORD[int(bits[i : i + 5], 2)] for i in range(0, len(bits), 5))
 
 
-def fingerprint_from_thumbprints(jwt_thumbprints: Iterable[str], policy_thumbprint: str) -> str:
-    thumbs = sorted(jwt_thumbprints, key=lambda t: t.encode("utf-8"))  # gesorteerd op bytewaarde
-    if not thumbs:
+def _sorted_bytes(thumbprints: Iterable[str]) -> list[str]:
+    return sorted(thumbprints, key=lambda t: t.encode("utf-8"))  # gesorteerd op bytewaarde (§4.5)
+
+
+def fingerprint_from_thumbprints(jwt_thumbprints: Iterable[str], policy_thumbprints: Iterable[str]) -> str:
+    """§4.5 (1.3): beide lijsten gesorteerd op bytewaarde; elke gepinde policy-sleutel telt mee."""
+    jwt_list = _sorted_bytes(jwt_thumbprints)
+    policy_list = _sorted_bytes(policy_thumbprints)
+    if not jwt_list:
         raise PinError("minstens één JWT-sleutel nodig")
-    text = f"{KEYSET_PREFIX}\njwt:{','.join(thumbs)}\npolicy:{policy_thumbprint}"
+    if not policy_list:
+        raise PinError("minstens één policy-sleutel nodig")
+    text = f"{KEYSET_PREFIX}\njwt:{','.join(jwt_list)}\npolicy:{','.join(policy_list)}"
     code = _crockford(hashlib.sha256(text.encode("utf-8")).digest()[:10])
     return "-".join(code[i : i + 4] for i in range(0, 16, 4))
 
 
-def keyset_fingerprint(jwt_keys: Iterable[Mapping[str, Any]], policy_key: Mapping[str, Any]) -> str:
-    return fingerprint_from_thumbprints((jwk_thumbprint(k) for k in jwt_keys), jwk_thumbprint(policy_key))
+def keyset_fingerprint(
+    jwt_keys: Iterable[Mapping[str, Any]], policy_keys: Mapping[str, Any] | Iterable[Mapping[str, Any]]
+) -> str:
+    """Vingerafdruk over JWK's. ``policy_keys`` is één JWK (enroll-antwoord) of een lijst (na een policy-rotatie)."""
+    policies = [policy_keys] if isinstance(policy_keys, Mapping) else list(policy_keys)
+    return fingerprint_from_thumbprints((jwk_thumbprint(k) for k in jwt_keys), (jwk_thumbprint(k) for k in policies))
 
 
 def normalize_code(value: str) -> str:
@@ -140,13 +154,14 @@ def make_pin(jwk: Mapping[str, Any], *, source: str, pinned_at: str) -> dict[str
 
 
 def pins_fingerprint(pins: Mapping[str, Any]) -> str:
-    """Vingerafdruk over de gepinde set. Na een policy-rotatie met alleen ``add`` zijn er tijdelijk twee
-    policy-sleutels; het contract definieert de vingerafdruk over één policy-sleutel, dus telt de laatst gepinde
-    (ADR-0011)."""
+    """Vingerafdruk over de **hele** gepinde set (contract 1.3 §4.5): na een policy-rotatie met alleen ``add`` zijn er
+    tijdelijk twee policy-sleutels en tellen ze allebei mee (in 1.2 telde hier de laatst gepinde, ADR-0011)."""
     policy_pins = pins.get("policy") or []
     if not policy_pins:
         raise PinError("geen gepinde policy-sleutel")
-    return fingerprint_from_thumbprints((p["thumbprint"] for p in pins.get("jwt") or []), policy_pins[-1]["thumbprint"])
+    return fingerprint_from_thumbprints(
+        (p["thumbprint"] for p in pins.get("jwt") or []), (p["thumbprint"] for p in policy_pins)
+    )
 
 
 @dataclass(frozen=True)

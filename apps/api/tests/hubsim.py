@@ -78,10 +78,11 @@ def hub_jwk(key: Ed25519PrivateKey) -> dict[str, str]:
     }
 
 
-def fingerprint(jwt_keys: list[dict[str, str]], policy: dict[str, str]) -> str:
-    """Onafhankelijke implementatie van §4.5 (geen code van de dienst)."""
+def fingerprint(jwt_keys: list[dict[str, str]], policy: dict[str, str] | list[dict[str, str]]) -> str:
+    """Onafhankelijke implementatie van §4.5 (1.3: alle policy-sleutels, gesorteerd; geen code van de dienst)."""
     thumbs = sorted(thumbprint_of_x(k["x"]) for k in jwt_keys)
-    text = f"jl-hub-keyset-v1\njwt:{','.join(thumbs)}\npolicy:{thumbprint_of_x(policy['x'])}"
+    policies = sorted(thumbprint_of_x(k["x"]) for k in ([policy] if isinstance(policy, dict) else policy))
+    text = f"jl-hub-keyset-v1\njwt:{','.join(thumbs)}\npolicy:{','.join(policies)}"
     digest = hashlib.sha256(text.encode()).digest()[:10]
     n = int.from_bytes(digest, "big")
     code = "".join(CROCKFORD[(n >> (75 - 5 * i)) & 31] for i in range(16))
