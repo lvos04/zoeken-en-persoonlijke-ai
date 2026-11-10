@@ -22,12 +22,12 @@
  {
   "id": "B07-003",
   "status": "Bezig",
-  "validatie": "Sim-getest",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; apps/api/tests/integration/test_schema_constraints.py::test_vector_roundtrip_and_dimension_check; commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_vector_index_acl_b07_003; apps/api/tests/integration/test_review_p0_qa.py::test_acl_before_ranking_survives_limit_and_pagination; apps/api/tests/integration/test_review_p0_qa.py::test_derived_rows_cannot_cross_sources",
   "blokkade": "Semantisch/hybride zoeken via de API vereist een lokaal embeddingmodel (optionele app, standaard uit) en B07-002; de vectorzoeker is alleen met vaste testvectoren getoetst. NIET GEVALIDEERD (echte NAS).",
   "opmerking": "Reikwijdte validatie: full-text + vectorzoeker met ACL vóór ranking, ook met HNSW-index; semantische API niet beschikbaar. GET /search/v1/search (full-text, GIN-index) met ACL in de WHERE; mode=semantic/hybrid → 501. search/semantic.py: ACL, model, versie en dimensie in de WHERE vóór de cosinusafstand; acceptatie 'B kan niet in privéfile van A zoeken via de vectorindex' Sim-getest (ook met limit=1 en een echte HNSW-index). Fuzzy zoeken, filters type/datum/score en RLS volgen.",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-09"
+  "bijgewerkt": "2026-11-10"
  },
  {
   "id": "B07-004",
@@ -143,11 +143,11 @@
   "id": "I14-14-02",
   "status": "Bezig",
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
-  "bewijs": "commit 4bd082b, ebeeca0; deploy/allinone/smoke-test.sh (pgvector 0.8.7 in de ingebouwde database; alleen-lezen share ongewijzigd); commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); deploy/allinone/smoke-test.sh 32/32 alleen als root (pgvector werkt echt: HNSW-index + KNN via de index; databehoud na herstart, harde kill en nieuwe container); unit/integratie/E2E (87 + 4) geslaagd tegen een PostgreSQL uit de gebouwde image (PG 16.15 + pgvector 0.8.7); commit c60d34a, ef10e18 (P0 afmaken, ADR-0009); GitHub Actions ci run 42619280743 groen (python + image); deploy/allinone/smoke-test.sh 37/37 lokaal als uid 1000 én op de GitHub-runner; apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_refuses_other_run_user_with_clear_dutch_error; commit 72d3714 (QA P0-afronding, ADR-0010); apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_sets_no_new_privs_for_itself_and_children; deploy/allinone/smoke-test.sh 39/39 lokaal als uid 1000 (start zonder --security-opt, elk proces van 568 NoNewPrivs 1); GitHub Actions ci run 42622755067 (commit eb6854c) groen: job python 107 + 4 geslaagd, job image rooktest 39/39 op de GitHub-runner; commit 558c474, f1fb078, 5b74b00 (contract 1.2); deploy/allinone/smoke-test.sh 43/43 lokaal (elk proces ook PID 1: Uid 568, CapEff 0, NoNewPrivs 1; PID 1 = bewaker; zombies opgeruimd; nette stop op SIGTERM); GitHub Actions ci run 42638210849 (commit 2f79922): python 258 + 7 geslaagd, image rooktest 43/43",
-  "blokkade": "Niet op TrueNAS geïnstalleerd; GHCR-release/digest nog niet uitgebracht.",
+  "bewijs": "commit 4bd082b, ebeeca0; deploy/allinone/smoke-test.sh (pgvector 0.8.7 in de ingebouwde database; alleen-lezen share ongewijzigd); commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); deploy/allinone/smoke-test.sh 32/32 alleen als root (pgvector werkt echt: HNSW-index + KNN via de index; databehoud na herstart, harde kill en nieuwe container); unit/integratie/E2E (87 + 4) geslaagd tegen een PostgreSQL uit de gebouwde image (PG 16.15 + pgvector 0.8.7); commit c60d34a, ef10e18 (P0 afmaken, ADR-0009); GitHub Actions ci run 42619280743 groen (python + image); deploy/allinone/smoke-test.sh 37/37 lokaal als uid 1000 én op de GitHub-runner; apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_refuses_other_run_user_with_clear_dutch_error; commit 72d3714 (QA P0-afronding, ADR-0010); apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_sets_no_new_privs_for_itself_and_children; deploy/allinone/smoke-test.sh 39/39 lokaal als uid 1000 (start zonder --security-opt, elk proces van 568 NoNewPrivs 1); GitHub Actions ci run 42622755067 (commit eb6854c) groen: job python 107 + 4 geslaagd, job image rooktest 39/39 op de GitHub-runner; commit 558c474, f1fb078, 5b74b00 (contract 1.2); deploy/allinone/smoke-test.sh 43/43 lokaal (elk proces ook PID 1: Uid 568, CapEff 0, NoNewPrivs 1; PID 1 = bewaker; zombies opgeruimd; nette stop op SIGTERM); GitHub Actions ci run 42638210849 (commit 2f79922): python 258 + 7 geslaagd, image rooktest 43/43; contract 1.3 (ADR-0016, commit 385525a): deploy/allinone/smoke-test.sh 58/58 lokaal (Docker op de ontwikkelmachine): elk proces ook PID 1 Uid 568, CapEff/CapPrm/CapAmb 0, CapBnd 0 bij een root-start, NoNewPrivs 1; healthcheck apart met --controle; ook als Custom User 568; apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_leegt_de_bounding_set_voor_de_wissel",
+  "blokkade": "Niet op TrueNAS geïnstalleerd; GHCR-release/digest nog niet uitgebracht. NIET GEVALIDEERD (echte NAS).",
   "opmerking": "Officiële image pgvector/pgvector:0.8.7-pg16-bookworm@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f; CREATE EXTENSION vector in migratie 0001. P0 afmaken: CI-job 'image' was rood doordat de rooktest /appdata/secrets (bewust 0700/568) als niet-root host-gebruiker las; nu via een alleen-lezen wegwerpcontainer. Bewaker geeft een NL-fout bij een andere run-gebruiker dan root/568 (Custom User). QA P0-afronding: zonder --security-opt (het TrueNAS-formulier kan die vlag niet zetten) draaiden alle processen met NoNewPrivs 0; de bewaker zet nu zelf PR_SET_NO_NEW_PRIVS en de rooktest start zoals het formulier. Contract 1.2: geen root-PID 1 meer (dumb-init verwijderd; de bewaker is PID 1 en wisselt zelf naar 568); de Docker-healthcheck zakt als eerste naar 568. Manifest volgens §9 zonder custom_app.ports/joins_platform_network, lokaal geldig volgens de validator van appstore-en-fork 837fa61 (in --strict alleen nog digest_pending_release, want er is in deze ronde bewust geen release). Of het TrueNAS-formulier een tag met @sha256 accepteert: NIET GEVALIDEERD (echte NAS).",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-09"
+  "bijgewerkt": "2026-11-10"
  },
  {
   "id": "I14-14-03",
@@ -203,11 +203,11 @@
   "id": "EX16",
   "status": "Bezig",
   "validatie": "Sim-geslaagd",
-  "bewijs": "commit e8adee6; commit 561fba1 (QA P0-afronding, ADR-0010); commit 558c474, f1fb078, 5b74b00 (contract 1.2); apps/api/tests/integration/test_contract_1_2.py::test_revocation_detected_only_when_services_self_also_401; apps/api/tests/integration/test_contract_1_2.py::test_unlink_by_hub_then_every_hub_jwt_refused; apps/api/tests/integration/test_qa_p0_afronding.py::test_hub_without_keys_in_enroll_answer_is_never_trusted; apps/api/tests/unit/test_security.py::test_state_checked_first; apps/api/tests/unit/test_security.py::test_service_token_never_accepted_inbound; tests/e2e/test_service_e2e.py::test_06_hub_outage_is_never_a_revocation; tests/e2e/test_service_e2e.py::test_07_revocation_is_fail_closed; GitHub Actions ci run 42638210849 (commit 2f79922): python 258 + 7 geslaagd, image rooktest 43/43; QA contract 1.2 (ADR-0012): apps/api/tests/integration/test_qa_contract_1_2.py::test_unreadable_body_without_valid_auth_is_401_not_422; apps/api/tests/integration/test_qa_contract_1_2.py::test_swapped_hub_key_is_never_trusted_without_rotation_or_relink; apps/api/tests/integration/test_qa_contract_1_2.py::test_no_pairing_on_the_status_page_after_revocation; tests/interop/test_real_hub.py::test_real_hub_lifecycle (lokaal tegen de echte Hub-code ai-server-manager be7d593, niet in CI); GitHub Actions ci run 42644401633 (commit 27eb591, QA contract 1.2): python 284 + 7 geslaagd, image rooktest 52/52; statuspagina in Peil (ADR-0013): commit 140b241, 5f2a712, 1bd1a9c, 0172925, ba3fba4; apps/api/tests/unit/test_statuspagina_peil.py::test_ingetrokken; apps/api/tests/unit/test_statuspagina_peil.py::test_niet_gekoppeld_is_nooit_groen; apps/api/tests/unit/test_statuspagina_peil.py::test_koppelformulier_alleen_als_nooit_gekoppeld; apps/api/tests/integration/test_qa_contract_1_2.py::test_no_pairing_on_the_status_page_after_revocation; tests/ui/statuspagina.mjs (axe-core 4.14.0: 0 overtredingen, geen overloop op 320 px; ook toestand ingetrokken); GitHub Actions ci run 42654438103 (commit 9e812dc) groen: python 360 + 7 geslaagd (8 overgeslagen: referentie-renderer alleen lokaal), statuspagina-ui 80 controles 0 mislukt, image rooktest 55/55; ontwerpreview statuspagina (ADR-0014, docs/ontwerp/PEIL_REVIEW.md): commit 303e7e3, 6216b35, 8c145cd, 6257354; tests/ui/echte_dienst.py + echte_dienst.mjs (echte dienst + Hub-simulator: toestand ingetrokken bereikt via /sim/revoke, 132 controles 0 mislukt); apps/api/tests/unit/test_statuspagina_peil.py::test_review_gereed_noemt_de_echte_reden; docs/screenshots/peil/statuspagina/CONTROLE.json; GitHub Actions ci run 42663920380 (commit 6f317e9) groen: python 382 geslaagd + 9 overgeslagen en E2E 7, statuspagina-ui renderer 90/0 en echte dienst 132/0, image rooktest 55/55; QA statuspagina (ADR-0015): commit ad4cb86, 776eb74, 036b527; apps/api/tests/integration/test_statuspagina_peil_http.py::test_qa_foutmelding_uit_een_zelfgemaakte_link_verschijnt_niet; apps/api/tests/integration/test_statuspagina_peil_http.py::test_qa_formulier_van_een_andere_app_op_hetzelfde_nas_adres_wordt_geweigerd; apps/api/tests/integration/test_statuspagina_peil_http.py::test_qa_poging_op_een_onleesbaar_koppelbestand; apps/api/tests/unit/test_statuspagina_peil.py::test_qa_toelichting_bij_niet_gereed_volgt_de_toon; lokaal: pytest 414 geslaagd, E2E 7, make ui 100/0, echte dienst 132/0, image-rooktest 55/55; GitHub Actions ci run 42669242728 (commit 1ceeb3e) groen: python 404 geslaagd + 10 overgeslagen (referentie-renderer alleen lokaal) en E2E 7, statuspagina-ui renderer 100/0 en echte dienst 132/0, image rooktest 55/55",
+  "bewijs": "commit e8adee6; commit 561fba1 (QA P0-afronding, ADR-0010); commit 558c474, f1fb078, 5b74b00 (contract 1.2); apps/api/tests/integration/test_contract_1_2.py::test_revocation_detected_only_when_services_self_also_401; apps/api/tests/integration/test_contract_1_2.py::test_unlink_by_hub_then_every_hub_jwt_refused; apps/api/tests/integration/test_qa_p0_afronding.py::test_hub_without_keys_in_enroll_answer_is_never_trusted; apps/api/tests/unit/test_security.py::test_state_checked_first; apps/api/tests/unit/test_security.py::test_service_token_never_accepted_inbound; tests/e2e/test_service_e2e.py::test_06_hub_outage_is_never_a_revocation; tests/e2e/test_service_e2e.py::test_07_revocation_is_fail_closed; GitHub Actions ci run 42638210849 (commit 2f79922): python 258 + 7 geslaagd, image rooktest 43/43; QA contract 1.2 (ADR-0012): apps/api/tests/integration/test_qa_contract_1_2.py::test_unreadable_body_without_valid_auth_is_401_not_422; apps/api/tests/integration/test_qa_contract_1_2.py::test_swapped_hub_key_is_never_trusted_without_rotation_or_relink; apps/api/tests/integration/test_qa_contract_1_2.py::test_no_pairing_on_the_status_page_after_revocation; tests/interop/test_real_hub.py::test_real_hub_lifecycle (lokaal tegen de echte Hub-code ai-server-manager be7d593, niet in CI); GitHub Actions ci run 42644401633 (commit 27eb591, QA contract 1.2): python 284 + 7 geslaagd, image rooktest 52/52; statuspagina in Peil (ADR-0013): commit 140b241, 5f2a712, 1bd1a9c, 0172925, ba3fba4; apps/api/tests/unit/test_statuspagina_peil.py::test_ingetrokken; apps/api/tests/unit/test_statuspagina_peil.py::test_niet_gekoppeld_is_nooit_groen; apps/api/tests/unit/test_statuspagina_peil.py::test_koppelformulier_alleen_als_nooit_gekoppeld; apps/api/tests/integration/test_qa_contract_1_2.py::test_no_pairing_on_the_status_page_after_revocation; tests/ui/statuspagina.mjs (axe-core 4.14.0: 0 overtredingen, geen overloop op 320 px; ook toestand ingetrokken); GitHub Actions ci run 42654438103 (commit 9e812dc) groen: python 360 + 7 geslaagd (8 overgeslagen: referentie-renderer alleen lokaal), statuspagina-ui 80 controles 0 mislukt, image rooktest 55/55; ontwerpreview statuspagina (ADR-0014, docs/ontwerp/PEIL_REVIEW.md): commit 303e7e3, 6216b35, 8c145cd, 6257354; tests/ui/echte_dienst.py + echte_dienst.mjs (echte dienst + Hub-simulator: toestand ingetrokken bereikt via /sim/revoke, 132 controles 0 mislukt); apps/api/tests/unit/test_statuspagina_peil.py::test_review_gereed_noemt_de_echte_reden; docs/screenshots/peil/statuspagina/CONTROLE.json; GitHub Actions ci run 42663920380 (commit 6f317e9) groen: python 382 geslaagd + 9 overgeslagen en E2E 7, statuspagina-ui renderer 90/0 en echte dienst 132/0, image rooktest 55/55; QA statuspagina (ADR-0015): commit ad4cb86, 776eb74, 036b527; apps/api/tests/integration/test_statuspagina_peil_http.py::test_melding_uit_de_url_doet_niets; apps/api/tests/integration/test_statuspagina_peil_http.py::test_geweigerde_herkomst_is_403_gaat_niet_naar_de_hub_en_telt_niet; apps/api/tests/integration/test_statuspagina_peil_http.py::test_poging_op_een_onleesbaar_koppelbestand_409_en_niets_vervangen; apps/api/tests/unit/test_statuspagina_peil.py::test_qa_toelichting_bij_niet_gereed_volgt_de_toon; lokaal: pytest 414 geslaagd, E2E 7, make ui 100/0, echte dienst 132/0, image-rooktest 55/55; GitHub Actions ci run 42669242728 (commit 1ceeb3e) groen: python 404 geslaagd + 10 overgeslagen (referentie-renderer alleen lokaal) en E2E 7, statuspagina-ui renderer 100/0 en echte dienst 132/0, image rooktest 55/55; contract 1.3 en Peil 1.1.1 (ADR-0016): commit 0306c98, 386cae7, 83489a7, d31c9b7, fc5d708, 16107c3, f821031, 1045860, 385525a (contract 1.3, ADR-0016); apps/api/tests/integration/test_jwt_1_3.py::test_aud_als_lijst_is_invalid_token_ook_met_de_eigen_app_id; apps/api/tests/integration/test_jwt_1_3.py::test_elke_post_verbruikt_de_jti_ook_zonder_idempotency_key_en_bij_501; apps/api/tests/unit/test_koppelbestand_1_3.py::test_onleesbaar_is_fail_closed; apps/api/tests/integration/test_statuspagina_peil_http.py::test_koppelen_bezig_is_409_en_gaat_niet_naar_de_hub; lokaal: pytest 653 geslaagd, E2E 7, renderer-UI 192 controles 0 mislukt, echte dienst 208 controles 0 mislukt (16 toestanden, negatieve herkomsttests in Chromium), image-rooktest 58/58",
   "blokkade": "Echte run op de NAS vereist.",
-  "opmerking": "Reikwijdte validatie: deel zoeken-en-persoonlijke-ai. Contract 1.2: een ingetrokken koppeling (de Hub geeft 401 op een aanroep én op GET /api/v1/services/self) zet state 'ingetrokken'; daarna geeft elke Hub-JWT 401 met reason 'revoked' (fail-closed, nooit open toegang), eigen data blijft, één audit-regel + incident-event service.hub_link.revoked. Netwerkfouten, 5xx en 429 zijn nooit een intrekking; een Hub die tijdelijk weg is verandert niets aan de gepinde sleutels. Niet gekoppeld/ontkoppeld → 401 'not_linked'. De JWKS-cache (1.1) is vervangen door pinning: er wordt nooit meer een JWKS opgehaald. QA contract 1.2 (ADR-0012): ook een onleesbare body zonder geldige authenticatie geeft 401 (was 422/400); een gewisselde Hub-sleutel wordt zonder ondertekende rotatie of geslaagde nieuwe koppeling nooit vertrouwd, en herkoppelen met de oude vingerafdruk slaat niets op; na intrekking kan de statuspagina niet opnieuw koppelen. Lokaal ook tegen de echte Hub-code (ai-server-manager be7d593, eigen venv en database) doorlopen: koppelen, rotatie, ontkoppelen met een dienst-JWT en intrekken door de Hub → 401 revoked; geen echte NAS. Statuspagina in Peil (ADR-0013): na intrekking toont GET / de pil 'Ingetrokken' (onbekend, nooit groen), totaal 'Niet gereed' en 'opnieuw koppelen gaat via de Hub', zonder koppelformulier; schermafdrukken in docs/screenshots/peil/statuspagina/ (fictieve simulatorgegevens). Ontwerpreview (ADR-0014): de Hub trekt in de simulator de koppeling in, de worker merkt het bij de volgende controle en GET / toont 'Ingetrokken' (onbekend, nooit groen) met Gereed 'Nee — de Hub heeft de koppeling ingetrokken'; axe 0, tekst ≥ 7:1 op 320–1440 px licht/donker (fictieve simulatorgegevens). QA statuspagina (ADR-0015): na intrekking of ontkoppelen kan een zelfgemaakte link (?melding=…) de pagina niets meer laten beweren; een foutmelding verschijnt alleen bij een echte poging met haar Trace-ID. Een formulier van een andere app op hetzelfde NAS-adres (Sec-Fetch-Site same-site) wordt geweigerd; met vastgelopen gebeurtenissen toont de pagina 'Niet gereed' met toon en toelichting 'Beperkt', nooit groen.",
+  "opmerking": "Reikwijdte validatie: deel zoeken-en-persoonlijke-ai. Contract 1.2: een ingetrokken koppeling (de Hub geeft 401 op een aanroep én op GET /api/v1/services/self) zet state 'ingetrokken'; daarna geeft elke Hub-JWT 401 met reason 'revoked' (fail-closed, nooit open toegang), eigen data blijft, één audit-regel + incident-event service.hub_link.revoked. Netwerkfouten, 5xx en 429 zijn nooit een intrekking; een Hub die tijdelijk weg is verandert niets aan de gepinde sleutels. Niet gekoppeld/ontkoppeld → 401 'not_linked'. De JWKS-cache (1.1) is vervangen door pinning: er wordt nooit meer een JWKS opgehaald. QA contract 1.2 (ADR-0012): ook een onleesbare body zonder geldige authenticatie geeft 401 (was 422/400); een gewisselde Hub-sleutel wordt zonder ondertekende rotatie of geslaagde nieuwe koppeling nooit vertrouwd, en herkoppelen met de oude vingerafdruk slaat niets op; na intrekking kan de statuspagina niet opnieuw koppelen. Lokaal ook tegen de echte Hub-code (ai-server-manager be7d593, eigen venv en database) doorlopen: koppelen, rotatie, ontkoppelen met een dienst-JWT en intrekken door de Hub → 401 revoked; geen echte NAS. Statuspagina in Peil (ADR-0013): na intrekking toont GET / de pil 'Ingetrokken' (onbekend, nooit groen), totaal 'Niet gereed' en 'opnieuw koppelen gaat via de Hub', zonder koppelformulier; schermafdrukken in docs/screenshots/peil/statuspagina/ (fictieve simulatorgegevens). Ontwerpreview (ADR-0014): de Hub trekt in de simulator de koppeling in, de worker merkt het bij de volgende controle en GET / toont 'Ingetrokken' (onbekend, nooit groen) met Gereed 'Nee — de Hub heeft de koppeling ingetrokken'; axe 0, tekst ≥ 7:1 op 320–1440 px licht/donker (fictieve simulatorgegevens). QA statuspagina (ADR-0015): na intrekking of ontkoppelen kan een zelfgemaakte link (?melding=…) de pagina niets meer laten beweren; een foutmelding verschijnt alleen bij een echte poging met haar Trace-ID. Een formulier van een andere app op hetzelfde NAS-adres (Sec-Fetch-Site same-site) wordt geweigerd; met vastgelopen gebeurtenissen toont de pagina 'Niet gereed' met toon en toelichting 'Beperkt', nooit groen. Contract 1.3 (ADR-0016): na intrekking of ontkoppelen geeft elke Hub-JWT 401 (revoked/not_linked), ook met aud als lijst of zonder kid; een POST op de statuspagina krijgt de melding met de echte HTTP-status (409 al_gekoppeld, nooit een nieuwe koppeling); 'Gereed' vraagt de bevestiging door de Hub. Een onleesbaar koppelbestand (ook een verkeerde eigenaar of rechten) blijft fail-closed.",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-09"
+  "bijgewerkt": "2026-11-10"
  },
  {
   "id": "EX36",
@@ -228,5 +228,165 @@
   "opmerking": "Reikwijdte validatie: deel zoeken-en-persoonlijke-ai: visibility=owner in index en vectorindex. Een document met visibility=owner is alleen voor zijn eigenaar vindbaar, ook via de vectorindex en ook als de zoeker leesrecht op de bron heeft.",
   "repo": "zoeken-en-persoonlijke-ai",
   "bijgewerkt": "2026-11-09"
+ },
+ {
+  "id": "C1.3-ZPA-01",
+  "status": "Bezig",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit 1045860; apps/api/tests/integration/test_statuspagina_peil_http.py::test_get_is_peil_1_1_1_zonder_js_met_strikte_kopregels; apps/api/tests/integration/test_statuspagina_peil_http.py::test_geweigerde_herkomst_is_403_gaat_niet_naar_de_hub_en_telt_niet; apps/api/tests/unit/test_statuspagina_peil.py::test_host_beperking; tests/ui/echte_dienst.mjs (Chromium: same-site, cross-site, sandbox met Origin null, domeinnaam als Host, geen cookie → 403, niets naar de Hub)",
+  "blokkade": "Of TrueNAS de Host- en Origin-koppen ongewijzigd doorgeeft achter de poortdoorsturing: NIET GEVALIDEERD (echte NAS).",
+  "opmerking": "Referrer-Policy same-origin; Origin exact <schema>://<Host> (ontbreekt/null → 403); Sec-Fetch-Site same-site/cross-site → 403; Host-beperking (403 host_niet_toegestaan).",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-02",
+  "status": "Bezig",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit 1045860; apps/api/tests/integration/test_statuspagina_peil_http.py::test_melding_uit_de_url_doet_niets; apps/api/tests/integration/test_statuspagina_peil_http.py::test_elke_post_na_de_herkomst_telt_ook_ongeldige_invoer; apps/api/tests/integration/test_statuspagina_peil_http.py::test_al_gekoppeld_is_409_en_telt_mee; apps/api/tests/integration/test_statuspagina_peil_http.py::test_koppelen_bezig_is_409_en_gaat_niet_naar_de_hub; apps/api/tests/integration/test_statuspagina_peil_http.py::test_te_lange_of_ongeldige_invoer_is_422_en_nooit_afgekapt; apps/api/tests/integration/test_statuspagina_peil_http.py::test_een_logregel_per_poging_zonder_hub_adres",
+  "blokkade": "Welk bron-IP-adres de dienst achter de poortdoorsturing van TrueNAS ziet (limiet per IP): NIET GEVALIDEERD (echte NAS).",
+  "opmerking": "De POST krijgt direct de pagina met de melding en de HTTP-status (ADR-0016 besluit 2); geen ?melding= meer.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-03",
+  "status": "Bezig",
+  "validatie": "Unit-getest",
+  "bewijs": "commit 386cae7; apps/api/tests/unit/test_pins.py::test_contract_1_3_vector_with_two_policy_keys_in_any_order; apps/api/tests/unit/test_pins.py::test_pins_fingerprint_counts_every_pinned_policy_key; apps/api/tests/unit/test_pins.py::test_policy_rotation_with_only_add_changes_fingerprint_over_both_keys",
+  "blokkade": "",
+  "opmerking": "Testvector HN69-2PHK-XV2D-X85W; de 1.2-vectoren blijven gelijk; de simulator rekent onafhankelijk mee.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-04",
+  "status": "Bezig",
+  "validatie": "Sim-getest",
+  "bewijs": "commit 83489a7; apps/api/tests/unit/test_koppelbestand_1_3.py::test_rotation_sequence_uit_het_enroll_antwoord; apps/api/tests/unit/test_koppelbestand_1_3.py::test_hub_1_2_zonder_rotation_sequence_geeft_0; apps/api/tests/unit/test_koppelbestand_1_3.py::test_schrijft_schema_1_3_en_leest_elke_1_x_met_extra_velden",
+  "blokkade": "De echte Hub stuurt rotation_sequence nog niet (C1.3-ASM-02 open); getest tegen de simulator, die 1.3 volgt.",
+  "opmerking": "",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-05",
+  "status": "Bezig",
+  "validatie": "Sim-getest",
+  "bewijs": "commit fc5d708; apps/api/tests/unit/test_events_1_3.py::test_verboden_event_types; apps/api/tests/unit/test_events_1_3.py::test_service_events_hebben_entiteit_service_en_de_eigen_app_id; apps/api/tests/unit/test_events_1_3.py::test_inboxgrenzen_voor_verzending; apps/api/tests/integration/test_connector_events_1_3.py::test_service_events_komen_ongeweigerd_door_de_inbox; apps/api/tests/integration/test_connector_events_1_3.py::test_ongeldig_event_gaat_niet_over_het_lan_maar_direct_naar_dead_letter",
+  "blokkade": "De inbox van de echte Hub met domeinen/werkwoorden (C1.3-ASM-09) is nog niet gebouwd; de simulator dwingt de grenzen van §7 af.",
+  "opmerking": "",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-06",
+  "status": "Bezig",
+  "validatie": "Sim-getest",
+  "bewijs": "commit 83489a7; apps/api/tests/unit/test_koppelbestand_1_3.py::test_onleesbaar_is_fail_closed; apps/api/tests/unit/test_koppelbestand_1_3.py::test_verkeerde_rechten_zijn_onleesbaar_en_worden_direct_opgemerkt; apps/api/tests/unit/test_koppelbestand_1_3.py::test_nieuw_env_token_vervangt_onleesbaar_bestand_vooraf_met_behoud_van_het_origineel; apps/api/tests/unit/test_koppelbestand_1_3.py::test_geweigerd_token_na_vervangen_wordt_na_herstart_niet_opnieuw_geprobeerd; apps/api/tests/unit/test_koppelbestand_1_3.py::test_definitieve_weigering_per_http_status",
+  "blokkade": "",
+  "opmerking": "Origineel bewaard als hub-link.json.onleesbaar-<UTC-tijd>; extra velden unreadable_replaced_at, token_rotation_requested_at, key_rotation_blocked_sequence.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-07",
+  "status": "Bezig",
+  "validatie": "Sim-getest",
+  "bewijs": "commit d31c9b7; apps/api/tests/integration/test_jwt_1_3.py::test_aud_als_lijst_is_invalid_token_ook_met_de_eigen_app_id; apps/api/tests/integration/test_jwt_1_3.py::test_jws_zonder_kid_is_unknown_key; apps/api/tests/integration/test_jwt_1_3.py::test_onleesbare_body_verbruikt_de_jti_en_geeft_met_geldige_auth_422; apps/api/tests/integration/test_jwt_1_3.py::test_rol_en_idempotency_key_pas_na_de_authenticatie",
+  "blokkade": "",
+  "opmerking": "",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-08",
+  "status": "Bezig",
+  "validatie": "Unit-getest; Sim-getest",
+  "bewijs": "commit 83489a7; apps/api/tests/unit/test_adressen_1_3.py::test_niet_canonieke_of_ongeldige_hosts_worden_geweigerd; apps/api/tests/unit/test_adressen_1_3.py::test_base_url_alleen_als_hij_geldig_is; apps/api/tests/unit/test_adressen_1_3.py::test_naam_die_naar_een_verboden_adres_wijst_wordt_niet_verbonden; apps/api/tests/unit/test_koppelbestand_1_3.py::test_base_url_alleen_als_hij_geldig_is",
+  "blokkade": "",
+  "opmerking": "GuardedBackend lost bij elke verbinding zelf op en verbindt alleen met een gecontroleerd adres.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-09",
+  "status": "Bezig",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
+  "bewijs": "commit 385525a; deploy/allinone/smoke-test.sh 58/58 lokaal (Docker, zonder --security-opt/--cap-drop); apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_leegt_de_bounding_set_voor_de_wissel; apps/api/tests/unit/test_deploy_artifacts.py::test_healthcheck_drops_root_first; apps/api/tests/unit/test_deploy_artifacts.py::test_healthcheck_controlevlag_faalt_buiten_568",
+  "blokkade": "Gedrag van de ix-app op een echte TrueNAS (capabilities, healthcheck als root): NIET GEVALIDEERD (echte NAS).",
+  "opmerking": "",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-10",
+  "status": "Bezig",
+  "validatie": "Sim-getest",
+  "bewijs": "commit fc5d708, 1045860; apps/api/tests/integration/test_connector_events_1_3.py::test_vaste_namen_observed_at_en_totaal_is_slechtste; apps/api/tests/integration/test_connector_events_1_3.py::test_verouderde_hartslag_is_unknown_met_meting_verouderd; apps/api/tests/integration/test_connector_events_1_3.py::test_discover_noemt_max_age_per_check_en_itemtype; apps/api/tests/integration/test_connector_events_1_3.py::test_geen_share_is_een_open_instelling_geen_gezondheidscheck",
+  "blokkade": "",
+  "opmerking": "Niet-gebouwde functies en een niet ingestelde share zijn geen gezondheidscheck (ADR-0016 besluit 7).",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-11",
+  "status": "Bezig",
+  "validatie": "Unit-getest",
+  "bewijs": "commit 16107c3; apps/api/tests/unit/test_idempotency_routes.py::test_elke_muterende_route_vraagt_idempotency_key_of_staat_met_reden_in_de_lijst; apps/api/tests/unit/test_idempotency_routes.py::test_negatief_een_nieuwe_route_zonder_sleutel_wordt_gevonden; apps/api/tests/integration/test_platform_core.py::test_idempotency_required_replay_and_conflict",
+  "blokkade": "",
+  "opmerking": "Foutcatalogus: idempotency_key_reused 422, validation_error voor cursor/itemtype, dependency_unavailable bij de zoektijdslimiet.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-12",
+  "status": "Bezig",
+  "validatie": "Unit-getest",
+  "bewijs": "commit 0306c98; apps/api/tests/unit/test_contract_kopie.py::test_kopie_heeft_de_vastgelegde_sha256; apps/api/tests/unit/test_contract_kopie.py::test_geen_drift_met_de_bron_op_de_bron_commit; apps/api/tests/unit/test_evidence_contract.py::test_niet_gevalideerd_in_blokkade_staat_ook_in_validatie",
+  "blokkade": "",
+  "opmerking": "Kopie van ai-server-manager@0a7143b; EVIDENCE-test volgt §11 van 1.3 (vond de inconsistente regel B07-003).",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-13",
+  "status": "Niet gestart",
+  "validatie": "Niet getest",
+  "bewijs": "",
+  "blokkade": "Wacht op de validator van appstore-en-fork (C1.3-ASF-08) voor healthcheck.monitor en de kop 'platformcontract 1.3'.",
+  "opmerking": "Al conform: geen HUB_* in parameters of custom_app.env.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.3-ZPA-14",
+  "status": "Niet gestart",
+  "validatie": "Niet getest",
+  "bewijs": "",
+  "blokkade": "Fase P5, na besluit BG-06 (Δ-ZK-1/Δ-ZK-2).",
+  "opmerking": "",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "C1.2-ZA9",
+  "status": "Bezig",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (hardware)",
+  "bewijs": "commit f821031, 1045860 (Peil 1.1.1); apps/api/tests/unit/test_statuspagina_peil.py::test_zelfde_uitkomst_als_de_referentie_renderer; apps/api/tests/unit/test_peil_kopie.py::test_pinregel_ten_opzichte_van_de_werkbranch_van_de_bron; tests/ui/statuspagina.mjs (16 toestanden, 192 controles, 0 mislukt); tests/ui/echte_dienst.mjs (208 controles, 0 mislukt)",
+  "blokkade": "Echte schermlezer, telefoon en tv: NIET GEVALIDEERD (hardware).",
+  "opmerking": "Statuspagina in Peil, sinds 2026-11-10 op 1.1.1.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
+ },
+ {
+  "id": "REVIEW-zoeken-en-persoonlijke-ai-statuspagina",
+  "status": "Bezig",
+  "validatie": "Sim-getest; NIET GEVALIDEERD (hardware)",
+  "bewijs": "commit 1045860; docs/screenshots/peil/statuspagina/CONTROLE.json; docs/ontwerp/PEIL_REVIEW.md; tests/ui/echte_dienst.mjs (320, 360, 390, 768, 1024, 1440 px × licht/donker; reflow met DejaVu Sans; axe 0)",
+  "blokkade": "Echte schermlezer, telefoon en tv: NIET GEVALIDEERD (hardware).",
+  "opmerking": "Ontwerpreview van de statuspagina na Peil 1.1.1 en contract 1.3, tegen de echte dienst met Hub-simulators.",
+  "repo": "zoeken-en-persoonlijke-ai",
+  "bijgewerkt": "2026-11-10"
  }
 ]
