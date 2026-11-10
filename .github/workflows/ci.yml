@@ -57,6 +57,20 @@ jobs:
       - name: Drift van de Peil-kopie met de bron (faalt bij drift)
         working-directory: apps/api
         run: pytest -q tests/unit/test_peil_kopie.py -p no:cacheprovider
+      - name: Contractbron op de vaste commit ophalen (contract 1.3 kop, C1.3-ALG-01)
+        run: |
+          commit="$(sed -n 's/^BRON_COMMIT = "\([0-9a-f]\{40\}\)"$/\1/p' apps/api/tests/unit/test_contract_kopie.py)"
+          test -n "$commit"
+          mkdir -p "$RUNNER_TEMP/contract-bron"
+          for f in PLATFORM_CONTRACTEN.md CONTRACT_1.3_CONFORMITEIT.md; do
+            curl -fsSL --retry 4 --retry-delay 2 -o "$RUNNER_TEMP/contract-bron/$f" \
+              "https://raw.githubusercontent.com/lvos04/ai-server-manager/$commit/docs/platform-v2/$f"
+          done
+          echo "CONTRACT_BRON_DIR=$RUNNER_TEMP/contract-bron" >> "$GITHUB_ENV"
+          echo "CONTRACT_BRON_VERPLICHT=1" >> "$GITHUB_ENV"
+      - name: Drift van de contractkopie met de bron (faalt bij drift)
+        working-directory: apps/api
+        run: pytest -q tests/unit/test_contract_kopie.py -p no:cacheprovider
       - name: Unit- en integratietests
         working-directory: apps/api
         run: pytest -q
