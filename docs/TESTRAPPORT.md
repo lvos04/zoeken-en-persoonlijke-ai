@@ -390,6 +390,8 @@ Eigen Ubuntu 26.04-machine (22 CPU, 14,5 GiB RAM, gedeeld), Python 3.12 (venv), 
 | `pip-audit -r apps/api/requirements.lock` | geen bekende kwetsbaarheden |
 | `actionlint .github/workflows/*.yml` | eerst SC2129 (losse `>> $GITHUB_ENV`), daarna geen bevindingen |
 | `shellcheck deploy/allinone/smoke-test.sh` | geen bevindingen |
+| GitHub Actions ci run 42782974064 (commit cf0bf89) | **mislukt**: 2 van 729 tests verwachtten een tijd zonder " UTC" (de runner draait in UTC, deze machine in Europe/Amsterdam); hersteld in 49988db |
+| GitHub Actions ci run 42783664084 (commit 49988db) | **groen**: python 729 geslaagd (0 overgeslagen) + E2E 7, contractdrift 7, Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58 |
 
 Negatieve controles die bewust zijn gedaan (de nieuwe test faalde op de oude code, daarna groen):
 `test_pins.py` (3 nieuwe tests faalden op de 1.2-vingerafdruk), `test_evidence_contract.py` (vond de inconsistente regel
