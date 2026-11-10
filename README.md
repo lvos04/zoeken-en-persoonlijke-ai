@@ -18,8 +18,10 @@ keuzes in [`docs/adr/ADR-0016-contract-1-3-en-peil-1-1-1.md`](docs/adr/ADR-0016-
 1.2-keuzes staan in ADR-0011 en ADR-0012): koppeling in `/appdata/secrets/hub-link.json` met gepinde Hub-sleutels en
 een vingerafdruk over alle sleutels, alleen Hub-JWT's (`aud` als één string, `token_use`, `jti` per mutatie),
 ontkoppelen/opnieuw koppelen alleen via de Hub, vaste `service.*`-events, connector-health met hartslag van de worker
-(totaal = slechtste check), en geen root-proces in de container (ook PID 1 niet; bounding set leeg).
-Getest tegen een Hub-simulator, **niet** tegen de echte Hub.
+(totaal = slechtste check), en geen root-proces in de container (ook PID 1 niet; bounding set leeg). Na een 429/503
+met `Retry-After` gaat er nooit eerder iets naar de Hub. QA-ronde: [`docs/adr/ADR-0017-qa-contract-1-3.md`](docs/adr/ADR-0017-qa-contract-1-3.md).
+Getest tegen een Hub-simulator in CI, en lokaal (interop, niet in CI) tegen de Hub-code van `ai-server-manager` met
+contract 1.3. **Niet** tegen een op een NAS geïnstalleerde Hub.
 
 **Statuspagina in Peil 1.1.1** ([`docs/adr/ADR-0013-statuspagina-in-peil.md`](docs/adr/ADR-0013-statuspagina-in-peil.md),
 ADR-0016): `GET /` rendert het framework-vrije statuspagina-sjabloon van de ontwerptaal Peil 1.1.1 (versie-gepinde
@@ -53,6 +55,7 @@ make image smoke     # alles-in-één image bouwen en de rooktest draaien
 - Keuzes: [`docs/adr/`](docs/adr/) · Testrapport: [`docs/TESTRAPPORT.md`](docs/TESTRAPPORT.md)
 - Pakketdocs, delta-matrix en bewijs: [`docs/platform-v2/`](docs/platform-v2/) (`EVIDENCE.json`, `DELTA_MATRIX.md`)
 - Manifest: [`deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml`](deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml)
+  (contract 1.3 §9, monitorplan op `/readyz`; CI valideert het met de validator van appstore-en-fork in `--strict`)
 
 ## Licentie
 

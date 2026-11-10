@@ -93,7 +93,8 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
   - Acht punten in het Peil-sjabloon zelf gaan als voorstel naar `ai-server-manager`.
 
 - **Contract 1.3 en Peil 1.1.1 (ADR-0016):** alle punten die de conformiteitslijst voor deze repo als NU markeert
-  (C1.3-ZPA-01 … -12); -13 (manifest) wacht op de validator van appstore-en-fork, -14 hoort bij P5.
+  (C1.3-ZPA-01 … -12); -13 (manifest) wacht op de validator van appstore-en-fork, -14 hoort bij P5 (bijgewerkt:
+  -13 is gebouwd in de QA-ronde hieronder).
   - Kopieën van `PLATFORM_CONTRACTEN.md` 1.3 en `CONTRACT_1.3_CONFORMITEIT.md` met drifttest (bron `0a7143b`).
   - Statuspagina: `Referrer-Policy: same-origin`; exacte `Origin` (`null` → 403), `Sec-Fetch-Site`, `Host`-beperking
     tegen DNS-rebinding (403 `host_niet_toegestaan`). De POST krijgt direct de pagina met de melding en de echte
@@ -112,6 +113,24 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
     slechtste check, `limits.max_age_s`, `meting_verouderd`.
   - API: foutcatalogus (o.a. 422 `idempotency_key_reused`) en een statische Idempotency-Key-test.
   - Image: bounding set leeg bij een start als root; healthcheck met controlevlag; rooktest controleert het apart.
+
+- **QA contract 1.3 (onafhankelijke review, ADR-0017):**
+  - **C1.3-ZPA-13 gebouwd:** de validator van appstore-en-fork is klaar (C1.3-ASF-08). Het manifest heeft nu:
+    - de kop 1.3;
+    - een monitorplan op `/readyz`;
+    - licentie GPL-3.0;
+    - `digest_pending_release` met reden in `accepted_findings`.
+
+    CI valideert het met `--strict` (validator op een vaste commit). Negatief getoetst: `HUB_URL` in de env geeft
+    `reserved_env`.
+  - **Retry-After (§5):** na een 429/503 met `Retry-After` gaat er nooit eerder iets naar de Hub. Dat geldt voor de
+    Hub-client, voor koppelen (503), voor de sleutelpoll en voor de outbox (de ronde stopt).
+  - **Outbox (§7, RV12):** een 401 die een intrekking blijkt, telt geen poging.
+  - **Sleutelrotatie-events (§7):** `service.key_rotation.applied` komt er ook als de achtergrondpoll van de API de
+    rotatie toepast. `service.key_rotation.rejected` komt één keer per geblokkeerde reeks.
+  - **Image:** `SEARCH_AI_UID`/`SEARCH_AI_GID` = 0 wordt geweigerd, zodat nooit alles als root blijft draaien.
+  - **Interop:** de test tegen de echte Hub-code (contract 1.3) controleert ook schema 1.3, `rotation_sequence` en de
+    `service.*`-events in de inbox van de Hub.
 
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).

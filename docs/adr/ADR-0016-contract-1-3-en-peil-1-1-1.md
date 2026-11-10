@@ -149,6 +149,8 @@ root-start `CapBnd 0`; de healthcheck apart. Met "Custom User 568" mag `CapBnd` 
 
 - **C1.3-ZPA-13 (manifest):** de validator van `appstore-en-fork` kent `healthcheck.monitor` en de kop 1.3 nog niet
   (C1.3-ASF-08 staat open). Het manifest heeft al geen `HUB_*` in parameters of `custom_app.env` (conform).
+  *Bijgewerkt door ADR-0017:* de validator is intussen gebouwd; ZPA-13 is in de QA-ronde gebouwd en in CI met
+  `--strict` gevalideerd.
 - **C1.3-ZPA-14 (één producent, Δ-ZK-1/-2):** fase P5, na BG-06.
 - **Log-sink en heartbeat naar de Hub (§6.1):** optioneel; niet gebouwd.
 

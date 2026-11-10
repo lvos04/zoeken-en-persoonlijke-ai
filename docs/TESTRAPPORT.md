@@ -399,3 +399,50 @@ B07-003), de herkomsttests (een POST zonder `Origin` kreeg in 1.2 nog een koppel
 
 **NIET GEVALIDEERD:** de echte NAS (Host/Origin achter de poortdoorsturing, bron-IP, capabilities van de ix-app), de
 echte Hub met contract 1.3 (alleen de simulator), een echte schermlezer, telefoon of tv.
+
+## QA contract 1.3 (onafhankelijke review, 2026-11-10, ADR-0017)
+
+Dezelfde machine en dezelfde omgeving als hierboven. **Geen** echte NAS, geen accounts en geen echte hardware.
+
+**Eerst opnieuw gedraaid zoals CI, vóór de reparaties.** Alles groen:
+
+| Commando | Uitkomst |
+|---|---|
+| `make lint` (ruff, format, mypy strict) | geen bevindingen |
+| `cd apps/api && pytest -q` | 729 geslaagd |
+| `pytest -q tests/e2e` | 7 geslaagd |
+| drift: `test_peil_kopie.py`, `test_contract_kopie.py`, `test_statuspagina_peil.py`; bron online opgehaald zoals CI, `…_VERPLICHT=1` | 176 geslaagd |
+| `render_toestanden.py` + `statuspagina.mjs` | 192 controles, 0 mislukt |
+| `echte_dienst.py` | 208 controles, 0 mislukt |
+| image + `smoke-test.sh` | 58/58 |
+| OpenAPI-export | gelijk aan `docs/openapi/` |
+| actionlint, shellcheck | geen bevindingen |
+
+**Kopieën** (sha256):
+- contract `15b30cf1…` en conformiteitslijst `f0a2352d…`: byte-gelijk aan de bron, ook aan de werkbranch;
+- Peil `d352028f…` (html) en `0f996358…` (css): byte-gelijk aan de bron, ook aan de werkbranch.
+
+**Testvectoren:** eigen, losse implementatie van §4.5. `MEGG-8GFG-2E4Y-K2RQ`, `CYRC-JS8C-14AN-JR17` en
+`HN69-2PHK-XV2D-X85W` kloppen, de laatste in beide volgordes van de policy-sleutels.
+
+**Daarna gemeten en gerepareerd** (zie ADR-0017):
+
+| Commando | Uitkomst |
+|---|---|
+| `jl-manifest validate --strict deploy/manifest/…` met de validator van appstore-en-fork `cca4403` (eigen venv, `git archive`; hun werkmap niet aangeraakt) | **vóór:** exit 1, `healthcheck_monitor_missing` + niet geaccepteerde `digest_pending_release`. **Na:** exit 0, 0 fouten, alleen `GEACC. image.digest` |
+| idem, met `HUB_URL` in `custom_app.env` (negatief) | `reserved_env`, ongeldig |
+| CI-stap nagespeeld: `git fetch --depth 1 … cca4403`, `pip install --require-hashes -r apps/api/requirements.lock`, `jl-manifest validate --strict` | geldig |
+| nieuwe tests (`tests/integration/test_qa_contract_1_3.py`, `tests/unit/test_hubclient_retry_after.py`, `test_doelgebruiker_root_via_omgeving_wordt_geweigerd`) op de **oude** code | 6 van 8 integratietests mislukt (de 2 andere zijn positieve controles); de unit-test kon de oude code niet importeren; de root-test 3 van 3 mislukt |
+| dezelfde tests op de nieuwe code | alle geslaagd |
+| `SEARCH_AI_REAL_HUB_PYTHON=… pytest -q tests/interop`: echte Hub-code `ai-server-manager@5e21775` (contract 1.3, eigen venv); dienst als echte processen | **1 geslaagd**, ook met de nieuwe 1.3-controles: schema 1.3 en `rotation_sequence` in het koppelbestand; `service.hub_link.linked` en `service.token.rotated` in de inbox van de echte Hub |
+| `cd apps/api && pytest -q` (validator, Peil- en contractbron verplicht, zoals CI) | **747 geslaagd**, 0 overgeslagen |
+| `pytest -q tests/e2e` | 7 geslaagd |
+| image opnieuw gebouwd + `smoke-test.sh` | 58/58 |
+| `docker run -e SEARCH_AI_UID=0 …` (negatief) | de bewaker stopt met "SEARCH_AI_UID en SEARCH_AI_GID mogen nooit 0 (root) zijn"; `healthcheck.py --controle` geeft exit 1 |
+| `make lint`, actionlint, shellcheck, OpenAPI-export, `pip-audit` | geen bevindingen; OpenAPI ongewijzigd; geen bekende kwetsbaarheden |
+
+**NIET GEVALIDEERD:**
+- de echte NAS (installatie via het manifest, monitor in Uptime Kuma, Host/Origin achter de poortdoorsturing, bron-IP,
+  capabilities van de ix-app);
+- een op een NAS geïnstalleerde Hub (de interop draaide lokaal tegen de Hub-code);
+- een echte schermlezer, telefoon of tv.
