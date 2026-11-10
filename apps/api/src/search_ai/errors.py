@@ -104,20 +104,25 @@ AUTH_PREFIXES = (SEARCH_PREFIX, VOICE_PREFIX, CONNECTOR_PREFIX)
 
 
 def auth_error_first(request: Request) -> JSONResponse | None:
-    """Authenticatie gaat vóór fouten bij het lezen van de body (contract 1.2 §4.7: zonder geldige auth altijd 401).
+    """Authenticatie gaat vóór fouten bij het lezen van de body (contract 1.3 §4.7: zonder geldige auth altijd 401).
 
     FastAPI leest en ontleedt een JSON-body vóór de afhankelijkheden; een onleesbare body (``json_invalid`` → 422, of
     een ontleedfout → 400) zou dan zonder geldige authenticatie een ander antwoord geven dan 401. Is er voor dit verzoek
-    nog geen principal vastgesteld, dan wordt hier eerst geauthenticeerd. Zonder methode-informatie: er wordt niets
-    uitgevoerd, dus de replaycache (``jti``) wordt hier niet verbruikt.
+    nog geen principal vastgesteld, dan wordt hier eerst geauthenticeerd. 1.3 §4.6: ook dan verbruikt een
+    POST/PUT/PATCH/DELETE de ``jti`` (er wordt niets uitgevoerd, maar dezelfde JWT werkt daarna niet meer voor een
+    mutatie; de Hub haalt per mutatie een nieuwe JWT).
     """
     if getattr(request.state, "principal", None) is not None or not request.url.path.startswith(AUTH_PREFIXES):
         return None
     auth = getattr(request.app.state, "auth", None)
     if auth is None:
         return None
+    from .security.auth import RequestInfo
+
+    key = request.headers.get("Idempotency-Key")
+    info = RequestInfo(request.method, request.url.path, key.strip()[:200] if key else None)
     try:
-        auth.authenticate(request.headers.get("Authorization"), None)
+        request.state.principal = auth.authenticate(request.headers.get("Authorization"), info)
     except ApiError as exc:
         return error_response(request, exc.status_code, exc.code, exc.message, exc.details, exc.headers)
     return None

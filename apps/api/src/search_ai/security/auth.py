@@ -1,4 +1,4 @@
-"""Authenticatie en rollen (contract 1.2 §4.2–§4.7).
+"""Authenticatie en rollen (contract 1.3 §4.2–§4.7).
 
 Alleen **Hub-JWT's** (EdDSA, ondertekend met een bij de koppeling **gepinde** sleutel, §4.5):
 
@@ -10,10 +10,13 @@ Alleen **Hub-JWT's** (EdDSA, ondertekend met een bij de koppeling **gepinde** sl
 Een inkomend ``Bearer svc_…`` (het eigen service-token) wordt **niet** meer geaccepteerd (§4.3): dat token gaat bij elke
 aanroep naar de Hub over het LAN en mag een afluisteraar niet tot "Hub" maken.
 
-Controlevolgorde (§4.7): koppelstatus → tokensoort → handtekening/``kid`` → claims → ``token_use`` → ``jti``. Elke
-weigering is ``401 {code: "unauthorized", details: {reason}}`` met een vaste ``reason``. Mutaties met een al gebruikte
-``jti`` → ``token_replayed`` (persistente replaycache in PostgreSQL, gedeeld door alle processen); kan die niet worden
-geraadpleegd → ``503 replay_check_unavailable`` (fail-closed).
+Controlevolgorde (§4.7): (1 MiB-laag) → koppelstatus → tokensoort → handtekening/``kid`` → claims → ``token_use`` →
+``jti`` → schemavalidatie van de body; rol (403) en ``Idempotency-Key`` pas daarna (RV9). Elke weigering is
+``401 {code: "unauthorized", details: {reason}}`` met een vaste ``reason`` (1.3: geen header/ander schema/lege waarde →
+``invalid_token``; een JWS-header zonder ``kid`` → ``unknown_key``; ``aud`` moet precies één string zijn, een lijst — ook
+met de eigen ``app_id`` — is ``invalid_token``). **Elke** POST/PUT/PATCH/DELETE verbruikt de ``jti``, ook als de body
+onleesbaar is of de route niets wijzigt; een al gebruikte ``jti`` → ``token_replayed`` (persistente replaycache in
+PostgreSQL, gedeeld door alle processen); kan die niet worden geraadpleegd → ``503 replay_check_unavailable``.
 """
 
 from __future__ import annotations
@@ -209,8 +212,10 @@ class Authenticator:
         except jwt.PyJWTError as exc:
             raise unauthorized("invalid_token") from exc
         kid = header.get("kid")
-        if header.get("alg") != "EdDSA" or not isinstance(kid, str) or not kid:
+        if header.get("alg") != "EdDSA":
             raise unauthorized("invalid_token")
+        if not isinstance(kid, str) or not kid:
+            raise unauthorized("unknown_key")  # §4.7 (1.3): een JWS-header zonder kid
         key = pinned_keys(doc.get("pins"), "jwt").get(kid)
         if key is None:
             if self.on_unknown_kid is not None:
@@ -231,7 +236,9 @@ class Authenticator:
             raise unauthorized("token_expired") from exc
         except jwt.PyJWTError as exc:
             raise unauthorized("invalid_token") from exc
-        # 4. claims
+        # 4. claims (1.3 §4.2: aud is precies één string, gelijk aan de eigen app_id; PyJWT accepteert ook een lijst)
+        if not isinstance(claims.get("aud"), str) or claims["aud"] != p.audience:
+            raise unauthorized("invalid_token")
         exp, iat = claims["exp"], claims["iat"]
         if not isinstance(exp, int | float) or not isinstance(iat, int | float) or exp - iat > p.max_lifetime_s:
             raise unauthorized("invalid_token")

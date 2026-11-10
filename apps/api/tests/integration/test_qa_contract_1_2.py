@@ -62,17 +62,21 @@ def test_unreadable_body_when_not_linked_is_401_not_linked(client: Any) -> None:
     assert r.status_code == 401 and r.json()["details"]["reason"] == "not_linked"
 
 
-def test_unreadable_body_with_valid_auth_stays_422_and_keeps_the_jti(
+def test_unreadable_body_with_valid_auth_stays_422_and_uses_the_jti(
     paired_client: Any, fake_hub: FakeHub, shares: Any
 ) -> None:
+    """Contract 1.3 §4.6: elke POST verbruikt de jti, ook als er niets is uitgevoerd (in 1.2 bleef hij hier vrij)."""
     token = fake_hub.sim.user_jwt(["admin"], sub="beheer")
     hdr = {"Authorization": f"Bearer {token}"}
     r = paired_client.post("/search/v1/sources", content=b"{kapot", headers={**JSON, **idem(hdr)})
     assert r.status_code == 422 and r.json()["code"] == "validation_error"
     with paired_client.app.state.db.sessions() as s:
-        assert s.execute(text("SELECT count(*) FROM jwt_replay")).scalar() == 0  # niets uitgevoerd, jti niet verbruikt
+        assert s.execute(text("SELECT count(*) FROM jwt_replay")).scalar() == 1  # niets uitgevoerd, jti wel verbruikt
     body = {"kind": "files", "name": "Docs", "allowed_paths": [str(shares.a)]}
-    assert paired_client.post("/search/v1/sources", json=body, headers=idem(hdr)).status_code == 201
+    r = paired_client.post("/search/v1/sources", json=body, headers=idem(hdr))
+    assert r.status_code == 401 and r.json()["details"]["reason"] == "token_replayed"
+    fresh = {"Authorization": f"Bearer {fake_hub.sim.user_jwt(['admin'], sub='beheer')}"}
+    assert paired_client.post("/search/v1/sources", json=body, headers=idem(fresh)).status_code == 201
 
 
 def test_status_page_form_errors_are_unaffected(client: Any) -> None:
@@ -265,10 +269,13 @@ def test_swapped_hub_key_is_never_trusted_without_rotation_or_relink(
     r = client.get("/connector/v1/hub-link", headers=fake_hub.user("viewer"))
     assert r.status_code == 401 and r.json()["details"]["reason"] == "unknown_key"
     assert uuid.UUID(after["service_id"]) == uuid.UUID(before["service_id"])
-    # de Hub zelf zag een geslaagde herkoppeling en trok het oude service-token in: de volgende controle zet de dienst
-    # fail-closed op 'ingetrokken' (nooit open toegang, nooit de nieuwe sleutel vertrouwen)
+    # contract 1.3 §3.6: de Hub trekt de oude tokens pas in bij het eerste gebruik van het nieuwe. De dienst gebruikte
+    # het nieuwe token nooit (antwoord geweigerd), dus de bestaande koppeling blijft werken: een mislukte herkoppeling
+    # breekt niets. De nieuwe sleutel wordt nog steeds niet vertrouwd (nooit open toegang).
     w.state.next_self_check_at = 0
     w.link_step(1.0)
-    assert client.app.state.hub_link.read()["state"] == "ingetrokken"
+    still = client.app.state.hub_link.read()
+    # (de simulator vraagt een tokenrotatie omdat er een nieuwer, ongebruikt token bestaat; dat mag, de pins niet)
+    assert still["state"] == "gekoppeld" and still["pins"] == before["pins"]
     r = client.get("/connector/v1/discover", headers=fake_hub.user("admin"))
-    assert r.status_code == 401 and r.json()["details"]["reason"] == "revoked"
+    assert r.status_code == 401 and r.json()["details"]["reason"] == "unknown_key"
