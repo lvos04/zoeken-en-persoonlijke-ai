@@ -222,14 +222,18 @@ def connector_health(request: Request, session: Session) -> dict[str, Any]:
         )
     )
     roots, warnings = validate_read_roots(state.settings.read_roots, state.settings.data_dir)
-    checks.append(
-        _check(
-            "leeswortels",
-            "healthy" if roots and not warnings else ("degraded" if roots else "unknown"),
-            {"geldig": len(roots), "waarschuwingen": len(warnings)},
-            None if roots and not warnings else ("geen_leeswortels" if not roots else "ongeldige_leeswortel"),
+    # Gekoppelde shares: alleen een gezondheidscheck als er iets is ingesteld (gezond, of beperkt bij genegeerde
+    # shares). Nog geen share is een instelling die open staat (een gate, ONTWERPTAAL §4.1 regel 7/12), geen meting van
+    # gezondheid: die staat in discover (``instellingen.leeswortels``) en op de statuspagina als "Niet ingesteld".
+    if roots or warnings:
+        checks.append(
+            _check(
+                "leeswortels",
+                "healthy" if not warnings else "degraded",
+                {"geldig": len(roots), "waarschuwingen": len(warnings)},
+                None if not warnings else "ongeldige_leeswortel",
+            )
         )
-    )
     failed_purges = (
         session.scalar(select(func.count()).where(IndexSource.status == "revoked", IndexSource.purge_status != "done"))
         or 0

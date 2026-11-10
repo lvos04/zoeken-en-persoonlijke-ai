@@ -264,23 +264,31 @@ def _post(client: Any, csrf: str, **form: str) -> str:
         "koppelcode": form.get("code", PAIR_CODE),
         "hub_vingerafdruk": form.get("fingerprint", ""),
     }
-    r = client.post("/koppelen", data=data, follow_redirects=False)
-    assert r.status_code == 303
-    return str(r.headers["location"])
+    # contract 1.3 §3.7: de POST krijgt direct de pagina met de melding en de HTTP-status (geen redirect)
+    r = client.post(
+        "/koppelen",
+        data=data,
+        headers={"Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"},
+        follow_redirects=False,
+    )
+    m = re.search(r'<p class="meta">Code <code>([a-z_]+)</code></p>', r.text)
+    titel = re.search(r'<p id="melding-titel"><strong>([^<]+)</strong>', r.text)
+    code = m.group(1) if m else ("gekoppeld" if titel and titel.group(1) == "Gekoppeld met de Hub" else "")
+    return f"{r.status_code} {code}"
 
 
 def test_status_page_pairing_rules(client: Any, fake_hub: FakeHub) -> None:
     csrf = _csrf(client)
     fp = fake_hub.fingerprint()
-    assert "ongeldig_formulier" in _post(client, "fout", fingerprint=fp)
+    assert _post(client, "fout", fingerprint=fp) == "403 ongeldig_formulier"
     r = client.post(
         "/koppelen",
         data={"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": PAIR_CODE, "hub_vingerafdruk": fp},
         headers={"Origin": "http://elders.example"},
         follow_redirects=False,
     )
-    assert "ongeldig_formulier" in r.headers["location"]
-    assert "ongeldig_hub_adres" in _post(client, csrf, hub_url="http://169.254.169.254", fingerprint=fp)
+    assert r.status_code == 403 and "herkomst_geweigerd" in r.text
+    assert _post(client, csrf, hub_url="http://169.254.169.254", fingerprint=fp) == "422 hub_adres_ongeldig"
     assert "koppelcode_ongeldig" in _post(client, csrf, code="KORT", fingerprint=fp)
     assert enroll_calls(fake_hub) == 0  # ongeldige invoer gaat nooit naar de Hub
     # vingerafdruk is verplicht en moet kloppen; bij een fout wordt niets bewaard (ook het Hub-adres niet)
@@ -297,7 +305,7 @@ def test_status_page_rate_limit_per_source_ip(client: Any, fake_hub: FakeHub) ->
     csrf = _csrf(client)
     for _ in range(5):
         assert "koppelcode_ongeldig" in _post(client, csrf, code="X", fingerprint=fake_hub.fingerprint())
-    assert "te_veel_pogingen" in _post(client, csrf, fingerprint=fake_hub.fingerprint())
+    assert _post(client, csrf, fingerprint=fake_hub.fingerprint()) == "429 te_veel_pogingen"
     assert enroll_calls(fake_hub) == 0
 
 
@@ -312,18 +320,18 @@ def test_pair_throttle_per_ip_and_total() -> None:
 
 def test_after_first_link_status_page_never_pairs_again(client: Any, fake_hub: FakeHub, svc: Auth) -> None:
     csrf = _csrf(client)
-    assert "melding=gekoppeld" in _post(client, csrf, fingerprint=fake_hub.fingerprint())
+    assert _post(client, csrf, fingerprint=fake_hub.fingerprint()) == "200 gekoppeld"
     page = client.get("/").text
     assert 'action="/koppelen"' not in page and "via de Hub" in page and fake_hub.fingerprint() in page
     assert "ontkoppelcode" not in page.lower()
     calls = enroll_calls(fake_hub)
-    assert "al_gekoppeld" in _post(client, csrf, fingerprint=fake_hub.fingerprint())
+    assert _post(client, csrf, fingerprint=fake_hub.fingerprint()) == "409 al_gekoppeld"
     assert client.post("/ontkoppelen", data={"csrf": csrf}).status_code in (404, 405)
     # ook na ontkoppelen door de Hub: geen formulier (first_linked_at blijft staan)
     assert client.post("/connector/v1/hub-link/unlink", headers=idem(svc())).status_code == 200
     page = client.get("/").text
     assert 'action="/koppelen"' not in page and "ontkoppeld" in page
-    assert "al_gekoppeld" in _post(client, csrf, fingerprint=fake_hub.fingerprint())
+    assert _post(client, csrf, fingerprint=fake_hub.fingerprint()) == "409 al_gekoppeld"
     assert enroll_calls(fake_hub) == calls
     assert "hub.pair" in audit_actions(client)
 

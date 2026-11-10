@@ -2,9 +2,11 @@
 
 Start lokaal echte processen van zoeken-en-persoonlijke-ai (``python -m search_ai api``/``worker``, eigen PostgreSQL-
 databases met pgvector) naast twee Hub-simulators (``tests/e2e/sim_hub.py``) en laat daarna ``echte_dienst.mjs`` in
-Chromium alle toestanden van ``GET /`` doorlopen: koppelen via het formulier (fout en goed), gekoppeld met testbronnen,
-ontkoppeld en ingetrokken door de Hub, niet gereed, te veel pogingen, verlopen formulier, onleesbare koppelstatus en
-een onbruikbaar sjabloon.
+Chromium alle toestanden van ``GET /`` en de antwoorden op ``POST /koppelen`` doorlopen (contract 1.3 §3.7, Peil
+1.1.1): koppelen via het formulier (fout en goed), de negatieve herkomsttests in een echte browser (``Origin: null``,
+een vreemde ``Origin``, ``Sec-Fetch-Site`` same-site en cross-site, een niet-toegestane ``Host``, geen cookie),
+gekoppeld met testbronnen, ontkoppeld en ingetrokken door de Hub, niet gereed, te veel pogingen, verlopen formulier,
+koppelen bezig, onleesbare koppelstatus en een onbruikbaar sjabloon.
 
     PATH=/usr/lib/postgresql/16/bin:$PATH .venv/bin/python tests/ui/echte_dienst.py \\
         --out build/echte-dienst [--rapport <json>] [--schermafdrukken <map>]
@@ -34,7 +36,7 @@ from search_ai.search.service import CONSENT_TEXT_VERSION
 ROOT = Path(__file__).resolve().parents[2]
 E2E = ROOT / "tests" / "e2e"
 ADMIN_DB_URL = os.environ.get("SEARCH_AI_TEST_ADMIN_URL", "postgresql+psycopg://postgres@127.0.0.1:5432/postgres")
-DATABASES = ("zoek_ui_echt_a", "zoek_ui_echt_b", "zoek_ui_echt_d")
+DATABASES = ("zoek_ui_echt_a", "zoek_ui_echt_b", "zoek_ui_echt_d", "zoek_ui_echt_f")
 
 
 def free_port() -> int:
@@ -153,6 +155,14 @@ def main() -> int:
     )
     service("c", "zoek_ui_echt_ontbreekt", worker=False, migrate=False)  # database bestaat niet → niet gereed
     service("d", "zoek_ui_echt_d", worker=False)
+    # koppelen bezig: een env-token naar een Hub-adres waar niets luistert → de poging blijft lopen (pending)
+    gesloten = free_port()
+    service(
+        "f",
+        "zoek_ui_echt_f",
+        worker=True,
+        extra={"HUB_URL": f"http://127.0.0.1:{gesloten}", "HUB_ENROLLMENT_TOKEN": "enr_" + "B" * 43},
+    )
     service("e", "zoek_ui_echt_ontbreekt", worker=False, migrate=False, extra={"SEARCH_AI_PEIL_DIR": str(kapot)})
     for url in services.values():
         wait_http(f"{url}/healthz")

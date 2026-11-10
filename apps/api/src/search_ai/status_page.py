@@ -1,24 +1,31 @@
-"""Kleine Nederlandse statuspagina op ``GET /`` (contract §1) in de ontwerptaal **Peil** (ONTWERPTAAL §13.2) +
-koppelen met koppelcode (contract 1.2 §3.7).
+"""Kleine Nederlandse statuspagina op ``GET /`` (contract 1.3 §1/§13) in de ontwerptaal **Peil 1.1.1** (ONTWERPTAAL
+§13.2) + koppelen met koppelcode (contract 1.3 §3.7).
 
 Vormgeving: het framework-vrije Peil-sjabloon ``design/ontwerptaal/statuspagina.html`` (versie-gepinde kopie, O-14):
 CSS en iconen inline, **geen JavaScript**, geen externe bron; past binnen ``default-src 'none'``.
 
-Veiligheid:
+Veiligheid (§3.7):
 - Geen geheimen, geen bronnamen, geen paden en geen zoekinhoud op de pagina; alleen de witte lijst van de koppelstatus
   (§3.5), versie, gezondheid en totaalaantallen.
 - Het koppelformulier (Hub-adres, koppelcode, **Hub-vingerafdruk**, alle drie verplicht) bestaat **alleen zolang de dienst
-  nog nooit gekoppeld is**. Daarna: alleen status en "ontkoppelen of opnieuw koppelen gaat via de Hub". Er is hier geen
-  ontkoppelen, geen lokale ontkoppelcode en geen herkoppelen na intrekking.
-- Formulieren: CSRF-token (double-submit-cookie, SameSite=Strict, HttpOnly) + Origin-controle; strikte CSP. Max. 5
-  pogingen per 15 min per bron-IP (adres van de TCP-verbinding; nooit ``X-Forwarded-For``) en 20 per 15 min voor de hele
-  dienst; daarboven gaat er niets naar de Hub.
-- Meldingen komen uit een vaste lijst (geen weerspiegelde invoer); het Hub-adres van een mislukte poging wordt nergens
-  bewaard en ook niet teruggezet in het formulier.
-- Foutweergave met code + Trace-ID (selecteer en kopieer): na de redirect (POST → 303 → GET) zoekt de pagina de
-  Trace-ID van de poging op met een willekeurige, kortlevende sleutel (``poging``). De Trace-ID komt dus nooit uit de URL.
-- Eerste signaal is nooit groen als de dienst niet gereed is: het totaal is het slechtste van de eigen controles
-  (``/readyz``) en de koppeling met de Hub.
+  nog nooit gekoppeld is** en het koppelbestand leesbaar is. Daarna: alleen status en "ontkoppelen of opnieuw koppelen
+  gaat via de Hub". Er is hier geen ontkoppelen, geen lokale ontkoppelcode en geen herkoppelen na intrekking.
+- **Herkomst** van elke formulier-POST, naast de double-submit-cookie (``SameSite=Strict``, HttpOnly): de pagina's sturen
+  ``Referrer-Policy: same-origin``; ``Origin`` moet exact ``<schema>://<Host>`` zijn (ontbreekt of ``null`` → 403);
+  ``Sec-Fetch-Site`` alleen ``same-origin`` of ``none``; de ``Host`` moet een IP-adres in de vorm van §3.2, een naam
+  zonder punt of een naam onder ``.local``/``.lan``/``.internal``/``.home.arpa`` zijn (DNS-rebinding, anders 403
+  ``host_niet_toegestaan``). Een geweigerd verzoek gaat niet naar de Hub en verandert niets.
+- **Elke** POST die de herkomstcontrole doorstaat telt als poging: max. 5 per 15 min per bron-IP (adres van de
+  TCP-verbinding; nooit ``X-Forwarded-For``) en 20 per 15 min voor de hele dienst (429), ook bij een verlopen formulier,
+  ongeldige invoer, een lopende poging (409 ``koppelen_bezig``), een onleesbaar koppelbestand (409) of een dienst die al
+  eens gekoppeld is (409 ``al_gekoppeld``).
+- **Meldingen** horen bij dít verzoek: de POST krijgt direct de pagina terug met de melding en de echte HTTP-status
+  (geen redirect, geen ``?melding=`` in de URL). ``GET /`` toont nooit een melding over een poging; alleen een
+  toestand die bij het laden al bestaat (onleesbaar koppelbestand, adres zonder koppelmogelijkheid), zonder live-rol.
+- Invoer als geheel controleren, nooit eerst afkappen: koppelcode ≤ 32, vingerafdruk ≤ 64, Hub-adres ≤ 512 tekens.
+- **Log:** elke afgehandelde POST geeft precies één regel met code, HTTP-status en Trace-ID, zonder het ingevulde
+  Hub-adres en zonder geheimen.
+- **Gereed** = ``/readyz`` in orde én gekoppeld en bevestigd; het totaal is nooit groen zonder Gereed (§3.7, §13).
 """
 
 from __future__ import annotations
@@ -26,25 +33,24 @@ from __future__ import annotations
 import hmac
 import html
 import logging
-import re
 import secrets
 import threading
 import time
-from collections import OrderedDict, deque
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import func, select
 
 from . import APP_ID, __version__, audit, events
-from .errors import trace_id_for
+from .errors import TRACE_HEADER, trace_id_for
 from .health import connector_health, readiness
-from .hubclient import HubUrlError, validate_hub_url
-from .hublink import ERROR_MESSAGES, public_view
+from .hubclient import HubUrlError, canonical_host, validate_hub_url
+from .hublink import ERROR_MESSAGES, is_unreadable, public_view
 from .peil import PeilTemplate, PeilTemplateError, default_dir, load_template, render, strip_comments
 from .search.models import IndexSource
 from .search.paths import validate_read_roots
@@ -62,9 +68,11 @@ SERVICE_DESCRIPTION = (
     "Persoonlijke zoekmachine voor je eigen bestanden op de NAS; spraak en persoonlijke AI volgen in fase P5. "
     f"Dienst-ID in de Hub: {APP_ID}."
 )
-PAIRING_CODE_VALID = "60 minuten"  # contract 1.2 §3.6: koppelcode verloopt 60 min na aanmaak in de Hub
+PAIRING_CODE_VALID = "60 minuten"  # contract §3.4: koppelcode verloopt 60 min na aanmaak in de Hub
+LINK_FILE = "/appdata/secrets/hub-link.json"
 WINDOW_S = 900.0
 MONTHS = ("jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec")
+ALLOWED_HOST_SUFFIXES = (".local", ".lan", ".internal", ".home.arpa")  # §3.7 punt 4
 
 
 @dataclass(frozen=True)
@@ -72,12 +80,16 @@ class Notice:
     toon: str  # "fout" | "info" (klassen melding-fout / melding-info van het sjabloon)
     titel: str
     tekst: str
+    http: int = 200  # HTTP-status van het antwoord op de POST met deze melding
     veld: str | None = None  # "hub" | "koppelcode" | "vingerafdruk": het formulierveld met de fout
     veldfout: str | None = None
+    pad: str | None = None  # Peil 1.1.1 melding_pad: pad in mono op een eigen regel (tekst eindigt op ":")
 
 
 _FAILED = "Koppelen is mislukt"
+_NOTHING_SENT = "Er is niets naar de Hub gestuurd."
 NOTICES: dict[str, Notice] = {
+    # na een geslaagde poging van dít verzoek (rol status)
     "gekoppeld": Notice(
         "info",
         "Gekoppeld met de Hub",
@@ -89,54 +101,90 @@ NOTICES: dict[str, Notice] = {
         "De koppeling is opgeslagen, maar de Hub heeft haar nog niet bevestigd. De dienst probeert dat vanzelf opnieuw. "
         "Vergelijk de vingerafdruk hieronder met die in de Hub.",
     ),
-    "al_gekoppeld": Notice(
+    # weigeringen vóór de Hub (rol alert)
+    "herkomst_geweigerd": Notice(
         "fout",
-        "Koppelen kan hier niet",
-        "Deze dienst is al eens gekoppeld. Ontkoppelen of opnieuw koppelen gaat via de Hub, niet via deze pagina.",
+        "Formulier geweigerd",
+        "Dit formulier kwam niet van deze pagina (andere herkomst). "
+        + _NOTHING_SENT
+        + " Open de statuspagina van deze "
+        "dienst zelf en vul het formulier daar in.",
+        403,
+    ),
+    "host_niet_toegestaan": Notice(
+        "fout",
+        "Koppelen kan niet via dit adres",
+        "Open deze pagina via het IP-adres van de NAS, of koppel via de Hub. " + _NOTHING_SENT,
+        403,
     ),
     "ongeldig_formulier": Notice(
         "fout",
         "Het formulier is verlopen",
         "Het formulier is ouder dan een uur, of je browser stuurde de beveiligingscookie van deze pagina niet mee. "
-        "Er is niets naar de Hub gestuurd. Laad de pagina opnieuw en vul het formulier nog eens in.",
+        + _NOTHING_SENT
+        + " Laad de pagina opnieuw en vul het formulier nog eens in.",
+        403,
     ),
     "te_veel_pogingen": Notice(
         "fout",
         "Te veel pogingen",
-        "In het afgelopen kwartier is te vaak geprobeerd te koppelen. Er is niets naar de Hub gestuurd. Wacht een "
-        "kwartier en probeer het dan opnieuw.",
+        "In het afgelopen kwartier is te vaak geprobeerd te koppelen. " + _NOTHING_SENT + " Wacht een kwartier en "
+        "probeer het dan opnieuw.",
+        429,
+    ),
+    "al_gekoppeld": Notice(
+        "fout",
+        "Koppelen kan hier niet",
+        "Deze dienst is al eens gekoppeld. Ontkoppelen of opnieuw koppelen gaat via de Hub, niet via deze pagina.",
+        409,
     ),
     "koppelen_bezig": Notice(
         "fout",
         "Er loopt al een koppelpoging",
         "Deze poging is niet naar de Hub gestuurd. Wacht tot de lopende poging klaar is en laad de pagina daarna "
         "opnieuw.",
+        409,
     ),
-    "ongeldig_hub_adres": Notice(
+    # Na een koppelpoging op een onleesbaar koppelbestand is onbekend of de dienst ooit gekoppeld was, dus nooit "al eens
+    # gekoppeld" (ADR-0015 Q-04). Zonder poging staat dezelfde tekst als blijvende toestand op de pagina (zonder rol).
+    "koppelstatus_onleesbaar": Notice(
+        "fout",
+        "Koppelstatus onleesbaar",
+        "Het koppelbestand van deze dienst is onleesbaar. Uit veiligheid weigert de dienst daarom elke Hub-aanvraag; er "
+        "gaat niets naar de Hub. Het bestand staat in:",
+        409,
+        pad=LINK_FILE,
+    ),
+    "hub_adres_ongeldig": Notice(
         "fout",
         _FAILED,
-        "Het adres van de Hub is ongeldig. Er is niets naar de Hub gestuurd.",
+        "Het adres van de Hub is ongeldig. " + _NOTHING_SENT,
+        422,
         "hub",
         "Gebruik http(s)://<NAS-adres>:<poort>, zonder pad en geen localhost.",
     ),
     "koppelcode_ongeldig": Notice(
         "fout",
         _FAILED,
-        "De koppelcode heeft niet de goede vorm. Er is niets naar de Hub gestuurd.",
+        "De koppelcode heeft niet de goede vorm. " + _NOTHING_SENT,
+        422,
         "koppelcode",
         "12 tekens, zoals de Hub ze toont (XXXX-XXXX-XXXX).",
     ),
     "vingerafdruk_ongeldig": Notice(
         "fout",
         _FAILED,
-        "De vingerafdruk van de Hub heeft niet de goede vorm. Er is niets naar de Hub gestuurd.",
+        "De vingerafdruk van de Hub heeft niet de goede vorm. " + _NOTHING_SENT,
+        422,
         "vingerafdruk",
         "16 tekens, zoals de Hub ze toont (XXXX-XXXX-XXXX-XXXX).",
     ),
+    # uitkomst van de Hub
     "hub_onbereikbaar": Notice(
         "fout",
         _FAILED,
         "De Hub is niet bereikbaar op dit adres. Controleer het adres en of de Hub draait, en probeer het opnieuw.",
+        503,
         "hub",
         "Geen antwoord van een Hub op dit adres.",
     ),
@@ -147,6 +195,7 @@ NOTICES: dict[str, Notice] = {
         _FAILED,
         "De Hub weigerde de koppelcode: verlopen, al gebruikt of ongeldig. Maak in de Hub een nieuwe koppelcode en "
         "probeer het opnieuw.",
+        422,
         "koppelcode",
         "Deze koppelcode is verlopen, al gebruikt of ongeldig. Maak een nieuwe in de Hub.",
     ),
@@ -154,11 +203,13 @@ NOTICES: dict[str, Notice] = {
         "fout",
         _FAILED,
         ERROR_MESSAGES["hub_antwoord_ongeldig"] + " Controleer of dit adres de Hub is en probeer het opnieuw.",
+        503,
     ),
     "hub_vingerafdruk_onjuist": Notice(
         "fout",
         _FAILED,
         ERROR_MESSAGES["hub_vingerafdruk_onjuist"],
+        422,
         "vingerafdruk",
         "Deze vingerafdruk hoort niet bij de Hub op dit adres. Vergelijk hem met de Hub.",
     ),
@@ -167,23 +218,32 @@ NOTICES: dict[str, Notice] = {
         _FAILED,
         "Op dit adres draait geen Hub die koppelen met een koppelcode kent. Controleer het adres; is het de Hub, werk "
         "de Hub dan bij en probeer het opnieuw.",
+        503,
         "hub",
         "Op dit adres draait geen Hub die koppelen kent.",
+    ),
+    "hub_incompatibel": Notice(
+        "fout",
+        _FAILED,
+        "De Hub weigerde het verzoek als onverenigbaar: deze dienst en de Hub passen niet bij elkaar. Werk de Hub of "
+        "deze dienst bij en probeer het daarna opnieuw.",
+        503,
     ),
     "rate_limited": Notice(
         "fout",
         _FAILED,
         "De Hub vraagt even te wachten (te veel pogingen). Probeer het over een paar minuten opnieuw.",
-    ),
-    # Het sjabloon heeft geen koppelblok voor deze toestand (S-01); de melding legt hem uit. Ook na een koppelpoging op
-    # een onleesbaar koppelbestand: dan is onbekend of de dienst ooit gekoppeld was, dus nooit "al eens gekoppeld".
-    "koppelstatus_onleesbaar": Notice(
-        "fout",
-        "Koppelstatus onleesbaar",
-        "Het koppelbestand van deze dienst in /appdata/secrets is onleesbaar. Uit veiligheid weigert de dienst daarom "
-        "elke Hub-aanvraag. Koppel opnieuw via de Hub: Instellingen → Diensten.",
+        429,
     ),
 }
+# Blijvende toestand bij het laden (geen poging): eigen tekst, geen live-rol (Peil 1.1.1 E05).
+HOST_NOTICE = Notice(
+    "info",
+    "Koppelen kan niet via dit adres",
+    "Je opent deze pagina via een domeinnaam. Koppelen op deze pagina kan alleen via het IP-adres van de NAS, een naam "
+    "zonder punt of een naam onder .local, .lan, .internal of .home.arpa (bescherming tegen DNS-rebinding). Open deze "
+    "pagina via het IP-adres van de NAS, of koppel via de Hub.",
+)
 FIELD_LINK = {
     "hub": ("hub", "Naar het veld Adres van de Hub", "Naar het Hub-adres (fout)"),
     "koppelcode": ("koppelcode", "Naar het veld Koppelcode", "Naar de koppelcode (fout)"),
@@ -202,11 +262,32 @@ CHECK_FAILED = {
     "geheimen": "Een of meer sleutelbestanden ontbreken; zie de app-log.",
 }
 STATUS_NL = {"draft": "concept", "active": "actief", "paused": "gepauzeerd", "revoked": "ingetrokken"}
+# Peil 1.1.1 (E03/E10): tonen die meetellen in het totaal en hun gewicht; 'verouderd' als eigen controle = Onbekend.
 SEVERITY = {"gezond": 0, "onbekend": 1, "beperkt": 2, "storing": 3}
+AS_TOTAL = {
+    "gezond": "gezond",
+    "onbekend": "onbekend",
+    "niet-gekoppeld": "onbekend",
+    "niet-beschikbaar": "onbekend",
+    "verouderd": "onbekend",
+    "beperkt": "beperkt",
+    "storing": "storing",
+}
+# Dienstblok (E10): een verse Storing of Beperkt maakt het totaal hooguit Beperkt; niet ingesteld (gate), nog niet
+# beschikbaar, beleid, feit en verouderd tellen niet mee; niet-beschikbaar (capability_unavailable) telt als Onbekend.
+SERVICE_BLOCK_TOTAL = {"gezond": "gezond", "beperkt": "beperkt", "storing": "beperkt", "niet-beschikbaar": "onbekend"}
 TOTAL_LABEL = {"gezond": "Alles gezond", "onbekend": "Deels onbekend", "beperkt": "Beperkt", "storing": "Storing"}
 # Begin van de toelichting bij "Niet gereed": dezelfde toon als de pil (nooit "Deels onbekend" naast een amber pil).
 NOT_READY_PREFIX = {"onbekend": "Deels onbekend", "beperkt": "Beperkt", "storing": "Storing"}
 LABEL = {"gezond": "Gezond", "onbekend": "Onbekend", "beperkt": "Beperkt", "storing": "Storing"}
+SOURCE_TEXT = "/readyz, /healthz en de connector-gezondheid (wat de Hub ziet) van deze dienst"
+# Peil 1.1.1 {{gereed_uitleg}}: preciezer dan de standaardzin van het sjabloon, want "Gereed" vraagt in contract 1.3
+# §3.7 ook de bevestiging door de Hub (confirmed_at), en zonder het woord "in orde" (ONTWERPTAAL §11.1: Gezond).
+GEREED_UITLEG = (
+    "Gereed betekent: de eigen controles van /readyz zijn gezond én de Hub heeft de koppeling bevestigd. /readyz kijkt "
+    "zelf niet naar de koppeling."
+)
+WORKER = "Achtergrondtaken (worker)"
 
 
 class PairThrottle:
@@ -239,52 +320,64 @@ class PairThrottle:
             return True
 
 
-class AttemptLog:
-    """Trace-ID van recente koppelpogingen voor de foutweergave na de redirect. Alleen in het geheugen, hooguit
-    ``max_items`` en ``ttl_s``; de sleutel is willekeurig (niet te raden) en verschijnt nooit op de pagina."""
-
-    KEY = re.compile(r"[A-Za-z0-9_-]{22,64}")
-
-    def __init__(self, ttl_s: float = WINDOW_S, max_items: int = 256) -> None:
-        self.ttl_s, self.max_items = ttl_s, max_items
-        self._items: OrderedDict[str, tuple[str, str, float]] = OrderedDict()
-        self._lock = threading.Lock()
-
-    def put(self, code: str, trace_id: str, now: float | None = None) -> str:
-        now = time.monotonic() if now is None else now
-        key = secrets.token_urlsafe(16)
-        with self._lock:
-            self._items[key] = (code, trace_id, now)
-            while len(self._items) > self.max_items:
-                self._items.popitem(last=False)
-        return key
-
-    def get(self, key: str | None, code: str, now: float | None = None) -> str | None:
-        if not key or not self.KEY.fullmatch(key):
-            return None
-        now = time.monotonic() if now is None else now
-        with self._lock:
-            item = self._items.get(key)
-            if item is None or now - item[2] >= self.ttl_s:
-                self._items.pop(key, None)
-                return None
-        return item[1] if item[0] == code else None
-
-
 SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
+    # contract 1.3 §3.7 punt 1: same-origin, nooit no-referrer (dan stuurt elke browser Origin: null)
+    "Referrer-Policy": "same-origin",
     "X-Frame-Options": "DENY",
     "Cache-Control": "no-store",
 }
+
+
+# ---------------------------------------------------------------------------------------------------- herkomst
+def host_allowed(host_header: str) -> bool:
+    """§3.7 punt 4 (DNS-rebinding): de ``Host`` (zonder poort) is een IP-adres in de vorm van §3.2 (IPv6 tussen ``[]``),
+    een naam zonder punt, of een naam onder ``.local``, ``.lan``, ``.internal`` of ``.home.arpa``."""
+    raw = (host_header or "").strip()
+    if not raw or len(raw) > 300 or any(ch.isspace() or ord(ch) < 32 for ch in raw):
+        return False
+    if raw.startswith("["):
+        end = raw.find("]")
+        if end < 0:
+            return False
+        host, rest, bracketed = raw[1:end], raw[end + 1 :], True
+        if rest and not (rest.startswith(":") and rest[1:].isdigit()):
+            return False
+    else:
+        host, _, port = raw.partition(":")
+        if port and not port.isdigit():
+            return False
+        bracketed = False
+    try:
+        name, ip = canonical_host(host, bracketed)
+    except HubUrlError:
+        return False
+    if ip is not None:
+        return True
+    return "." not in name or name.endswith(ALLOWED_HOST_SUFFIXES)
+
+
+def origin_refusal(request: Request) -> str | None:
+    """Herkomstcontrole van §3.7 (punten 2–4); ``None`` = doorgelaten, anders de vaste code."""
+    host = request.headers.get("host", "")
+    origin = request.headers.get("origin")
+    if not origin or origin == "null" or origin != f"{request.url.scheme}://{host}":
+        return "herkomst_geweigerd"
+    site = request.headers.get("sec-fetch-site")
+    if site is not None and site not in ("same-origin", "none"):
+        return "herkomst_geweigerd"
+    if not host_allowed(host):
+        return "host_niet_toegestaan"
+    return None
 
 
 # ---------------------------------------------------------------------------------------------------- weergave
 @dataclass(frozen=True)
 class PageInput:
     """Alles wat de pagina toont. ``doc`` is het koppelbestand (``read_safe``); de pagina gebruikt daarvan alleen de
-    witte lijst van §3.5 (``public_view``) plus ``corrupt``."""
+    witte lijst van §3.5 (``public_view``) plus ``corrupt``, ``unreadable_replaced_at``, ``confirmed_at`` en
+    ``pending.started_at`` (nooit het geheim of zijn hash)."""
 
     ready: bool
     checks: list[dict[str, Any]]
@@ -294,23 +387,27 @@ class PageInput:
     root_warnings: int
     csrf: str
     now: datetime
+    # melding van dít verzoek (alleen bij een POST): code uit NOTICES + Trace-ID
     melding: str | None = None
     trace_id: str | None = None
-    # controles van de connector-gezondheid (wat de Hub ziet); alleen afwijkingen worden een regel, zodat de pagina
-    # nooit "Alles gezond" zegt terwijl de Hub "Beperkt" of "Storing" toont (ONTWERPTAAL §1 punt 8)
+    # controles van de connector-gezondheid (wat de Hub ziet): elke afwijking wordt een regel, zodat de pagina nooit
+    # beter is dan wat de Hub ziet (ONTWERPTAAL §1 punt 8)
     health: list[dict[str, Any]] | None = None
+    # het adres waarmee de pagina geopend is staat koppelen niet toe (§3.7 punt 4): blijvende melding zonder rol
+    host_blocked: bool = False
 
 
 def may_pair(doc: dict[str, Any]) -> bool:
-    """Koppelen via de statuspagina alleen zolang de dienst nog **nooit** gekoppeld is (§3.7)."""
-    return doc.get("state") == "nooit_gekoppeld" and not doc.get("first_linked_at") and not doc.get("corrupt")
+    """Koppelen via de statuspagina alleen zolang de dienst nog **nooit** gekoppeld is en het koppelbestand leesbaar is
+    (§3.5/§3.7; ook na het vervangen van een onleesbaar bestand blijft het "onleesbaar" tot een nieuwe koppeling)."""
+    return doc.get("state") == "nooit_gekoppeld" and not doc.get("first_linked_at") and not is_unreadable(doc)
 
 
 def fmt_time(value: datetime | str | None) -> tuple[str, str]:
     """``("9 nov 2026, 11:56", ISO)`` in de tijdzone van de container (TrueNAS zet ``TZ``); UTC staat er dan bij."""
     if isinstance(value, str):
         try:
-            value = datetime.fromisoformat(value)
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             return "onbekend", ""
     if value is None:
@@ -322,22 +419,29 @@ def fmt_time(value: datetime | str | None) -> tuple[str, str]:
     return text, local.isoformat(timespec="seconds")
 
 
-def _readiness_rows(checks: list[dict[str, Any]], tijd: str, iso_: str) -> list[dict[str, str]]:
+def _short(text: str) -> str:
+    return text.split(", ", 1)[1] if ", " in text else text
+
+
+def _row(naam: str, toon: str, label: str, reden: str = "", code: str | None = None) -> dict[str, str]:
+    return {"naam": naam, "toon": toon, "label": label, "reden": reden, "reden_code": code or ""}
+
+
+def _readiness_rows(checks: list[dict[str, Any]]) -> list[dict[str, str]]:
     by_name = {str(c.get("name")): str(c.get("status")) for c in checks}
     rows = []
     for name, label in CHECK_NAMES.items():
         status = by_name.get(name)
         if status == "ok":
-            toon, reden = "gezond", ""
+            rows.append(_row(label, "gezond", "Gezond"))
         elif status is None:  # bv. migraties/pgvector zonder database: niet gemeten, dus nooit groen
-            toon, reden = "onbekend", "Niet te controleren zonder database."
+            rows.append(_row(label, "onbekend", "Onbekend", "Niet te controleren zonder database."))
         else:
-            toon, reden = "storing", CHECK_FAILED[name]
-        rows.append({"naam": label, "toon": toon, "label": LABEL[toon], "tijd": tijd, "iso": iso_, "reden": reden})
+            rows.append(_row(label, "storing", "Storing", CHECK_FAILED[name]))
     return rows
 
 
-def _hub_row(link: dict[str, Any], corrupt: bool, shown_code: str | None = None) -> dict[str, str] | None:
+def _hub_row(link: dict[str, Any], unreadable: bool, shown_code: str | None = None) -> dict[str, str] | None:
     """Regel "Koppeling met de Hub" in de controles; ``None`` als de dienst gekoppeld is zonder melding (dan staat de
     neutrale pil "Gekoppeld" in het koppelblok: verbonden is geen gezondheid, dus nooit groen).
 
@@ -345,32 +449,35 @@ def _hub_row(link: dict[str, Any], corrupt: bool, shown_code: str | None = None)
     state = link.get("state")
     err = link.get("last_error") or {}
     code = err.get("code")
-    err_text = f" Laatste melding: {err.get('message_nl')} (code {code})" if code and code != shown_code else ""
-    if corrupt:
-        reden = "Onleesbaar koppelbestand; de dienst weigert elke Hub-aanvraag (code koppelstatus_onleesbaar)."
-        return {"toon": "storing", "label": "Onleesbaar", "reden": reden}
+    herhaal = bool(code) and code != shown_code
+    laatste = f" Laatste melding: {err.get('message_nl')}" if herhaal else ""
+    naam = "Koppeling met de Hub"
+    if unreadable:
+        reden = "Onleesbaar koppelbestand; de dienst weigert elke Hub-aanvraag."
+        return _row(naam, "storing", "Onleesbaar", reden, "koppelstatus_onleesbaar")
     if state == "gekoppeld":
-        return {"toon": "beperkt", "label": "Beperkt", "reden": err_text.strip()} if err_text else None
+        return _row(naam, "beperkt", "Beperkt", laatste.strip(), code) if herhaal else None
     if state == "ontkoppeld":
-        reden = "Ontkoppeld door de Hub; de dienst weigert elke Hub-aanvraag." + err_text
-        return {"toon": "onbekend", "label": "Ontkoppeld", "reden": reden}
+        reden = "Ontkoppeld door de Hub; de dienst weigert elke Hub-aanvraag." + laatste
+        return _row(naam, "niet-gekoppeld", "Ontkoppeld", reden, code if herhaal else None)
     if state == "ingetrokken":
         reden = "Ingetrokken door de Hub; de dienst weigert elke opdracht van de Hub."
-        return {"toon": "onbekend", "label": "Ingetrokken", "reden": reden}
+        return _row(naam, "niet-gekoppeld", "Ingetrokken", reden, "ingetrokken_door_hub")
     reden = "Tot de koppeling voert de dienst niets uit voor de Hub."
     if link.get("koppelen_bezig"):
         reden += " Er loopt een koppelpoging."
-    return {"toon": "onbekend", "label": "Niet gekoppeld", "reden": reden + err_text}
+    return _row(naam, "niet-gekoppeld", "Niet gekoppeld", reden + laatste, code if herhaal else None)
 
 
 HEALTH_ROWS = {
-    # naam in de connector-gezondheid → (regelnaam, reden); alleen afwijkingen (degraded/down) worden getoond
+    # naam in de connector-gezondheid → (regelnaam, reden); afwijkingen worden een regel in de controles
     "hub_sleutels": ("Gepinde Hub-sleutels", "De gepinde sleutels van de Hub zijn ongeldig of een rotatie is mislukt."),
-    "outbox": ("Gebeurtenissen naar de Hub", "Er staan gebeurtenissen vast of lopen achter; zie de Hub."),
+    "jobs": ("Gebeurtenissen naar de Hub", "Er staan gebeurtenissen vast of lopen achter; zie de Hub."),
     "intrekking_opgeschoond": (
         "Opschonen na intrekking",
         "Een ingetrokken bron is nog niet volledig opgeschoond; zie de app-log.",
     ),
+    "worker": (WORKER, "De worker meldt dat een stap mislukte; zie de app-log."),
 }
 HEALTH_TOON = {"degraded": "beperkt", "down": "storing"}
 
@@ -379,19 +486,27 @@ def _health_rows(health: list[dict[str, Any]] | None, linked: bool) -> list[dict
     rows = []
     for c in health or []:
         name, status, code = str(c.get("name")), str(c.get("status")), c.get("reason_code")
+        if name == "worker" and status == "unknown":
+            # §6.2: een verouderde meting is "laatst bekend" (Peil-toon verouderd, telt als Onbekend), nooit actueel
+            if code == "meting_verouderd":
+                tijd, _ = fmt_time(c.get("observed_at"))
+                reden = f"Laatste hartslag {_short(tijd)}; daarna niets meer gemeten. Zie de app-log."
+                row = _row(WORKER, "verouderd", "Verouderd", reden, "meting_verouderd")
+                row["tijd_bron"] = str(c.get("observed_at") or "")
+                rows.append(row)
+            else:
+                reden = "Nog geen hartslag van de worker gemeten; zie de app-log."
+                rows.append(_row(WORKER, "onbekend", "Onbekend", reden, code or "geen_hartslag"))
+            continue
         toon = HEALTH_TOON.get(status)
         if toon is None:
             continue
-        if name == "hub_koppeling" and linked and code == "niet_bevestigd":
-            naam, reden = (
-                "Koppeling met de Hub",
-                "De Hub heeft de koppeling nog niet bevestigd; de dienst probeert het opnieuw.",
-            )
+        if name == "hub_link" and linked and code == "niet_bevestigd":
+            reden = "De Hub heeft de koppeling nog niet bevestigd; de dienst probeert het opnieuw."
+            rows.append(_row("Koppeling met de Hub", toon, LABEL[toon], reden, code))
         elif name in HEALTH_ROWS and not (name == "hub_sleutels" and code == "sleutelrotatie_ongeldig"):
             naam, reden = HEALTH_ROWS[name]  # een mislukte rotatie staat al als laatste melding bij de koppeling
-        else:
-            continue
-        rows.append({"naam": naam, "toon": toon, "label": LABEL[toon], "reden": f"{reden} (code {code or name})"})
+            rows.append(_row(naam, toon, LABEL[toon], reden, code or name))
     return rows
 
 
@@ -412,45 +527,39 @@ def _shares(n: int) -> str:
 
 def _service_rows(inp: PageInput) -> list[dict[str, str]]:
     # Namen in gewone taal, zonder interne taak-ID's zoals B07/B15 (ontwerpreview, docs/ontwerp/PEIL_REVIEW.md).
-    # "Gekoppelde shares" (de leeswortels van ADR-0004) in gewone taal; geen share is geen storing maar een instelling
-    # die nog open staat ("Niet ingesteld", nooit groen, ONTWERPTAAL §4.1 regel 12).
+    # "Gekoppelde shares" (de leeswortels van ADR-0004): gezond/beperkt is een verse meting (telt mee); geen share is
+    # een instelling die nog open staat (gate "Niet ingesteld", telt niet mee, nooit groen; ONTWERPTAAL §4.1 regel 12).
     if inp.roots and not inp.root_warnings:
-        roots = ("gezond", "Gezond", f"{_shares(inp.roots)}. {SHARE_HINT}")
-    elif inp.roots:
-        roots = (
-            "beperkt",
-            "Beperkt",
-            f"{_shares(inp.roots)}, {inp.root_warnings} genegeerd (zie de app-log). {SHARE_HINT}",
-        )
+        roots = _row("Gekoppelde shares", "gezond", "Gezond", f"{_shares(inp.roots)}. {SHARE_HINT}")
+    elif inp.root_warnings:
+        reden = f"{_shares(inp.roots)}, {inp.root_warnings} genegeerd (zie de app-log). {SHARE_HINT}"
+        roots = _row("Gekoppelde shares", "beperkt", "Beperkt", reden, "ongeldige_leeswortel")
     else:
-        roots = ("onbekend", "Niet ingesteld", f"Nog geen share gekoppeld. {SHARE_HINT}")
+        roots = _row("Gekoppelde shares", "gate", "Niet ingesteld", f"Nog geen share gekoppeld. {SHARE_HINT}")
     return [
-        {
-            "naam": "Bronnen",
-            "toon": "gate",
-            "label": "Alleen met toestemming",
-            "reden": f"{_sources_summary(inp.per_status)}. Zonder toestemming van de eigenaar wordt niets gelezen; "
-            "indexdata verlaat de NAS niet.",
-        },
-        {
-            "naam": "Gekoppelde shares",
-            "toon": roots[0],
-            "label": roots[1],
-            "reden": roots[2],
-        },
-        {
-            "naam": "Indexeren en semantisch zoeken",
-            "toon": "onbekend",
-            "label": "Nog niet beschikbaar",
-            "reden": "Volgt in fase P5. Er wordt nu niets geïndexeerd (code capability_unavailable).",
-        },
-        {
-            "naam": "Spraak en persoonlijke AI",
-            "toon": "onbekend",
-            "label": "Nog niet beschikbaar",
-            "reden": "Volgt in fase P5. Spraak en een lokaal taalmodel zijn optioneel en staan standaard uit; er wordt "
-            "niets opgenomen. Typen in de Hub blijft altijd mogelijk (code capability_unavailable).",
-        },
+        _row(
+            "Bronnen",
+            "gate",
+            "Alleen met toestemming",
+            f"{_sources_summary(inp.per_status)}. Zonder toestemming van de eigenaar wordt niets gelezen; indexdata "
+            "verlaat de NAS niet.",
+        ),
+        roots,
+        _row(
+            "Indexeren en semantisch zoeken",
+            "nog-niet",
+            "Nog niet beschikbaar",
+            "Volgt in fase P5. Er wordt nu niets geïndexeerd.",
+            "capability_unavailable",
+        ),
+        _row(
+            "Spraak en persoonlijke AI",
+            "nog-niet",
+            "Nog niet beschikbaar",
+            "Volgt in fase P5. Spraak en een lokaal taalmodel zijn optioneel en staan standaard uit; er wordt niets "
+            "opgenomen. Typen in de Hub blijft altijd mogelijk.",
+            "capability_unavailable",
+        ),
     ]
 
 
@@ -461,82 +570,163 @@ def _safe_hub_url(url: Any) -> str:
     return ""
 
 
-def page_data(inp: PageInput) -> dict[str, Any]:
-    """Plekken van het Peil-sjabloon voor deze dienst (zuivere functie: ook voor de schermafdrukken en UI-tests)."""
-    link = public_view(inp.doc)
-    corrupt = bool(inp.doc.get("corrupt"))
-    state = str(link.get("state"))
-    form = may_pair(inp.doc)
-    tijd, iso_ = fmt_time(inp.now)
-    tijd_kort = tijd.split(", ", 1)[1] if ", " in tijd else tijd
+def _worst(tonen: list[str]) -> str:
+    return max(tonen, key=SEVERITY.__getitem__) if tonen else "gezond"
 
-    linked = state == "gekoppeld" and not corrupt
-    notice = NOTICES.get(inp.melding or "")
-    # Een melding uit de URL mag nooit iets beweren dat de koppelstatus nu tegenspreekt: "gekoppeld" alleen als de
-    # koppeling echt bestaat, "al eens gekoppeld" nooit naast het formulier, "onleesbaar" alleen als het zo is.
-    if notice is not None and (
-        (notice.toon == "info" and not linked)
-        or (inp.melding == "al_gekoppeld" and form)
-        or (inp.melding == "koppelstatus_onleesbaar" and not corrupt)
-    ):
-        notice = None
-    shown = inp.melding if notice is not None and notice.toon == "fout" else None
 
-    rows = _readiness_rows(inp.checks, tijd_kort, iso_)
-    hub = _hub_row(link, corrupt, shown)
-    if hub:
-        rows.append({"naam": "Koppeling met de Hub", "tijd": tijd_kort, "iso": iso_, **hub})
-    rows += [{**r, "tijd": tijd_kort, "iso": iso_} for r in _health_rows(inp.health, linked)]
-    service_rows = _service_rows(inp)
-    later = sum(1 for r in service_rows if r["label"] == "Nog niet beschikbaar")
-    worst = max((r["toon"] for r in rows), key=SEVERITY.__getitem__)
-    failing = [r["naam"] for r in rows[: len(CHECK_NAMES)] if r["toon"] == "storing"]
-
-    # Totaal = slechtste van gezondheid en gereedheid; "Niet gereed" is nooit groen (ONTWERPTAAL §13.2).
-    if not inp.ready or not linked:
-        label = "Niet gereed"
-        if worst == "gezond":  # kan niet: niet gereed zonder storing en zonder onbekend → toch niet groen
-            worst = "onbekend"
-    else:
-        label = TOTAL_LABEL[worst]
-    # bij "Niet gereed" begint de toelichting met hetzelfde woord als de toon van de pil (Peil §11.1)
+def _toelichting(
+    *,
+    failing: list[str],
+    unreadable: bool,
+    ready: bool,
+    state: str,
+    linked: bool,
+    confirmed: bool,
+    bezig: bool,
+    worst: str,
+    rows_beperkt: bool,
+) -> str:
+    """Toelichting naast de totaalpil; bij "Niet gereed" met hetzelfde woord als de toon van de pil (Peil §11.1)."""
     prefix = NOT_READY_PREFIX.get(worst, "Deels onbekend")
     if failing:
         uitleg = f"Storing in: {', '.join(failing)}."
-        if not linked:
-            uitleg += " Ook nog niet gekoppeld met de Hub."
-    elif corrupt:
-        uitleg = "Storing — de koppelstatus is onleesbaar."
-    elif not inp.ready:
-        uitleg = f"{prefix} — de eigen controles zijn niet compleet."
-    elif state == "nooit_gekoppeld":
-        uitleg = f"{prefix} — wacht op koppeling met de Hub."
-    elif state == "ontkoppeld":
-        uitleg = f"{prefix} — ontkoppeld door de Hub."
-    elif state == "ingetrokken":
-        uitleg = f"{prefix} — de Hub heeft de koppeling ingetrokken."
-    elif not linked:  # onbekende toestand in het koppelbestand (vangnet): nooit "Gereed en gekoppeld"
-        uitleg = f"{prefix} — koppelstatus onbekend."
-    elif worst == "gezond":
-        uitleg = "Gereed en gekoppeld met de Hub."
-    else:
-        uitleg = "Gereed; een of meer controles vragen aandacht (zie hieronder)."
-    if inp.ready and linked and later:
-        # ONTWERPTAAL §4.3: "Nog niet beschikbaar" verslechtert het totaal niet, maar staat wel in de telling
-        uitleg += f" {later} {'functie is' if later == 1 else 'functies zijn'} nog niet beschikbaar."
+        return uitleg + (" Ook nog niet gekoppeld met de Hub." if not linked else "")
+    if unreadable:
+        return "Storing — de koppelstatus is onleesbaar."
+    if not ready:
+        return f"{prefix} — de eigen controles zijn niet compleet."
+    if state == "nooit_gekoppeld":
+        return f"{prefix} — " + ("er loopt een koppelpoging." if bezig else "wacht op koppeling met de Hub.")
+    if state == "ontkoppeld":
+        return f"{prefix} — ontkoppeld door de Hub."
+    if state == "ingetrokken":
+        return f"{prefix} — de Hub heeft de koppeling ingetrokken."
+    if not linked:  # onbekende toestand in het koppelbestand (vangnet): nooit "Gereed en gekoppeld"
+        return f"{prefix} — koppelstatus onbekend."
+    if not confirmed:
+        return f"{prefix} — gekoppeld, maar de Hub heeft de koppeling nog niet bevestigd."
+    if worst == "gezond":
+        return "Gereed en gekoppeld met de Hub."
+    if worst == "beperkt" and not rows_beperkt:
+        return "Gereed, maar beperkt: zie het blok hieronder."  # E10: uit het dienstblok, hooguit Beperkt
+    return "Gereed; een of meer controles vragen aandacht (zie hieronder)."
+
+
+def _gereed(*, ok: bool, ready: bool, unreadable: bool, state: str, linked: bool) -> str:
     eigen = "de eigen controles van /readyz zijn gezond"
-    if inp.ready and linked:
-        gereed = "Ja"
-    elif not inp.ready:
-        gereed = "Nee — /readyz meldt een storing of een controle die niet kon worden uitgevoerd"
-    elif corrupt:
-        gereed = f"Nee — de koppelstatus is onleesbaar ({eigen})"
-    elif state == "ontkoppeld":
-        gereed = f"Nee — ontkoppeld door de Hub ({eigen})"
-    elif state == "ingetrokken":
-        gereed = f"Nee — de Hub heeft de koppeling ingetrokken ({eigen})"
+    if ok:
+        return "Ja"
+    if not ready:
+        return "Nee — /readyz meldt een storing of een controle die niet kon worden uitgevoerd"
+    if unreadable:
+        return f"Nee — de koppelstatus is onleesbaar ({eigen})"
+    if state == "ontkoppeld":
+        return f"Nee — ontkoppeld door de Hub ({eigen})"
+    if state == "ingetrokken":
+        return f"Nee — de Hub heeft de koppeling ingetrokken ({eigen})"
+    if linked:
+        return f"Nee — de Hub heeft de koppeling nog niet bevestigd ({eigen})"
+    return f"Nee — wacht op koppeling met de Hub ({eigen})"
+
+
+def _notice_data(inp: PageInput, unreadable: bool, form: bool) -> tuple[dict[str, Any], str, Notice | None]:
+    """Melding van dít verzoek (rol ``alert`` bij een fout, ``status`` bij info) of een blijvende toestand (geen rol,
+    E05). Geeft (plekken, rol, melding)."""
+    notice = NOTICES.get(inp.melding or "")
+    rol = ""
+    if notice is not None:
+        rol = "alert" if notice.toon == "fout" else "status"
+    elif unreadable:
+        notice = NOTICES["koppelstatus_onleesbaar"]
+    elif inp.host_blocked and form:
+        notice = HOST_NOTICE
+    if notice is None:
+        return {}, rol, None
+    data: dict[str, Any] = {
+        "melding": True,
+        "melding_toon": notice.toon,
+        "melding_icoon": "storing" if notice.toon == "fout" else "info",
+        "melding_titel": notice.titel,
+        "melding_tekst": notice.tekst,
+        "melding_rol": rol,
+    }
+    if notice.pad:
+        data["melding_pad"] = notice.pad
+    if rol == "alert" and inp.trace_id:
+        data.update(trace_id=inp.trace_id, melding_code=inp.melding)
+    elif notice is NOTICES["koppelstatus_onleesbaar"]:
+        data["melding_code"] = "koppelstatus_onleesbaar"  # blijvende toestand: code zonder trace-ID (E06)
+    if notice.veld and form and rol == "alert":
+        doel, link_tekst, spring = FIELD_LINK[notice.veld]
+        veld = "hub_adres" if notice.veld == "hub" else notice.veld
+        data.update(
+            melding_link=True,
+            melding_link_doel=doel,
+            melding_link_tekst=link_tekst,
+            spring_doel=doel,
+            spring_tekst=spring,
+            **{f"fout_{veld}": notice.veldfout},
+        )
+    return data, rol, notice
+
+
+def page_data(inp: PageInput) -> dict[str, Any]:
+    """Plekken van het Peil-sjabloon voor deze dienst (zuivere functie: ook voor de schermafdrukken en UI-tests)."""
+    link = public_view(inp.doc)
+    unreadable = is_unreadable(inp.doc)
+    state = str(link.get("state"))
+    form = may_pair(inp.doc)
+    tijd, iso_ = fmt_time(inp.now)
+
+    linked = state == "gekoppeld" and not unreadable
+    confirmed = linked and bool(inp.doc.get("confirmed_at"))
+    bezig = bool(link.get("koppelen_bezig")) and not unreadable
+    shown = inp.melding if inp.melding in NOTICES and NOTICES[inp.melding].toon == "fout" else None
+
+    rows = _readiness_rows(inp.checks)
+    hub = _hub_row(link, unreadable, shown)
+    if hub:
+        rows.append(hub)
+    rows += _health_rows(inp.health, linked)
+    for r in rows:
+        bron_tijd = r.pop("tijd_bron", "")
+        t, i = fmt_time(bron_tijd) if bron_tijd else (tijd, iso_)
+        r.update(tijd=_short(t), iso=i)
+    service_rows = _service_rows(inp)
+    later = sum(1 for r in service_rows if r["toon"] == "nog-niet")
+    open_ = sum(1 for r in service_rows if r["toon"] == "gate" and r["label"] == "Niet ingesteld")
+    totals = [AS_TOTAL[r["toon"]] for r in rows]
+    totals += [SERVICE_BLOCK_TOTAL[r["toon"]] for r in service_rows if r["toon"] in SERVICE_BLOCK_TOTAL]
+    worst = _worst(totals)
+
+    # Totaal = slechtste van gezondheid en gereedheid; "Niet gereed" is nooit groen (ONTWERPTAAL §13.2, contract §3.7).
+    gereed_ok = inp.ready and confirmed
+    if gereed_ok:
+        label = TOTAL_LABEL[worst]
     else:
-        gereed = f"Nee — wacht op koppeling met de Hub ({eigen})"
+        label = "Niet gereed"
+        worst = "onbekend" if worst == "gezond" else worst
+    uitleg = _toelichting(
+        failing=[r["naam"] for r in rows[: len(CHECK_NAMES)] if r["toon"] == "storing"],
+        unreadable=unreadable,
+        ready=inp.ready,
+        state=state,
+        linked=linked,
+        confirmed=confirmed,
+        bezig=bezig,
+        worst=worst,
+        rows_beperkt=any(AS_TOTAL[r["toon"]] == "beperkt" for r in rows),
+    )
+    if gereed_ok and (later or open_):
+        # ONTWERPTAAL §4.3: "Nog niet beschikbaar" en "Niet ingesteld" verslechteren het totaal niet, maar staan wel in
+        # de telling
+        delen = []
+        if later:
+            delen.append(f"{later} {'functie is' if later == 1 else 'functies zijn'} nog niet beschikbaar")
+        if open_:
+            delen.append(f"{open_} {'instelling staat' if open_ == 1 else 'instellingen staan'} nog open")
+        zin = " en ".join(delen)
+        uitleg += f" {zin[0].upper()}{zin[1:]}."
 
     data: dict[str, Any] = {
         "voorbeeld": False,
@@ -548,19 +738,28 @@ def page_data(inp: PageInput) -> dict[str, Any]:
         "totaal_label": label,
         "totaal_toelichting": uitleg,
         "checks": rows,
-        "gereed": gereed,
+        "gereed": _gereed(ok=gereed_ok, ready=inp.ready, unreadable=unreadable, state=state, linked=linked),
         "versie": __version__,
+        "bron": SOURCE_TEXT,
+        "gereed_uitleg": GEREED_UITLEG,
         "bijgewerkt": tijd,
         "bijgewerkt_iso": iso_,
         "gekoppeld": linked,
-        "ontkoppeld": state == "ontkoppeld" and not corrupt,
-        "ingetrokken": state == "ingetrokken" and not corrupt,
+        "ontkoppeld": state == "ontkoppeld" and not unreadable,
+        "ingetrokken": state == "ingetrokken" and not unreadable,
+        "koppelstatus_onleesbaar": unreadable,
         "koppelformulier": form,
+        "koppelen_bezig": bezig,
         "koppelcode_geldig": PAIRING_CODE_VALID,
         "csrf_token": inp.csrf,
         "dienst_blok_titel": "Wat deze versie doet",
         "dienst_blok": service_rows,
     }
+    started = (inp.doc.get("pending") or {}).get("started_at") if bezig else None
+    if started:
+        sinds, sinds_iso = fmt_time(str(started))
+        if sinds_iso:
+            data.update(koppelen_bezig_sinds=_short(sinds), koppelen_bezig_iso=sinds_iso)
     if linked:
         sinds, _ = fmt_time(link.get("linked_at"))
         data.update(
@@ -568,40 +767,17 @@ def page_data(inp: PageInput) -> dict[str, Any]:
             hub_adres=_safe_hub_url(link.get("hub_url")),
             hub_vingerafdruk=link.get("keyset_fingerprint") or "onbekend",
         )
-
-    if notice is None and corrupt:
-        # Het sjabloon heeft geen koppelblok voor deze toestand; de melding legt hem uit (zie PEIL_REVIEW.md). Zonder
-        # koppelpoging staat de code niet in de melding maar bij de controle "Koppeling met de Hub": als lopende tekst in
-        # het smalle meldingvak liep hij zonder breekpunt bij ruimere tekstafstand (WCAG 1.4.12) op 320 px buiten het
-        # vak (P-14). Na een poging staat hij in het <code>-blok met Trace-ID, dat wel mag afbreken.
-        notice = NOTICES["koppelstatus_onleesbaar"]
-    if notice is not None:
-        data.update(
-            melding=True,
-            melding_toon=notice.toon,
-            melding_icoon="storing" if notice.toon == "fout" else "info",
-            melding_titel=notice.titel,
-            melding_tekst=notice.tekst,
-        )
-        if notice.toon == "fout" and inp.trace_id:
-            data.update(trace_id=inp.trace_id, melding_code=inp.melding)
-        if notice.veld and form:
-            doel, link_tekst, spring = FIELD_LINK[notice.veld]
-            data.update(
-                melding_link=True,
-                melding_link_doel=doel,
-                melding_link_tekst=link_tekst,
-                spring_doel=doel,
-                spring_tekst=spring,
-                **{f"fout_{'hub_adres' if notice.veld == 'hub' else notice.veld}": notice.veldfout},
-            )
+    melding, rol, notice = _notice_data(inp, unreadable, form)
+    data.update(melding)
     staat = {"gekoppeld": "gekoppeld", "ontkoppeld": "ontkoppeld", "ingetrokken": "ingetrokken"}.get(
         state, "niet gekoppeld"
     )
-    if corrupt:
+    if unreadable:
         staat = "koppelstatus onleesbaar"
+    elif bezig and not linked:
+        staat = "koppelen bezig"
     titel = f"{label.lower()}, {staat}"
-    if notice is not None and notice.toon == "fout" and notice.titel.lower() not in titel:  # niets dubbel in de titel
+    if rol == "alert" and notice is not None and notice.titel.lower() not in titel:  # niets dubbel in de titel
         titel = f"{notice.titel} · {titel}"
     data["titel_toestand"] = titel
     return data
@@ -633,7 +809,8 @@ def _fallback(request: Request, exc: Exception) -> Response:
         f"<title>{SERVICE_NAME} — statuspagina niet beschikbaar</title>"
         "<style>html{background:Canvas;color:CanvasText}"
         'body{margin:0;font:400 1rem/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",Arial,'
-        "sans-serif}main{max-width:47.5rem;margin:0 auto;padding:1.5rem 1rem 3rem}h1{font-size:1.5rem;line-height:2rem}"
+        "sans-serif}main{max-width:47.5rem;margin:0 auto;padding:1.5rem 1rem 3rem;overflow-wrap:break-word}"
+        "h1{font-size:1.5rem;line-height:2rem}"
         'code{font-family:ui-monospace,"Cascadia Mono","Roboto Mono","DejaVu Sans Mono",Menlo,Consolas,'
         "monospace;font-size:max(.9375em,.875rem);overflow-wrap:anywhere}.selecteer{display:block;margin-top:.25rem;"
         "padding:.5rem .625rem;border:2px dashed;border-radius:.25rem;user-select:all;word-break:break-all}"
@@ -668,38 +845,6 @@ def _with_headers(resp: Response, csrf: str | None = None) -> Response:
     return resp
 
 
-def _form_ok(request: Request, token: str) -> bool:
-    """CSRF (double-submit) + herkomst. ``Origin: null`` laat de eigen pagina zelf ontstaan (``Referrer-Policy:
-    no-referrer`` maakt de Origin van een formulier-POST ``null``), dus daarop alleen kan het niet weigeren.
-    ``Sec-Fetch-Site`` (moderne browsers) sluit het gat: een andere app op hetzelfde NAS-adres (andere poort = zelfde
-    site, dus SameSite-cookies gaan mee en cookies van die app gelden ook voor deze poort) of een sandbox-iframe geeft
-    ``same-site``/``cross-site`` en wordt geweigerd. Zonder die header (oude browser, curl) blijft de CSRF-controle."""
-    cookie = request.cookies.get(CSRF_COOKIE, "")
-    if not cookie or not token or not hmac.compare_digest(cookie, token):
-        return False
-    site = request.headers.get("sec-fetch-site")
-    if site is not None and site not in ("same-origin", "none"):
-        return False
-    origin = request.headers.get("origin")
-    if origin and origin != "null":
-        host = request.headers.get("host", "")
-        if urlsplit(origin).netloc != host:
-            return False
-    return True
-
-
-def _redirect(request: Request, notice: str) -> Response:
-    tid = trace_id_for(request)
-    url = f"/?melding={notice}"
-    if NOTICES[notice].toon == "fout":
-        url += f"&poging={request.app.state.pair_attempts.put(notice, tid)}"
-        # dezelfde Trace-ID als op de pagina, in X-Trace-Id en in het auditspoor; nooit het ingevulde Hub-adres (§3.7)
-        log.warning("statuspagina: koppelen niet gelukt (code %s, Trace-ID %s)", notice, tid)
-    else:
-        log.info("statuspagina: %s (Trace-ID %s)", notice, tid)
-    return _with_headers(RedirectResponse(url, status_code=303))
-
-
 def _db_facts(request: Request) -> tuple[dict[str, int] | None, list[dict[str, Any]] | None]:
     """Aantal bronnen per status en de connector-gezondheid; ``None`` als de database dat niet kan geven (eerlijk
     "onbekend", nooit 0)."""
@@ -718,25 +863,12 @@ def _db_facts(request: Request) -> tuple[dict[str, int] | None, list[dict[str, A
         return None, None
 
 
-@router.get("/", response_class=HTMLResponse)
-def status_page(request: Request, melding: str | None = None, poging: str | None = None) -> Response:
+def _page_input(request: Request, csrf: str, melding: str | None = None, trace_id: str | None = None) -> PageInput:
     state = request.app.state
-    try:
-        tpl = _template(request.app)
-    except PeilTemplateError as exc:
-        return _fallback(request, exc)
-    csrf = _csrf_token(request)
     ready, checks = readiness(request)
     roots, root_warnings = validate_read_roots(state.settings.read_roots, state.settings.data_dir)
-    code = melding if melding in NOTICES else None
-    trace_id = state.pair_attempts.get(poging, code) if code else None
-    if code and NOTICES[code].toon == "fout" and trace_id is None:
-        # Een foutmelding hoort bij een echte, recente poging van dit proces (met haar Trace-ID). Een zelfgemaakte of
-        # verlopen link (zonder geldige poging-sleutel) toont geen melding: de pagina beweert nooit een mislukking
-        # die niet gebeurd is.
-        code = None
     per_status, health = _db_facts(request)
-    inp = PageInput(
+    return PageInput(
         ready=ready,
         checks=checks,
         doc=state.hub_link.read_safe(),
@@ -745,11 +877,23 @@ def status_page(request: Request, melding: str | None = None, poging: str | None
         root_warnings=len(root_warnings),
         csrf=csrf,
         now=utcnow(),
-        melding=code,
-        trace_id=trace_id if code else None,
+        melding=melding,
+        trace_id=trace_id,
         health=health,
+        host_blocked=not host_allowed(request.headers.get("host", "")),
     )
-    return _with_headers(HTMLResponse(render_page(tpl, inp)), csrf)
+
+
+@router.get("/", response_class=HTMLResponse)
+def status_page(request: Request) -> Response:
+    """Toont de stand van nu. Een melding over een poging hoort alleen bij het antwoord op die POST (§3.7); een
+    ``?melding=`` in de URL heeft geen effect."""
+    try:
+        tpl = _template(request.app)
+    except PeilTemplateError as exc:
+        return _fallback(request, exc)
+    csrf = _csrf_token(request)
+    return _with_headers(HTMLResponse(render_page(tpl, _page_input(request, csrf))), csrf)
 
 
 def _audit_pair(request: Request, ok: bool, code: str) -> None:
@@ -785,6 +929,26 @@ def _audit_pair(request: Request, ok: bool, code: str) -> None:
         log.warning("auditspoor van het koppelen kon niet worden vastgelegd (database niet beschikbaar)")
 
 
+def _answer(request: Request, code: str) -> Response:
+    """Antwoord op een POST: de pagina met de melding van dít verzoek en de HTTP-status van die melding (§3.7), plus
+    precies één logregel met code en Trace-ID (nooit het ingevulde Hub-adres, nooit geheimen)."""
+    notice = NOTICES[code]
+    tid = trace_id_for(request)
+    level = logging.INFO if notice.toon == "info" else logging.WARNING
+    log.log(level, "statuspagina: koppelpoging afgehandeld (code %s, HTTP %s, Trace-ID %s)", code, notice.http, tid)
+    try:
+        tpl = _template(request.app)
+    except PeilTemplateError as exc:
+        return _fallback(request, exc)
+    csrf = _csrf_token(request)
+    body = render_page(tpl, _page_input(request, csrf, melding=code, trace_id=tid))
+    resp = _with_headers(HTMLResponse(body, status_code=notice.http), csrf)
+    resp.headers[TRACE_HEADER] = tid
+    if notice.http == 429:
+        resp.headers["Retry-After"] = str(int(WINDOW_S))
+    return resp
+
+
 @router.post("/koppelen")
 def pair(
     request: Request,
@@ -793,33 +957,42 @@ def pair(
     koppelcode: str = Form(""),
     hub_vingerafdruk: str = Form(""),
 ) -> Response:
-    """Veldnamen zoals het Peil-sjabloon: ``hub_adres``, ``koppelcode``, ``hub_vingerafdruk`` (+ ``csrf``)."""
+    """Veldnamen zoals het Peil-sjabloon: ``hub_adres``, ``koppelcode``, ``hub_vingerafdruk`` (+ ``csrf``).
+
+    Volgorde (§3.7): herkomst (Origin, Sec-Fetch-Site, Host) → telt als poging (5 per IP / 20 per dienst per 15 min) →
+    formuliertoken → onleesbaar koppelbestand → al eens gekoppeld → lopende poging → invoer → Hub."""
     state = request.app.state
-    if not _form_ok(request, csrf):
-        return _redirect(request, "ongeldig_formulier")
+    refused = origin_refusal(request)
+    if refused is not None:
+        return _answer(request, refused)
     client_ip = request.client.host if request.client else "onbekend"
     if not state.pair_throttle.allow(client_ip):
-        return _redirect(request, "te_veel_pogingen")
+        return _answer(request, "te_veel_pogingen")
+    cookie = request.cookies.get(CSRF_COOKIE, "")
+    if not cookie or not csrf or not hmac.compare_digest(cookie, csrf):
+        return _answer(request, "ongeldig_formulier")
     doc = state.hub_link.read_safe()
-    if doc.get("corrupt"):
-        return _redirect(request, "koppelstatus_onleesbaar")
-    if not may_pair(doc):
-        return _redirect(request, "al_gekoppeld")
-    # Invoer als geheel controleren, nooit eerst afkappen: een te lange invoer is ongeldig (§3.3: koppelcode ≤ 32
-    # tekens), ook als het begin ervan toevallig een geldige waarde is. De lengte is begrensd door de bodygrens (§5).
+    if is_unreadable(doc):
+        return _answer(request, "koppelstatus_onleesbaar")
+    if doc.get("state") != "nooit_gekoppeld" or doc.get("first_linked_at"):
+        return _answer(request, "al_gekoppeld")
+    if doc.get("pending") is not None:
+        return _answer(request, "koppelen_bezig")
+    # Invoer als geheel controleren, nooit eerst afkappen: een te lange invoer is ongeldig (Hub-adres ≤ 512, koppelcode
+    # ≤ 32, vingerafdruk ≤ 64), ook als het begin ervan toevallig een geldige waarde is.
     try:
         url = validate_hub_url(hub_adres, state.settings.allow_loopback_hub)
     except HubUrlError:
-        return _redirect(request, "ongeldig_hub_adres")
+        return _answer(request, "hub_adres_ongeldig")
     code = normalize_pairing_code(koppelcode)
     if code is None:
-        return _redirect(request, "koppelcode_ongeldig")
+        return _answer(request, "koppelcode_ongeldig")
     fingerprint = normalize_fingerprint(hub_vingerafdruk)
     if fingerprint is None:
-        return _redirect(request, "vingerafdruk_ongeldig")
+        return _answer(request, "vingerafdruk_ongeldig")
     outcome = state.enrollment.enroll_with_code(url, code, fingerprint)
-    _audit_pair(request, outcome.ok, outcome.code)
+    if outcome.code != "koppelen_bezig":
+        _audit_pair(request, outcome.ok, outcome.code)
     if outcome.ok:
-        confirmed = bool(outcome.detail.get("confirmed"))
-        return _redirect(request, "gekoppeld" if confirmed else "gekoppeld_onbevestigd")
-    return _redirect(request, outcome.code if outcome.code in NOTICES else "hub_onbereikbaar")
+        return _answer(request, "gekoppeld" if outcome.detail.get("confirmed") else "gekoppeld_onbevestigd")
+    return _answer(request, outcome.code if outcome.code in NOTICES else "hub_onbereikbaar")

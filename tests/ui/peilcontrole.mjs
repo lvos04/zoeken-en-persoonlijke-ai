@@ -11,7 +11,11 @@ const require = createRequire(import.meta.url);
 export const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 export const AXE_VERSION = require('axe-core/package.json').version;
 export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
-export const BREEDTES = [320, 360, 390, 768, 1440];
+// Contract 1.3 §13 = ONTWERPTAAL §12: 320, 360, 390, 768, 1024 en 1440 px, licht en donker.
+export const BREEDTES = [320, 360, 390, 768, 1024, 1440];
+// Peil 1.1.1 (E12): reflow op 320 px ook met het systeemlettertype van de CI-runner (DejaVu Sans), ongeacht wat het
+// lettertype van deze machine is. Andere letter: PEIL_LETTER="<familie>".
+export const LETTER = process.env.PEIL_LETTER || 'DejaVu Sans';
 export const THEMAS = [['licht', 'light'], ['donker', 'dark']];
 
 // Vaste woorden (ONTWERPTAAL §11.1): wat op een pil mag staan, en woorden die Peil vervangen heeft.
@@ -19,9 +23,10 @@ export const PIL_WOORDEN = new Set([
   'Gezond', 'Beperkt', 'Storing', 'Onbekend', 'Alles gezond', 'Deels onbekend', 'Niet gereed',
   'Gekoppeld', 'Niet gekoppeld', 'Ontkoppeld', 'Ingetrokken', 'Onleesbaar',
   'Nog niet beschikbaar', 'Niet beschikbaar', 'Niet ingesteld', 'Alleen met toestemming',
+  'Koppelen bezig', 'Verouderd',
 ]);
 // Niet-gezonde woorden: een pil met dit woord mag nooit de gezond-stijl (groen) hebben.
-const NIET_GROEN = /onbekend|niet gereed|niet gekoppeld|ontkoppeld|ingetrokken|onleesbaar|beschikbaar|niet ingesteld|verouderd|laatst bekend|storing|beperkt/i;
+const NIET_GROEN = /onbekend|niet gereed|niet gekoppeld|ontkoppeld|ingetrokken|onleesbaar|beschikbaar|niet ingesteld|verouderd|laatst bekend|storing|beperkt|koppelen bezig/i;
 const VERBODEN = [
   /\bin orde\b/i, /\bActueel\b/, /\bVerminderd\b/, /\bVerstoord\b/, /\bLet op\b/, /\bOffline\b/, /\bProbleem\b/,
   /\bNiet gezond\b/, /Laden…/, /\bGelukt\b/, /\bOK\b/, /\bDoorgaan\b/, /Weet je het zeker/, /snooz/i, /safe mode/i,
@@ -211,4 +216,25 @@ export async function controleer(page, { metFocus = true } = {}) {
       pillen: m.pillen.map((p) => `${p.toon}:${p.woord}`), titel: m.structuur.titel, focus,
     },
   };
+}
+
+// WCAG 1.4.12 tekstafstand en (E12) het lettertype van de CI-runner op 320 px: geen overloop van de pagina en geen
+// inhoud buiten zijn vak. Herlaadt de pagina daarna, zodat de volgende controles de echte stand zien.
+export async function reflow320(page) {
+  const problemen = [];
+  const meting = {};
+  const proeven = [
+    ['tekstafstand (1.4.12)', '*{line-height:1.5!important;letter-spacing:.12em!important;word-spacing:.16em!important}p{margin-bottom:2em!important}'],
+    [`lettertype ${LETTER}`, `body,body *:not(code):not(.mono){font-family:"${LETTER}",sans-serif!important}`],
+  ];
+  for (const [naam, css] of proeven) {
+    await page.addStyleTag({ content: css });
+    const o = await page.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth);
+    const vak = await page.evaluate(OVERLOOP_BINNEN);
+    meting[naam] = { overloop: o, buiten_vak: vak };
+    if (o > 0) problemen.push(`overloop bij ${naam}: ${o}px`);
+    if (vak.length) problemen.push(`inhoud buiten zijn vak bij ${naam}: ${vak.join(', ')}`);
+    await page.reload({ waitUntil: 'load' });
+  }
+  return { problemen, meting };
 }

@@ -26,7 +26,7 @@ from .search.router import router as search_router
 from .security.auth import Authenticator, JwtPolicy, ReplayCache
 from .security.secrets import ensure_secrets, load_identity, load_vault_key, public_jwk
 from .security.vault import Vault
-from .status_page import AttemptLog, PairThrottle
+from .status_page import PairThrottle
 from .status_page import router as status_router
 from .voice.router import router as voice_router
 
@@ -69,7 +69,7 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
             "B07 persoonlijke zoekmachine (PostgreSQL + pgvector) en B15 spraak/persoonlijke AI voor TrueNAS Home "
             "Platform V2. Bronselectie en toestemming (B07-001) met lees-padenallowlist, gebruikers-ACL vóór ranking, "
             "kinderprofiel-beperkingen en intrekking met gecontroleerde purge. Authenticatie alleen met Hub-JWT's "
-            "die zijn ondertekend met een bij het koppelen gepinde sleutel (platformcontract 1.2 §4). Niet-gebouwde "
+            "die zijn ondertekend met een bij het koppelen gepinde sleutel (platformcontract 1.3 §4). Niet-gebouwde "
             "functies geven `501 capability_unavailable`; nooit gesimuleerd succes."
         ),
         docs_url=None,
@@ -87,7 +87,6 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
     app.state.auth = Authenticator(store.read_safe, policy, ReplayCache(db.engine, settings.jwt_leeway_s), trigger)
     app.state.alembic_head = head_revision(settings)
     app.state.pair_throttle = PairThrottle()
-    app.state.pair_attempts = AttemptLog()
     app.state.search_limiter = RateLimiter(max(1, settings.search_rate_limit), settings.search_rate_window_s)
     app.state.app_id = APP_ID
 
@@ -103,7 +102,7 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
             response.headers.setdefault("Cache-Control", "no-store")
         return response
 
-    # buitenste laag: telt de body vóór routering en authenticatie (contract 1.2 §5)
+    # buitenste laag: telt de body vóór routering en authenticatie (contract 1.3 §5)
     app.add_middleware(BodyLimitMiddleware, max_bytes=MAX_BODY_BYTES)
 
     for r in (health_router, status_router, connector_router, search_router, voice_router):

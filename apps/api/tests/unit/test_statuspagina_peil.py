@@ -1,13 +1,15 @@
-"""Statuspagina in Peil (ONTWERPTAAL §13.2) volgens contract 1.2 §3.7 — rendering per toestand, zonder database.
+"""Statuspagina in Peil 1.1.1 (ONTWERPTAAL §13.2) volgens contract 1.3 §3.7 — rendering per toestand, zonder database.
 
 Toestanden komen uit ``tests/ui/render_toestanden.py`` (dezelfde invoer als de browsercontrole en de schermafdrukken):
 niet gekoppeld · koppelen mislukt · gekoppeld · ingetrokken · niet gereed (+ gekoppeld-beperkt, ontkoppeld,
-koppelstatus onleesbaar).
+koppelstatus onleesbaar, koppelen bezig, herkomst geweigerd, adres zonder koppelen, worker verouderd, shares beperkt).
 """
 
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 import re
 import shutil
 import subprocess
@@ -20,8 +22,8 @@ from typing import Any
 
 import pytest
 
-from search_ai.peil import load_template, render, strip_comments
-from search_ai.status_page import NOTICES, AttemptLog, PageInput, page_data, render_page
+from search_ai.peil import PeilTemplateError, load_template, parse, render, split_copy, strip_comments
+from search_ai.status_page import NOTICES, PageInput, host_allowed, page_data, render_page
 from tests.conftest import REPO_ROOT
 
 OK = [{"name": n, "status": "ok"} for n in ("database", "migraties", "pgvector", "geheimen")]
@@ -78,7 +80,7 @@ def test_geen_js_geen_externe_bron_alles_ingevuld(name: str) -> None:
     hrefs = set(re.findall(r'href="([^"]*)"', page))
     toegestaan = {"/healthz", "/readyz", _fixtures().HUB}
     assert all(h.startswith("#") or h in toegestaan for h in hrefs), hrefs
-    assert page.count("<h1>") == 1 and "Peil statuspagina.css 1.1.0" in page
+    assert page.count("<h1>") == 1 and "Peil statuspagina.css 1.1.1" in page
     assert "ontkoppelcode" not in page.lower() and 'action="/ontkoppelen"' not in page
     for token in ("service_token", "svc_", "secret_sha256", "AbCd"):  # alleen de witte lijst van §3.5
         assert token not in page
@@ -88,15 +90,21 @@ def test_geen_js_geen_externe_bron_alles_ingevuld(name: str) -> None:
 def test_koppelformulier_alleen_als_nooit_gekoppeld(name: str) -> None:
     page = _page(name)
     inp, _ = _fixtures().toestanden()[name]
-    form = inp.doc.get("state") == "nooit_gekoppeld" and not inp.doc.get("first_linked_at")
+    form = (
+        inp.doc.get("state") == "nooit_gekoppeld"
+        and not inp.doc.get("first_linked_at")
+        and not inp.doc.get("corrupt")
+        and not inp.doc.get("pending")  # Peil 1.1.1 E02: koppelen bezig verbergt het formulier
+    )
     assert ('action="/koppelen"' in page) is form
     assert ('name="csrf"' in page) is form
     if form:
         for field in ("hub_adres", "koppelcode", "hub_vingerafdruk"):  # drie verplichte velden (§3.7)
             assert re.search(rf'<input [^>]*name="{field}"[^>]*\srequired', page), field
         assert "Vingerafdruk van de Hub" in page and "Geldig 60 minuten" in page
-    else:
-        assert "via de Hub" in page
+        assert " novalidate>" in page and page.count("(verplicht)") == 3  # Peil 1.1.1 E09
+    else:  # de pagina zegt hoe het verder gaat: via de Hub, met een nieuw koppeltoken, of wachten op de poging
+        assert "via de Hub" in page or "nieuw koppeltoken" in page or "Koppelen bezig" in page
 
 
 # ------------------------------------------------------------------ per toestand
@@ -106,11 +114,10 @@ def test_niet_gekoppeld() -> None:
     totaal = _totaal(page)
     assert "pil-onbekend" in totaal and "Niet gereed" in totaal and "wacht op koppeling met de Hub" in totaal
     assert "pil-gezond" not in totaal  # eerste signaal nooit groen als niet gereed
-    assert 'class="melding' not in page
-    assert (
-        '<span class="pil pil-onbekend"><svg aria-hidden="true"><use href="#i-niet-gekoppeld"/></svg>Niet gekoppeld'
-        in page
-    )
+    assert 'class="melding' not in page and 'role="' not in page
+    # Peil 1.1.1 E04: "Niet gekoppeld" overal met link-2-off, ook in de controles
+    assert page.count('<use href="#i-niet-gekoppeld"/></svg>Niet gekoppeld</span>') == 2
+    assert '<span class="pil pil-niet-gekoppeld">' in page
 
 
 def test_koppelen_mislukt_toont_code_en_kopieerbare_trace_id() -> None:
@@ -118,8 +125,8 @@ def test_koppelen_mislukt_toont_code_en_kopieerbare_trace_id() -> None:
     trace = _fixtures().TRACE
     assert '<div class="melding melding-fout" role="alert" aria-labelledby="melding-titel"' in page
     assert "<strong>Koppelen is mislukt</strong>" in page
-    assert "Code <code>hub_weigerde</code> · Trace-ID (selecteer en kopieer)" in page
-    assert f'<code class="selecteer">{trace}</code>' in page
+    assert '<p class="meta">Code <code>hub_weigerde</code></p>' in page  # E06: code los van de trace-ID
+    assert f'Trace-ID (selecteer en kopieer)</p><code class="selecteer">{trace}</code>' in page
     # veldfout bij de koppelcode, gekoppeld via aria-describedby; skiplink en melding wijzen naar het veld
     assert 'aria-describedby="code-hulp code-fout" aria-invalid="true"' in page
     assert '<p class="veldfout" id="code-fout">' in page and "verlopen, al gebruikt of ongeldig" in page
@@ -137,19 +144,33 @@ def test_gekoppeld_is_neutraal_nooit_groen_en_zonder_formulier() -> None:
         '<span class="pil pil-neutraal"><svg aria-hidden="true"><use href="#i-gekoppeld"/></svg>Gekoppeld</span>'
         in page
     )
-    assert f"<code>{_fixtures().FP}</code>" in page and f'<a href="{_fixtures().HUB}">Hub openen</a>' in page
+    hub = _fixtures().HUB
+    assert (
+        f"<code>{_fixtures().FP}</code>" in page
+        and f'<a class="knop knop-secundair" href="{hub}">Hub openen</a>' in page
+    )
     assert "Ontkoppelen of opnieuw koppelen gaat via de Hub." in page
     assert not re.search(r"pil-gezond[^<]*<svg[^>]*><use[^>]*/></svg>Gekoppeld", page)
-    # alles gemeten en goed: dan pas groen
+    # alles gemeten en goed (ook bevestigd en de connector-gezondheid): dan pas groen
     assert "Alles gezond" in _totaal(page) and "pil-gezond" in _totaal(page)
     assert "2 actief, 1 gepauzeerd" in page
+    # bron van het totaal en de uitleg van Gereed (Peil 1.1.1, contract 1.3 §3.7)
+    assert "connector-gezondheid (wat de Hub ziet)" in page and "de Hub heeft de koppeling bevestigd" in page
+
+
+def test_melding_na_koppelen_heeft_rol_status() -> None:
+    page = _page("gekoppeld-melding")
+    assert '<div class="melding melding-info" role="status" aria-labelledby="melding-titel"' in page
+    assert 'class="selecteer"' not in page  # geen trace-ID bij een info-melding
 
 
 def test_gekoppeld_maar_beperkt_is_nooit_alles_gezond() -> None:
     page = _page("gekoppeld-beperkt")
     totaal = _totaal(page)
-    assert "pil-beperkt" in totaal and "Alles gezond" not in totaal
-    assert "nog niet bevestigd" in page and "(code niet_bevestigd)" in page and "(code dead_letter)" in page
+    assert "Alles gezond" not in totaal and "Niet gereed" in totaal  # niet bevestigd = niet gereed (§3.7)
+    assert "pil-beperkt" in totaal
+    assert "nog niet bevestigd" in page and "(code <code>niet_bevestigd</code>)" in page
+    assert "(code <code>dead_letter</code>)" in page
 
 
 def test_ingetrokken() -> None:
@@ -177,11 +198,76 @@ def test_niet_gereed_is_storing_en_nooit_groen() -> None:
     assert "Nee — /readyz meldt een storing" in page
 
 
-def test_koppelstatus_onleesbaar_is_storing_zonder_formulier() -> None:
+def test_koppelstatus_onleesbaar_is_storing_zonder_formulier_en_zonder_rol() -> None:
+    """Peil 1.1.1 E01/E05/E06: eigen koppelblok (pil Storing "Onleesbaar"), melding zonder live-rol met code en pad,
+    geen trace-ID en geen formulier."""
     page = _page("koppelstatus-onleesbaar")
-    assert "Koppelstatus onleesbaar" in page and "(code koppelstatus_onleesbaar)" in page
-    assert "pil-storing" in _totaal(page) and 'action="/koppelen"' not in page
+    assert (
+        '<span class="pil pil-storing"><svg aria-hidden="true"><use href="#i-storing"/></svg>Onleesbaar</span>' in page
+    )
+    assert "Hier staat bewust geen formulier" in page and 'action="/koppelen"' not in page
+    assert '<div class="melding melding-fout" style=' in page and 'role="' not in page
+    assert "<p><code>/appdata/secrets/hub-link.json</code></p>" in page
+    assert '<p class="meta">Code <code>koppelstatus_onleesbaar</code></p>' in page and 'class="selecteer"' not in page
+    assert "pil-storing" in _totaal(page)
     assert "2 genegeerd (zie de app-log)" in page
+
+
+def test_koppelen_op_onleesbaar_is_een_alert_met_trace_id() -> None:
+    page = _page("koppelen-op-onleesbaar")
+    assert 'role="alert"' in page and _fixtures().TRACE in page and "al eens gekoppeld" not in page
+
+
+def test_koppelen_bezig_verbergt_het_formulier_en_noemt_de_starttijd() -> None:
+    page = _page("koppelen-bezig")
+    assert '<use href="#i-nog-niet"/></svg>Koppelen bezig</span>' in page
+    assert re.search(r'gestart om <time datetime="2026-11-09T\d\d:54:00[^"]*">\d\d:54</time>', page)
+    assert 'action="/koppelen"' not in page and "Maak in de Hub een koppelcode" not in page
+    assert "Niet gereed" in _totaal(page) and "er loopt een koppelpoging" in _totaal(page)
+    assert "<title>Zoeken en persoonlijke AI — niet gereed, koppelen bezig</title>" in page
+
+
+def test_herkomst_geweigerd_en_adres_zonder_koppelen() -> None:
+    page = _page("herkomst-geweigerd")
+    assert 'role="alert"' in page and "<code>herkomst_geweigerd</code>" in page
+    page = _page("adres-zonder-koppelen")
+    assert "<strong>Koppelen kan niet via dit adres</strong>" in page and 'role="' not in page
+    assert 'action="/koppelen"' in page
+
+
+def test_verouderde_worker_is_laatst_bekend_en_nooit_alles_gezond() -> None:
+    page = _page("worker-verouderd")
+    assert (
+        '<span class="pil pil-verouderd"><svg aria-hidden="true"><use href="#i-verouderd"/></svg>Verouderd</span>'
+        in page
+    )
+    assert re.search(r'<time datetime="2026-11-09T\d\d:41:00[^"]*">\d\d:41</time>', page)  # tijd van de meting
+    assert "(code <code>meting_verouderd</code>)" in page
+    totaal = _totaal(page)
+    assert "Deels onbekend" in totaal and "Alles gezond" not in totaal
+
+
+def test_beperkt_dienstblok_maakt_het_totaal_hooguit_beperkt() -> None:
+    """Peil 1.1.1 E10: een verse Beperkt/Storing in het dienstblok maakt het totaal hooguit Beperkt."""
+    page = _page("shares-beperkt")
+    totaal = _totaal(page)
+    assert "pil-beperkt" in totaal and "Gereed, maar beperkt" in totaal
+    storing = page_data(_inp(doc=_fixtures()._linked(), root_warnings=3, roots=0))
+    assert storing["totaal_toon"] == "beperkt"
+
+
+def test_dienstblok_tonen_volgen_peil_1_1_1() -> None:
+    data = page_data(_inp(doc=_fixtures()._linked(), roots=0))
+    rijen = {r["naam"]: r for r in data["dienst_blok"]}
+    assert rijen["Bronnen"]["toon"] == "gate"
+    assert (rijen["Gekoppelde shares"]["toon"], rijen["Gekoppelde shares"]["label"]) == ("gate", "Niet ingesteld")
+    for naam in ("Indexeren en semantisch zoeken", "Spraak en persoonlijke AI"):
+        assert (rijen[naam]["toon"], rijen[naam]["reden_code"]) == ("nog-niet", "capability_unavailable")
+    # niet ingesteld en nog niet beschikbaar tellen niet mee, maar staan wel in de telling
+    assert data["totaal_label"] == "Alles gezond"
+    assert data["totaal_toelichting"] == (
+        "Gereed en gekoppeld met de Hub. 2 functies zijn nog niet beschikbaar en 1 instelling staat nog open."
+    )
 
 
 # ------------------------------------------------------------------ eerlijk en veilig
@@ -206,22 +292,31 @@ def test_niet_gekoppeld_is_nooit_groen(state: str) -> None:
     assert data["totaal_toon"] == "onbekend" and data["totaal_label"] == "Niet gereed"
 
 
+def test_gekoppeld_zonder_bevestiging_is_niet_gereed() -> None:
+    data = page_data(_inp(doc=_fixtures()._linked(confirmed_at=None)))
+    assert data["totaal_label"] == "Niet gereed" and data["totaal_toon"] == "onbekend"
+    assert data["gereed"].startswith("Nee — de Hub heeft de koppeling nog niet bevestigd")
+
+
 def test_onbekende_melding_wordt_niet_weerspiegeld() -> None:
     data = page_data(_inp(melding="<script>alert(1)</script>"))
     assert "melding" not in data and "trace_id" not in data
 
 
-@pytest.mark.parametrize("state", ["nooit_gekoppeld", "ontkoppeld", "ingetrokken"])
-def test_succesmelding_uit_de_url_spreekt_de_koppelstatus_nooit_tegen(state: str) -> None:
-    for code in ("gekoppeld", "gekoppeld_onbevestigd"):
-        assert "melding" not in page_data(_inp(doc={"state": state}, melding=code))
-    assert page_data(_inp(doc=_fixtures()._linked(), melding="gekoppeld"))["melding_titel"] == "Gekoppeld met de Hub"
+def test_meldingsrol_alleen_bij_dit_verzoek() -> None:
+    """Peil 1.1.1 E05: alert = fout van dít verzoek, status = info na dít verzoek, leeg = bestaande toestand."""
+    assert page_data(_inp(melding="te_veel_pogingen", trace_id="t-1"))["melding_rol"] == "alert"
+    assert page_data(_inp(doc=_fixtures()._linked(), melding="gekoppeld"))["melding_rol"] == "status"
+    assert page_data(_inp(doc={"state": "nooit_gekoppeld", "corrupt": True}))["melding_rol"] == ""
+    assert page_data(_inp(host_blocked=True))["melding_rol"] == ""
 
 
-def test_trace_id_alleen_bij_een_foutmelding() -> None:
-    assert "trace_id" not in page_data(_inp(melding="gekoppeld", trace_id="t"))
+def test_trace_id_alleen_bij_een_foutmelding_van_dit_verzoek() -> None:
+    assert "trace_id" not in page_data(_inp(doc=_fixtures()._linked(), melding="gekoppeld", trace_id="t"))
     data = page_data(_inp(melding="te_veel_pogingen", trace_id="t-1"))
     assert data["trace_id"] == "t-1" and data["melding_code"] == "te_veel_pogingen"
+    zonder = page_data(_inp(doc={"state": "nooit_gekoppeld", "corrupt": True}))
+    assert "trace_id" not in zonder and zonder["melding_code"] == "koppelstatus_onleesbaar"
 
 
 def test_hub_adres_wordt_geescaped_en_alleen_http_s_is_een_link() -> None:
@@ -230,6 +325,7 @@ def test_hub_adres_wordt_geescaped_en_alleen_http_s_is_een_link() -> None:
         "state": "gekoppeld",
         "hub_url": 'http://nas"><script>x</script>:30400',
         "linked_at": "2026-11-08T19:14:00+00:00",
+        "confirmed_at": "2026-11-08T19:14:01+00:00",
         "pins": {"keyset_fingerprint": "MEGG-8GFG-2E4Y-K2RQ"},
     }
     page = render_page(tpl, _inp(doc=doc))
@@ -238,33 +334,63 @@ def test_hub_adres_wordt_geescaped_en_alleen_http_s_is_een_link() -> None:
     assert "javascript:" not in page
 
 
-def _doc_voor(code: str) -> dict[str, Any]:
-    """Een koppelstatus waarbij de melding past (een melding spreekt de koppelstatus nooit tegen)."""
-    if NOTICES[code].toon == "info":
-        return _fixtures()._linked()
-    if code == "al_gekoppeld":
-        return {"state": "ontkoppeld", "first_linked_at": "2026-11-08T19:14:00+00:00"}
-    if code == "koppelstatus_onleesbaar":
-        return {"state": "nooit_gekoppeld", "corrupt": True}
-    return {"state": "nooit_gekoppeld"}
-
-
 @pytest.mark.parametrize("code", sorted(NOTICES))
-def test_elke_melding_rendert_met_vaste_tekst(code: str) -> None:
+def test_elke_melding_rendert_met_vaste_tekst_en_status(code: str) -> None:
     notice = NOTICES[code]
-    doc = _doc_voor(code)
+    doc = _fixtures()._linked() if notice.toon == "info" else {"state": "nooit_gekoppeld"}
     page = render_page(load_template(), _inp(doc=doc, melding=code, trace_id="0f0e0d0c-0000-4000-8000-000000000000"))
     assert f"<strong>{notice.titel}</strong>" in page
     assert ("0f0e0d0c-0000-4000-8000-000000000000" in page) is (notice.toon == "fout")
+    assert notice.http in (200, 403, 409, 422, 429, 503)
+    if notice.toon == "info":
+        assert notice.http == 200
     if notice.veld:
         veld = {"hub": "hub-fout", "koppelcode": "code-fout", "vingerafdruk": "vinger-fout"}[notice.veld]
         assert f'id="{veld}"' in page
+
+
+def test_http_status_per_melding_volgt_contract_1_3() -> None:
+    assert NOTICES["koppelen_bezig"].http == 409 and NOTICES["al_gekoppeld"].http == 409
+    assert NOTICES["herkomst_geweigerd"].http == 403 and NOTICES["host_niet_toegestaan"].http == 403
+    assert NOTICES["te_veel_pogingen"].http == 429 and NOTICES["koppelstatus_onleesbaar"].http == 409
 
 
 def test_tijd_in_nederlandse_notatie() -> None:
     data = page_data(_inp())
     assert data["bijgewerkt"] == "9 nov 2026, 10:56 UTC" or re.fullmatch(r"9 nov 2026, \d\d:\d\d", data["bijgewerkt"])
     assert data["checks"][0]["iso"].startswith("2026-11-09T")
+
+
+# ------------------------------------------------------------------ Host-beperking (§3.7 punt 4)
+@pytest.mark.parametrize(
+    ("host", "ok"),
+    [
+        ("192.168.1.5", True),
+        ("192.168.1.5:30450", True),
+        ("[fd00::5]:30450", True),
+        ("[fd00::5]", True),
+        ("nas", True),
+        ("nas:30450", True),
+        ("NAS.LAN", True),
+        ("nas.local.", True),
+        ("box.home.arpa", True),
+        ("svc.internal:1", True),
+        ("testserver", True),
+        ("zoeken.voorbeeld.nl", False),
+        ("10.1.2.3.nip.io", False),
+        ("local", True),
+        ("evil.local.example.com", False),
+        ("127.1", False),
+        ("0x7f000001", False),
+        ("fd00::5", False),  # IPv6 zonder [ ]
+        ("[nas]", False),
+        ("nas:abc", False),
+        ("", False),
+        ("na s", False),
+    ],
+)
+def test_host_beperking(host: str, ok: bool) -> None:
+    assert host_allowed(host) is ok
 
 
 # ------------------------------------------------------------------ ontwerpreview (docs/ontwerp/PEIL_REVIEW.md)
@@ -288,11 +414,18 @@ def test_review_geen_interne_ids_en_alleen_peil_woorden(name: str) -> None:
         ({"state": "ontkoppeld", "first_linked_at": "x"}, "Nee — ontkoppeld door de Hub"),
         ({"state": "ingetrokken", "first_linked_at": "x"}, "Nee — de Hub heeft de koppeling ingetrokken"),
         ({"state": "ontkoppeld", "corrupt": True}, "Nee — de koppelstatus is onleesbaar"),
+        ({"state": "nooit_gekoppeld", "unreadable_replaced_at": "t"}, "Nee — de koppelstatus is onleesbaar"),
     ],
 )
 def test_review_gereed_noemt_de_echte_reden(doc: dict[str, Any], verwacht: str) -> None:
     gereed = page_data(_inp(doc=doc))["gereed"]
     assert gereed.startswith(verwacht) and gereed.endswith("(de eigen controles van /readyz zijn gezond)")
+
+
+def test_na_vervangen_onleesbaar_bestand_blijft_de_pagina_onleesbaar_tot_een_koppeling() -> None:
+    """§3.5 (RV6): zolang ``first_linked_at`` leeg is na het vervangen: geen formulier, geen vertrouwen."""
+    data = page_data(_inp(doc={"state": "nooit_gekoppeld", "unreadable_replaced_at": "2026-11-10T08:00:00Z"}))
+    assert data["koppelstatus_onleesbaar"] and not data["koppelformulier"]
 
 
 def test_review_hub_weigerde_noemt_de_koppelcode_en_herhaalt_niet() -> None:
@@ -305,13 +438,7 @@ def test_review_hub_weigerde_noemt_de_koppelcode_en_herhaalt_niet() -> None:
     assert "Laatste melding" not in hub["reden"]  # staat al in de melding bovenaan
     # zonder melding (bv. later opnieuw geladen) blijft de laatste melding wél bij de controle staan
     hub = next(r for r in page_data(_inp(doc=doc))["checks"] if r["naam"] == "Koppeling met de Hub")
-    assert "Laatste melding: De Hub weigerde" in hub["reden"] and hub["reden"].endswith("(code hub_weigerde)")
-
-
-def test_review_nog_niet_beschikbaar_staat_in_de_telling() -> None:
-    data = page_data(_inp(doc=_fixtures()._linked()))
-    assert data["totaal_label"] == "Alles gezond"
-    assert data["totaal_toelichting"] == "Gereed en gekoppeld met de Hub. 2 functies zijn nog niet beschikbaar."
+    assert "Laatste melding: De Hub weigerde" in hub["reden"] and hub["reden_code"] == "hub_weigerde"
 
 
 def test_review_paginatitel_herhaalt_niets() -> None:
@@ -319,34 +446,6 @@ def test_review_paginatitel_herhaalt_niets() -> None:
     assert titel == "niet gereed, koppelstatus onleesbaar"
     titel = page_data(_inp(melding="hub_weigerde", trace_id="t"))["titel_toestand"]
     assert titel == "Koppelen is mislukt · niet gereed, niet gekoppeld"
-
-
-def test_review_geen_share_is_niet_ingesteld_en_nooit_groen() -> None:
-    rij = next(r for r in page_data(_inp(roots=0))["dienst_blok"] if r["naam"] == "Gekoppelde shares")
-    assert (rij["toon"], rij["label"]) == ("onbekend", "Niet ingesteld") and "Host Path met Read Only" in rij["reden"]
-
-
-# ------------------------------------------------------------------ QA statuspagina (ADR-0015)
-def test_qa_al_gekoppeld_nooit_naast_het_koppelformulier() -> None:
-    """'Deze dienst is al eens gekoppeld' is onwaar zolang het formulier er staat (nog nooit gekoppeld)."""
-    data = page_data(_inp(melding="al_gekoppeld", trace_id="t-1"))
-    assert data["koppelformulier"] and "melding" not in data and "trace_id" not in data
-    data = page_data(_inp(doc={"state": "ontkoppeld", "first_linked_at": "x"}, melding="al_gekoppeld", trace_id="t"))
-    assert data["melding_titel"] == "Koppelen kan hier niet" and data["trace_id"] == "t"
-
-
-def test_qa_koppelstatus_onleesbaar_alleen_als_het_zo_is() -> None:
-    # na een poging op een onleesbaar koppelbestand: eigen melding met code + Trace-ID, nooit "al eens gekoppeld"
-    data = page_data(
-        _inp(doc={"state": "nooit_gekoppeld", "corrupt": True}, melding="koppelstatus_onleesbaar", trace_id="t")
-    )
-    assert data["melding_titel"] == "Koppelstatus onleesbaar" and data["melding_code"] == "koppelstatus_onleesbaar"
-    assert "al eens gekoppeld" not in data["melding_tekst"] and not data["koppelformulier"]
-    # zonder poging dezelfde vaste tekst, zonder code in het smalle meldingvak (P-14: de code staat bij de controle)
-    zonder = page_data(_inp(doc={"state": "nooit_gekoppeld", "corrupt": True}))
-    assert zonder["melding_tekst"] == data["melding_tekst"] and "melding_code" not in zonder
-    # is het bestand weer leesbaar, dan beweert een oude link niets meer
-    assert "melding" not in page_data(_inp(melding="koppelstatus_onleesbaar", trace_id="t"))
 
 
 @pytest.mark.parametrize(
@@ -359,7 +458,7 @@ def test_qa_koppelstatus_onleesbaar_alleen_als_het_zo_is() -> None:
 )
 def test_qa_toelichting_bij_niet_gereed_volgt_de_toon(doc: dict[str, Any], eind: str) -> None:
     """Ontkoppeld met vastgelopen gebeurtenissen: pil 'beperkt', dus ook de toelichting 'Beperkt', niet 'Deels onbekend'."""
-    vast = [{"name": "outbox", "status": "degraded", "reason_code": "dead_letter"}]
+    vast = [{"name": "jobs", "status": "degraded", "reason_code": "dead_letter"}]
     data = page_data(_inp(doc=doc, health=vast))
     assert (data["totaal_toon"], data["totaal_label"]) == ("beperkt", "Niet gereed")
     assert data["totaal_toelichting"] == f"Beperkt — {eind}"
@@ -374,52 +473,67 @@ def test_qa_onbekende_koppeltoestand_is_nooit_gereed_en_gekoppeld() -> None:
     assert data["totaal_toelichting"] == "Deels onbekend — koppelstatus onbekend." and data["gereed"].startswith("Nee")
 
 
-# ------------------------------------------------------------------ poging-sleutel voor de Trace-ID
-def test_attempt_log() -> None:
-    log = AttemptLog(ttl_s=10, max_items=3)
-    key = log.put("hub_weigerde", "trace-1", now=0)
-    assert log.get(key, "hub_weigerde", now=1) == "trace-1"
-    assert log.get(key, "te_veel_pogingen", now=1) is None  # andere melding: geen Trace-ID
-    assert log.get("kort", "hub_weigerde", now=1) is None
-    assert log.get("<script>alert(1)</script>xxxxxxxxxx", "hub_weigerde", now=1) is None
-    assert log.get(key, "hub_weigerde", now=10) is None  # verlopen
-    keys = [log.put("x", f"t{i}", now=20) for i in range(5)]
-    assert log.get(keys[0], "x", now=21) is None and log.get(keys[-1], "x", now=21) == "t4"  # begrensd
-
-
-# ------------------------------------------------------------------ renderer = referentie (sjabloon.mjs)
+# ------------------------------------------------------------------ renderer in één doorgang (Peil 1.1.1, E07)
 def test_render_semantiek() -> None:
     tpl = "<!--ALS:a-->A{{x}}<!--/ALS:a--><!--NIET:a-->N<!--/NIET:a--><!--ELK:l-->[{{n}}<!--ALS:r-->:{{r}}<!--/ALS:r-->]<!--/ELK:l-->"
     assert render(tpl, {"a": True, "x": "<&\"'>", "l": [{"n": 1}, {"n": 2, "r": "y"}]}) == (
-        "A&lt;&amp;&quot;&#x27;&gt;[1][2:y]"
+        "A&lt;&amp;&quot;&#39;&gt;[1][2:y]"
     )
     assert render(tpl, {"a": False, "l": []}) == "N"
     assert strip_comments("a<!-- uitleg\n met regels -->\nb") == "ab"
+    # waar = niet leeg: 0, lege tekst en een lege lijst zijn onwaar; True/False als tekst zoals JavaScript
+    assert render("<!--ALS:x-->ja<!--/ALS:x-->", {"x": 0}) == "" and render("{{b}}", {"b": True}) == "true"
 
 
-REFERENTIE = REPO_ROOT.parent / "ai-server-manager" / "design" / "ontwerptaal" / "bouw" / "sjabloon.mjs"
+def test_een_doorgang_een_waarde_wordt_nooit_opnieuw_als_sjabloon_gelezen() -> None:
+    """1.1.0 vulde een bronnaam ``{{csrf_token}}`` in met de CSRF-waarde; 1.1.1 laat zo'n waarde letterlijk staan."""
+    out = render("<p>{{naam}}</p><i>{{csrf_token}}</i>", {"naam": "{{csrf_token}}", "csrf_token": "GEHEIM"})
+    assert out == "<p>{{csrf_token}}</p><i>GEHEIM</i>"
+    out = render("{{a}}", {"a": "<!--ALS:b-->x<!--/ALS:b-->", "b": True})
+    assert out == "&lt;!--ALS:b--&gt;x&lt;!--/ALS:b--&gt;"
+
+
+def test_verkeerd_genest_sjabloon_wordt_geweigerd() -> None:
+    for kapot in ("<!--ALS:a-->x", "<!--ALS:a-->x<!--/NIET:a-->", "x<!--/ELK:l-->"):
+        with pytest.raises(PeilTemplateError):
+            parse(kapot)
+
+
+def _referentie_python() -> ModuleType | None:
+    """``bouw/sjabloon.py`` van de ontwerptaal op de gepinde commit: uit ``PEIL_BRON_DIR`` (CI) of de naastgelegen
+    checkout van ai-server-manager."""
+    prov, _ = split_copy((REPO_ROOT / "design" / "ontwerptaal" / "statuspagina.html").read_bytes())
+    bron: bytes | None = None
+    env = os.environ.get("PEIL_BRON_DIR")
+    if env and (Path(env) / "sjabloon.py").exists():
+        bron = (Path(env) / "sjabloon.py").read_bytes()
+    else:
+        sibling = REPO_ROOT.parent / "ai-server-manager"
+        git = shutil.which("git")
+        if git and (sibling / ".git").exists():
+            r = subprocess.run(
+                [git, "-C", str(sibling), "show", f"{prov.commit}:design/ontwerptaal/bouw/sjabloon.py"],
+                capture_output=True,
+                check=False,
+            )
+            bron = r.stdout if r.returncode == 0 else None
+    if bron is None:
+        return None
+    mod = ModuleType("peil_referentie_sjabloon")
+    exec(compile(bron, "sjabloon.py", "exec"), mod.__dict__)  # noqa: S102 - eigen bron van het platform, gepinde commit
+    return mod
 
 
 @pytest.mark.parametrize("name", ALLE)
-def test_zelfde_uitkomst_als_de_referentie_renderer(name: str, tmp_path: Path) -> None:
-    """Lokaal (naastgelegen ai-server-manager + node): de Python-renderer geeft byte voor byte wat ``sjabloon.mjs``
-    geeft, op het echte sjabloon met de echte gegevens van deze toestand."""
-    node = shutil.which("node")
-    if not node or not REFERENTIE.exists():
-        pytest.skip("referentie-renderer (ai-server-manager/design/ontwerptaal/bouw/sjabloon.mjs) of node ontbreekt")
-    import json
-
+def test_zelfde_uitkomst_als_de_referentie_renderer(name: str) -> None:
+    """De Python-renderer geeft byte voor byte wat de referentie ``bouw/sjabloon.py`` (Peil 1.1.1, byte-gelijk getest met
+    ``sjabloon.mjs``) geeft, op het echte sjabloon met de echte gegevens van deze toestand."""
+    ref = _referentie_python()
+    if ref is None:
+        if os.environ.get("PEIL_BRON_VERPLICHT") == "1":
+            pytest.fail("referentie-renderer bouw/sjabloon.py niet beschikbaar (PEIL_BRON_DIR)")
+        pytest.skip("referentie-renderer (ai-server-manager/design/ontwerptaal/bouw/sjabloon.py) ontbreekt")
     inp, _ = _fixtures().toestanden()[name]
-    data = page_data(inp)
+    data = json.loads(json.dumps(page_data(inp)))  # zoals de referentie het als JSON krijgt
     tpl = load_template()
-    (tmp_path / "data.json").write_text(json.dumps(data), encoding="utf-8")
-    (tmp_path / "tpl.html").write_text(tpl.body, encoding="utf-8")
-    script = (
-        f"import {{ render }} from {json.dumps(REFERENTIE.as_uri())}; import fs from 'node:fs';"
-        f"process.stdout.write(render(fs.readFileSync({json.dumps(str(tmp_path / 'tpl.html'))}, 'utf8'),"
-        f" JSON.parse(fs.readFileSync({json.dumps(str(tmp_path / 'data.json'))}, 'utf8'))));"
-    )
-    out = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, check=True, text=True)
-    ours = render(tpl.body, data)
-    # enige bekende verschil: JS escapet ' als &#39;, Python als &#x27; (zelfde teken)
-    assert ours.replace("&#x27;", "&#39;") == out.stdout
+    assert render(tpl.body, data) == ref.render(tpl.body, data)

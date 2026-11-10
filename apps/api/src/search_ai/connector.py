@@ -33,6 +33,7 @@ from .pagination import MAX_LIMIT, decode_int_cursor, encode_cursor, offset_page
 from .redact import redact
 from .search import service as search_service
 from .search.models import IndexRun, IndexSource
+from .search.paths import validate_read_roots
 from .security.auth import Principal, require_admin_or_service, require_connector_reader
 from .timeutil import iso, utcnow
 
@@ -73,6 +74,8 @@ def discover(request: Request, _p: Principal = Depends(require_connector_reader)
             "read:evidence",
         ],
         "item_types": {k: v["title_nl"] for k, v in ITEM_TYPES.items()},
+        # open instellingen (gates): geen gezondheid, wel iets wat de beheerder nog moet doen
+        "instellingen": {"leeswortels": "ingesteld" if _roots_configured(request) else "niet_ingesteld"},
         "unbuilt_item_types": UNBUILT_ITEM_TYPES,
         "functions": {
             "search.fulltext": "beschikbaar (ACL vóór ranking; index leeg zolang ingest ontbreekt)",
@@ -91,6 +94,12 @@ def discover(request: Request, _p: Principal = Depends(require_connector_reader)
         },
         "timestamp_utc": iso(utcnow()),
     }
+
+
+def _roots_configured(request: Request) -> bool:
+    settings = request.app.state.settings
+    roots, warnings = validate_read_roots(settings.read_roots, settings.data_dir)
+    return bool(roots or warnings)
 
 
 @router.get("/health", summary="Gezondheid volgens het connectorcontract")

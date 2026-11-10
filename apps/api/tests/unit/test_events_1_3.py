@@ -49,8 +49,13 @@ def test_vaste_service_lijst_van_1_3() -> None:
 
 @pytest.mark.parametrize(
     "ok",
-    ["search.source.created", "search.consent.granted", "voice.session.started", "app.health.changed"]
-    + sorted(SERVICE_EVENTS),
+    [
+        "search.source.created",
+        "search.consent.granted",
+        "voice.session.started",
+        "app.health.changed",
+        *sorted(SERVICE_EVENTS),
+    ],
 )
 def test_toegestane_event_types(ok: str) -> None:
     check_event_type(ok)

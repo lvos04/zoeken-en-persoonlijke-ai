@@ -44,7 +44,9 @@ def test_vaste_namen_observed_at_en_totaal_is_slechtste(paired_client: Any, fake
         s.execute(update(OutboxEvent).values(delivery_status="dead_letter"))
         s.commit()
     h = _health(paired_client, fake_hub)
-    assert _checks(h)["jobs"]["status"] == "degraded" and h["status"] == "degraded" and h["reason_code"] == "dead_letter"
+    assert (
+        _checks(h)["jobs"]["status"] == "degraded" and h["status"] == "degraded" and h["reason_code"] == "dead_letter"
+    )
 
 
 def test_verouderde_hartslag_is_unknown_met_meting_verouderd(paired_client: Any, fake_hub: FakeHub) -> None:
@@ -100,7 +102,9 @@ def test_service_events_komen_ongeweigerd_door_de_inbox(
     assert fake_hub.sim.inbox_rejections == []
 
 
-def test_ongeldig_event_gaat_niet_over_het_lan_maar_direct_naar_dead_letter(paired_client: Any, fake_hub: FakeHub) -> None:
+def test_ongeldig_event_gaat_niet_over_het_lan_maar_direct_naar_dead_letter(
+    paired_client: Any, fake_hub: FakeHub
+) -> None:
     with paired_client.app.state.db.sessions() as s:
         from search_ai import events
 
@@ -121,3 +125,25 @@ def _tid() -> str:
     import uuid
 
     return str(uuid.uuid4())
+
+
+def test_geen_share_is_een_open_instelling_geen_gezondheidscheck(
+    app_factory: Any, fake_hub: FakeHub, tmp_path: Any
+) -> None:
+    """Nog geen share is een gate (ONTWERPTAAL §4.1), zoals "Niet ingesteld" op de statuspagina: geen check die het
+    totaal verslechtert, wel zichtbaar in discover. Een ingestelde share die genegeerd wordt, is wél een check."""
+    from tests.conftest import pair
+
+    client = app_factory(read_roots=())
+    pair(client, fake_hub)
+    Worker(client.app.state.settings).heartbeat(0)
+    h = _health(client, fake_hub)
+    assert "leeswortels" not in _checks(h) and h["status"] == "healthy"
+    disc = client.get("/connector/v1/discover", headers=fake_hub.service()).json()
+    assert disc["instellingen"]["leeswortels"] == "niet_ingesteld"
+    kapot = app_factory(read_roots=("/etc",), data_dir=tmp_path / "ander")  # systeemmap: genegeerd met waarschuwing
+    code = fake_hub.sim.add_pairing_code()
+    assert kapot.app.state.enrollment.enroll_with_code(HUB_URL, code, fake_hub.fingerprint()).ok
+    Worker(kapot.app.state.settings).heartbeat(0)
+    h = _health(kapot, fake_hub)
+    assert _checks(h)["leeswortels"]["status"] == "degraded" and h["status"] == "degraded"

@@ -1,6 +1,6 @@
 """Hub-simulator als eigen proces voor de dienst-E2E. ALLEEN voor tests; geen productiecode.
 
-Dunne HTTP-schil om ``apps/api/tests/hubsim.py`` (dezelfde kern als in de integratietests), die platformcontract 1.2
+Dunne HTTP-schil om ``apps/api/tests/hubsim.py`` (dezelfde kern als in de integratietests), die platformcontract 1.3
 volgt: enroll exact volgens §3.3 (422/401/429/herhaling), ``services/self``, ``self/rotate``, ``events/inbox``,
 ``key-rotations`` en ``jwks``. Testhulpmiddelen onder ``/sim/*`` (koppeltoken en koppelcode maken, JWT's uitgeven, intrekken,
 rotatie aanvragen, inbox en alle verzoeken lezen).

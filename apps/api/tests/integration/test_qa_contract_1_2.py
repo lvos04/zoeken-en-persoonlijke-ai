@@ -81,8 +81,8 @@ def test_unreadable_body_with_valid_auth_stays_422_and_uses_the_jti(
 
 def test_status_page_form_errors_are_unaffected(client: Any) -> None:
     # de statuspagina heeft geen Hub-JWT nodig: een kapotte formulierbody blijft gewoon een formulierfout
-    r = client.post("/koppelen", data={"csrf": "x"}, follow_redirects=False)
-    assert r.status_code == 303 and "ongeldig_formulier" in r.headers["location"]
+    r = client.post("/koppelen", data={"csrf": "x"}, headers={"Origin": "http://testserver"}, follow_redirects=False)
+    assert r.status_code == 403 and "<code>ongeldig_formulier</code>" in r.text
 
 
 # ------------------------------------------------------------------ §3.7: gelijktijdig koppelen
@@ -109,9 +109,11 @@ def test_concurrent_code_pairings_only_one_reaches_the_hub(client: Any, fake_hub
     r = client.post(
         "/koppelen",
         data={"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": second, "hub_vingerafdruk": fake_hub.fingerprint()},
+        headers={"Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"},
         follow_redirects=False,
     )
-    assert "koppelen_bezig" in r.headers["location"] and enroll_calls(fake_hub) == 1
+    # contract 1.3 §3.7: koppelen bezig → 409 met de vaste melding, niets naar de Hub
+    assert r.status_code == 409 and "<code>koppelen_bezig</code>" in r.text and enroll_calls(fake_hub) == 1
     release.set()
     first.join(20)
     fake_hub.override = None
@@ -191,17 +193,23 @@ def test_reused_enrollment_token_on_a_fresh_install_is_refused(
 # ------------------------------------------------------------------ §3.7: rate-limit en na intrekking
 def test_status_page_rate_limit_ignores_x_forwarded_for(client: Any, fake_hub: FakeHub) -> None:
     csrf = _csrf(client)
-    locations = []
+    uitkomsten = []
     for i in range(7):
         r = client.post(
             "/koppelen",
             data={"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": "X", "hub_vingerafdruk": fake_hub.fingerprint()},
-            headers={"X-Forwarded-For": f"10.9.9.{i}", "X-Real-IP": f"10.8.8.{i}", "Forwarded": f"for=10.7.7.{i}"},
+            headers={
+                "Origin": "http://testserver",
+                "X-Forwarded-For": f"10.9.9.{i}",
+                "X-Real-IP": f"10.8.8.{i}",
+                "Forwarded": f"for=10.7.7.{i}",
+            },
             follow_redirects=False,
         )
-        locations.append(re.sub(r"&poging=[\w-]+$", "", r.headers["location"]))
-    assert locations[:5] == ["/?melding=koppelcode_ongeldig"] * 5
-    assert locations[5:] == ["/?melding=te_veel_pogingen"] * 2  # elke poging telt voor hetzelfde TCP-adres
+        code = re.search(r'<p class="meta">Code <code>([a-z_]+)</code></p>', r.text)
+        uitkomsten.append((r.status_code, code.group(1) if code else None))
+    assert uitkomsten[:5] == [(422, "koppelcode_ongeldig")] * 5
+    assert uitkomsten[5:] == [(429, "te_veel_pogingen")] * 2  # elke poging telt voor hetzelfde TCP-adres
     assert enroll_calls(fake_hub) == 0
 
 
@@ -220,9 +228,10 @@ def test_no_pairing_on_the_status_page_after_revocation(paired_client: Any, fake
     r = client.post(
         "/koppelen",
         data={"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": code, "hub_vingerafdruk": fake_hub.fingerprint()},
+        headers={"Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"},
         follow_redirects=False,
     )
-    assert "al_gekoppeld" in r.headers["location"] and enroll_calls(fake_hub) == calls
+    assert r.status_code == 409 and "<code>al_gekoppeld</code>" in r.text and enroll_calls(fake_hub) == calls
     # ook rechtstreeks via de koppellogica: een koppelcode vervangt nooit een (ingetrokken) koppeling
     outcome = client.app.state.enrollment.enroll_with_code(HUB_URL, code, fake_hub.fingerprint())
     assert not outcome.ok and outcome.code == "al_gekoppeld"

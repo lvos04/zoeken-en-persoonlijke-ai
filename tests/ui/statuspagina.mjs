@@ -4,7 +4,7 @@
 //   python tests/ui/render_toestanden.py --out <map>
 //   node tests/ui/statuspagina.mjs --in <map> [--rapport <bestand.json>] [--schermafdrukken <map>]
 //
-// Per toestand × breedte (320/360/390/768/1440) × thema (licht/donker), geserveerd met de echte beveiligingskoppen
+// Per toestand × breedte (320/360/390/768/1024/1440) × thema (licht/donker), geserveerd met de echte beveiligingskoppen
 // van de dienst (CSP default-src 'none'), de controles van peilcontrole.mjs:
 //   - axe-core: 0 overtredingen op WCAG 2.0/2.1/2.2 A + AA (en best practices);
 //   - contrast gemeten in de DOM: tekst ≥ 4,5:1, iconen/randen/veldranden ≥ 3:1; tekst ≥ 14 px;
@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { AXE_TAGS, AXE_VERSION, BREEDTES, OVERLOOP_BINNEN, THEMAS, controleer } from './peilcontrole.mjs';
+import { AXE_TAGS, AXE_VERSION, BREEDTES, LETTER, THEMAS, controleer, reflow320 } from './peilcontrole.mjs';
 
 const SHOT_BREEDTES = new Set([360, 768, 1440]);
 const arg = (naam) => { const i = process.argv.indexOf(naam); return i > 0 ? process.argv[i + 1] : undefined; };
@@ -59,13 +59,10 @@ for (const { naam, schermafdruk } of meta.toestanden) {
       if (extern.length) problemen.push(`externe verzoeken: ${extern.join(', ')}`);
       if (!csp.includes("default-src 'none'")) problemen.push(`CSP zonder default-src 'none': ${csp}`);
       if (breedte === 320 && thema === 'licht') {
-        // WCAG 1.4.12 tekstafstand: geen overloop van de pagina en geen inhoud buiten zijn vak
-        await page.addStyleTag({ content: '*{line-height:1.5!important;letter-spacing:.12em!important;word-spacing:.16em!important}p{margin-bottom:2em!important}' });
-        const o = await page.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth);
-        const vak = await page.evaluate(OVERLOOP_BINNEN);
-        if (o > 0) problemen.push(`overloop bij tekstafstand (1.4.12): ${o}px`);
-        if (vak.length) problemen.push(`inhoud buiten zijn vak bij tekstafstand (1.4.12): ${vak.join(', ')}`);
-        await page.reload({ waitUntil: 'load' });
+        // WCAG 1.4.12 tekstafstand en het lettertype van de CI-runner (E12): geen overloop, geen inhoud buiten zijn vak
+        const r = await reflow320(page);
+        problemen.push(...r.problemen);
+        meting.reflow_320 = r.meting;
       }
       let afdruk = null;
       if (SHOTS && schermafdruk && SHOT_BREEDTES.has(breedte)) {
@@ -88,6 +85,7 @@ const rapport = {
   axe_tags: AXE_TAGS,
   browser: BROWSER,
   breedtes: BREEDTES,
+  lettertype_reflow: LETTER,
   themas: THEMAS.map(([t]) => t),
   toestanden: meta.toestanden.map((t) => t.naam),
   controles: resultaten.length,
