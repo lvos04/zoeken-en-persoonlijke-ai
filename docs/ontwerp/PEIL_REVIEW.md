@@ -1,4 +1,4 @@
-# Ontwerpreview — statuspagina van zoeken-en-persoonlijke-ai (Peil 1.1.0)
+# Ontwerpreview — statuspagina van zoeken-en-persoonlijke-ai (Peil 1.1.0; bijgewerkt voor Peil 1.1.1 in §11)
 
 **Wat:** onafhankelijke ontwerpreview achteraf (contract 1.2 §13, werkwijze) van `GET /`, in alle toestanden.
 **Door:** de design-agent. **Datum:** 9 november 2026. **Repo:** `lvos04/zoeken-en-persoonlijke-ai`, branch
@@ -235,3 +235,33 @@ make ui-echt                             # echte dienst + simulators + PostgreSQ
 
 Vereist voor `ui-echt`: PostgreSQL met pgvector op `127.0.0.1:5432` (gebruiker `postgres`, databases `zoek_ui_echt_*`;
 andere server via `SEARCH_AI_TEST_ADMIN_URL`).
+
+## 11. Peil 1.1.1 en contract 1.3 (10 november 2026)
+
+De statuspagina staat sinds ADR-0016 op **Peil 1.1.1** (gepinde kopie op `ai-server-manager@0a7143b`) en volgt
+contract 1.3 §3.7. Opnieuw gemeten tegen de echte dienst met Hub-simulators (`make ui-echt`, rapport
+`docs/screenshots/peil/statuspagina/CONTROLE.json`): **16 toestanden × 320/360/390/768/1024/1440 × licht/donker + forced
+colors = 208 controles, 0 mislukt**; axe-core 0 overtredingen; laagste tekstcontrast 8,34:1 (licht) en 7,84:1 (donker);
+op 320 px geen overloop, ook met ruimere tekstafstand en met DejaVu Sans. De renderer-controle (`make ui`, zonder
+database) geeft 192 controles, 0 mislukt.
+
+Wat er veranderde (handoff COMPONENTEN §29):
+
+| Onderdeel | 1.1.0 | 1.1.1 |
+|---|---|---|
+| Renderer | vier regex-doorgangen; een waarde kon opnieuw als sjabloon gelezen worden | één doorgang, byte-gelijk getest met `bouw/sjabloon.py` |
+| Niet gekoppeld / ontkoppeld / ingetrokken | toon `onbekend` met symbool `link-2-off` | toon `niet-gekoppeld` (zelfde symbool in de controles en het koppelblok) |
+| Indexeren, spraak (P5) | `onbekend`, label *Nog niet beschikbaar* | `nog-niet` (zandloper) met `reden_code` `capability_unavailable`; telt niet mee |
+| Geen share | `onbekend` *Niet ingesteld* | `gate` *Niet ingesteld*: een open instelling, telt niet mee (de connector heeft dan ook geen check) |
+| Worker zonder verse hartslag | (geen regel) | `verouderd` met de tijd van de laatste hartslag; telt als Onbekend |
+| Melding | altijd `role="alert"`, code alleen met trace-ID | `melding_rol` `alert`/`status`/leeg; code ook zonder trace-ID; `melding_pad` |
+| Onleesbaar koppelbestand | alleen een melding | eigen koppelblok (pil Storing *Onleesbaar*, geen formulier) + melding zonder rol met code en pad |
+| Koppelen bezig | formulier bleef staan | pil *Koppelen bezig* met starttijd, geen formulier (POST → 409) |
+| Formulier | browservalidatie | `novalidate` + "(verplicht)"; server-side veldfout |
+| Gereed | gekoppeld | gekoppeld **en bevestigd** door de Hub; eigen `gereed_uitleg` (zonder "in orde") |
+| Totaal | eigen controles | ook het dienstblok volgens E10 (verse Beperkt/Storing hooguit Beperkt) |
+
+Nieuwe toestanden in de review: `adres-zonder-koppelen` (domeinnaam als Host), `host-geweigerd` (403),
+`koppelen-bezig` en `koppelen-bezig-poging` (409). De afdrukken zijn opnieuw gemaakt; de 1.1.0-afdrukken zijn vervangen.
+
+**NIET GEVALIDEERD:** een echte schermlezer, telefoon of tv en de echte NAS.

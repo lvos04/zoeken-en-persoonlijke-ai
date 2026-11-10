@@ -12,23 +12,25 @@ Na de onafhankelijke review van P0 (ADR-0008): samengestelde bron-sleutels (migr
 ACL vóór ranking (alleen intern en getest; de API voor semantisch zoeken blijft 501 zonder lokaal model), intrekken
 zonder restdata (ook zoekgeschiedenis en back-ups) en een verzoek- en tijdlimiet op zoeken.
 
-**Platformcontract 1.2** (kopie in [`docs/platform-v2/PLATFORM_CONTRACTEN.md`](docs/platform-v2/PLATFORM_CONTRACTEN.md),
-keuzes in [`docs/adr/ADR-0011-contract-1-2-conformiteit.md`](docs/adr/ADR-0011-contract-1-2-conformiteit.md), review in
-[`docs/adr/ADR-0012-qa-contract-1-2.md`](docs/adr/ADR-0012-qa-contract-1-2.md)): koppeling
-in `/appdata/secrets/hub-link.json` met gepinde Hub-sleutels en vingerafdruk, alleen Hub-JWT's (`token_use`,
-`jti`-replaycache), ontkoppelen/opnieuw koppelen alleen via de Hub, geen root-proces in de container (ook PID 1 niet).
+**Platformcontract 1.3** (kopie in [`docs/platform-v2/PLATFORM_CONTRACTEN.md`](docs/platform-v2/PLATFORM_CONTRACTEN.md)
+met drifttest, conformiteitslijst [`docs/platform-v2/CONTRACT_1.3_CONFORMITEIT.md`](docs/platform-v2/CONTRACT_1.3_CONFORMITEIT.md),
+keuzes in [`docs/adr/ADR-0016-contract-1-3-en-peil-1-1-1.md`](docs/adr/ADR-0016-contract-1-3-en-peil-1-1-1.md); de
+1.2-keuzes staan in ADR-0011 en ADR-0012): koppeling in `/appdata/secrets/hub-link.json` met gepinde Hub-sleutels en
+een vingerafdruk over alle sleutels, alleen Hub-JWT's (`aud` als één string, `token_use`, `jti` per mutatie),
+ontkoppelen/opnieuw koppelen alleen via de Hub, vaste `service.*`-events, connector-health met hartslag van de worker
+(totaal = slechtste check), en geen root-proces in de container (ook PID 1 niet; bounding set leeg).
 Getest tegen een Hub-simulator, **niet** tegen de echte Hub.
 
-**Statuspagina in Peil** ([`docs/adr/ADR-0013-statuspagina-in-peil.md`](docs/adr/ADR-0013-statuspagina-in-peil.md)):
-`GET /` rendert het framework-vrije statuspagina-sjabloon van de ontwerptaal Peil 1.1.0 (versie-gepinde kopie met
-herkomstkop in [`design/ontwerptaal/`](design/ontwerptaal/HERKOMST.md); CI faalt bij drift met de bron in
-`ai-server-manager`). Geen JavaScript, CSP `default-src 'none'`, eerste signaal nooit groen als de dienst niet gereed is.
-Ontwerpreview tegen de echte dienst ([`docs/ontwerp/PEIL_REVIEW.md`](docs/ontwerp/PEIL_REVIEW.md), ADR-0014): 12
-toestanden × 320/360/390/768/1440 × licht/donker, axe-core 0 overtredingen, tekst ≥ 7:1, focus ≥ 3:1, doelen ≥ 44 px,
-geen overloop op 320 px; schermafdrukken in [`docs/screenshots/peil/statuspagina/`](docs/screenshots/peil/statuspagina/).
-QA na de ombouw ([`docs/adr/ADR-0015-qa-statuspagina-contract-1-2.md`](docs/adr/ADR-0015-qa-statuspagina-contract-1-2.md)):
-een foutmelding verschijnt alleen bij een echte poging, een formulier van een andere app op hetzelfde NAS-adres wordt
-geweigerd (`Sec-Fetch-Site`), en invoer wordt nooit eerst afgekapt.
+**Statuspagina in Peil 1.1.1** ([`docs/adr/ADR-0013-statuspagina-in-peil.md`](docs/adr/ADR-0013-statuspagina-in-peil.md),
+ADR-0016): `GET /` rendert het framework-vrije statuspagina-sjabloon van de ontwerptaal Peil 1.1.1 (versie-gepinde
+kopie met herkomstkop in [`design/ontwerptaal/`](design/ontwerptaal/HERKOMST.md); CI faalt bij drift met de bron in
+`ai-server-manager`). Geen JavaScript, CSP `default-src 'none'`, `Referrer-Policy: same-origin`, eerste signaal nooit
+groen als de dienst niet gereed is. Het koppelformulier weigert een andere herkomst (`Origin`, `Sec-Fetch-Site`) en een
+domeinnaam die DNS-rebinding mogelijk maakt (`Host`); de POST krijgt direct de pagina met de melding en de echte
+HTTP-status. Ontwerpreview tegen de echte dienst ([`docs/ontwerp/PEIL_REVIEW.md`](docs/ontwerp/PEIL_REVIEW.md)): 16
+toestanden × 320/360/390/768/1024/1440 × licht/donker, axe-core 0 overtredingen, reflow ook met DejaVu Sans, en de
+negatieve herkomsttests in Chromium; schermafdrukken in
+[`docs/screenshots/peil/statuspagina/`](docs/screenshots/peil/statuspagina/).
 
 ## Installeren
 Uitsluitend als **standaard TrueNAS Custom App** — zie [`deploy/truenas/CUSTOM_APP.md`](deploy/truenas/CUSTOM_APP.md)

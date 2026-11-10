@@ -98,14 +98,15 @@ def test_concurrent_code_pairings_only_one_reaches_the_hub(client: Any, fake_hub
 
     fake_hub.override = hold_first
     enrollment = client.app.state.enrollment
+    csrf = _csrf(client)  # vóór de poging: tijdens een lopende poging toont de pagina geen formulier (Peil 1.1.1 E02)
     results: list[Any] = []
     first = threading.Thread(
         target=lambda: results.append(enrollment.enroll_with_code(HUB_URL, PAIR_CODE, fake_hub.fingerprint()))
     )
     first.start()
     assert at_hub.wait(10)
-    # tweede poging via de statuspagina terwijl de eerste loopt: gaat niet naar de Hub
-    csrf = _csrf(client)
+    # tweede poging via de statuspagina terwijl de eerste loopt: geen formulier, en een POST gaat niet naar de Hub
+    assert 'action="/koppelen"' not in client.get("/").text and "Koppelen bezig" in client.get("/").text
     r = client.post(
         "/koppelen",
         data={"csrf": csrf, "hub_adres": HUB_URL, "koppelcode": second, "hub_vingerafdruk": fake_hub.fingerprint()},

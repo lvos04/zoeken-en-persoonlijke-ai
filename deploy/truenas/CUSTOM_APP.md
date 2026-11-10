@@ -9,7 +9,7 @@ wachtwoorden. Alle schermen (bronnen kiezen, toestemming, zoeken) staan in de Hu
 > **Normaal installeer je deze app niet zelf.** Na de eerste installatie van de Hub (`ai-server-manager`) en de
 > executor installeert het platform deze app via de TrueNAS-API met precies dezelfde formulierwaarden, en geeft het
 > alleen `HUB_URL`, `HUB_KEY_FINGERPRINT` en een eenmalig koppeltoken (`HUB_ENROLLMENT_TOKEN`) mee
-> (platformcontract 1.2 §3.2). Dit document is voor handmatige installatie en voor controle.
+> (platformcontract 1.3 §3.2). Dit document is voor handmatige installatie en voor controle.
 
 > **Verificatiestatus: NIET GEVALIDEERD (echte NAS).** De image is in een Linux/Docker-bouwomgeving gebouwd en met een
 > rooktest gestart (zie `docs/TESTRAPPORT.md`). Het TrueNAS-formulier zelf is niet op echte TrueNAS-hardware
@@ -74,7 +74,7 @@ Vul bij **Tag** de versie mét digest in, precies zoals in `release/digests.json
 iemand de versietag later zou verplaatsen.
 
 > **NIET GEVALIDEERD (echte NAS):** of het TrueNAS-formulier een tag met `@` accepteert en of TrueNAS daarmee nog
-> updates herkent, is niet op een echte NAS getest (contract 1.2 §2.2). Weigert het formulier de tag, vul dan alleen
+> updates herkent, is niet op een echte NAS getest (contract 1.3 §2.2). Weigert het formulier de tag, vul dan alleen
 > de versie in (`0.1.0`); het platform controleert na installatie de digest (readback via de TrueNAS-API) en stopt bij
 > een afwijking. Er is in deze bouwronde nog geen release gemaakt; tot dan bestaat er geen digest om in te vullen.
 
@@ -112,7 +112,13 @@ Network*, geen *Privileged*, geen schrijfbare share-koppelingen. Er is geen enke
   toont koppelcode en vingerafdruk samen). Hooguit 5 pogingen per kwartier per bron-IP-adres en 20 per kwartier voor
   de hele app; er loopt hooguit één koppelpoging tegelijk. Welk bron-IP-adres de app achter de poortdoorsturing van
   TrueNAS ziet (jouw apparaat of één gateway-adres voor iedereen), is **NIET GEVALIDEERD (echte NAS)**; in het
-  laatste geval delen alle apparaten de limiet van 5.
+  laatste geval delen alle apparaten de limiet van 5. Elke verzending telt mee, ook een verlopen formulier of een
+  verkeerd ingevuld veld.
+- **Open de statuspagina via het IP-adres van de NAS** (of een naam zonder punt, of een naam onder `.local`, `.lan`,
+  `.internal` of `.home.arpa`). Via een andere domeinnaam (bijvoorbeeld een eigen domein of een publieke naam die naar
+  de NAS wijst) toont de pagina *Koppelen kan niet via dit adres* en weigert hij het formulier: zo kan een website die
+  je bezoekt de app niet via DNS-rebinding aan een eigen "Hub" koppelen (contract 1.3 §3.7). Gebruik dan het IP-adres,
+  of koppel met een koppeltoken (hierboven).
 
 **Ontkoppelen of opnieuw koppelen gaat alleen via de Hub** (of met een nieuw `HUB_ENROLLMENT_TOKEN` in dit formulier:
 wie het formulier kan wijzigen is TrueNAS-beheerder). Op de statuspagina kan dat niet meer, en er is geen lokale
@@ -123,11 +129,11 @@ Vergelijk na het koppelen de vingerafdruk op de statuspagina met die in de Hub-U
 
 | Variabele | Wanneer |
 |---|---|
-| `HUB_URL` | Hub-adres als je het koppeltoken handmatig meegeeft (normaal zet het platform dit): `http(s)://<host>[:<poort>]` zonder pad |
+| `HUB_URL` | Hub-adres als je het koppeltoken handmatig meegeeft (normaal zet het platform dit): `http(s)://<host>[:<poort>]` zonder pad; een IP-adres alleen als `a.b.c.d` (geen verkorte vorm zoals `127.1`), IPv6 tussen `[ ]` |
 | `HUB_ENROLLMENT_TOKEN` | eenmalig koppeltoken uit de Hub (`enr_…`, vervalt na 60 min of na gebruik; geen blijvend geheim) |
 | `HUB_KEY_FINGERPRINT` | vingerafdruk van de Hub-sleutels (`XXXX-XXXX-XXXX-XXXX`, niet geheim); ingevuld ⇒ de app koppelt alleen als hij klopt. Zonder deze waarde vertrouwt de app de eerste Hub (*trust on first use*) en toont hij de vingerafdruk ter vergelijking |
 | `ENROLLMENT_TOKEN` | **verouderd** (oude naam van `HUB_ENROLLMENT_TOKEN`): wordt in deze release nog gelezen met een waarschuwing in de log |
-| `SEARCH_AI_PUBLIC_URL` | adres waarop de Hub deze app bereikt, als dat afwijkt van wat de Hub zelf weet |
+| `SEARCH_AI_PUBLIC_URL` | adres waarop de Hub deze app bereikt, als dat afwijkt van wat de Hub zelf weet. Alleen informatief: voldoet het niet aan de adresregels, dan stuurt de app het niet mee (de Hub gebruikt altijd zijn eigen register) |
 
 Zet hier **nooit** wachtwoorden of API-sleutels. Credentials van Immich/Jellyfin voer je later in de Hub-UI in; de app
 bewaart ze versleuteld in `/appdata` (`vault.key` in `/appdata/secrets`).
@@ -166,12 +172,17 @@ nooit audio op.
 | `oude postmaster.pid ... verwijderd` | Geen fout: de vorige stop was onverwacht (stroom/kill). |
 | Poort bezet bij opslaan | Kies een andere vrije **Host Port**; de Container Port blijft `30450`. |
 | Statuspagina: *Het adres van de Hub is ongeldig* (bij het veld: *Gebruik http(s)://<NAS-adres>:<poort>, zonder pad en geen localhost*) | Vul het LAN-adres van de NAS met de poort van de Hub in, zonder pad. `localhost` en `127.0.0.1` wijzen naar deze container zelf. |
-| Statuspagina: *Koppelstatus onleesbaar* | Het koppelbestand in `/appdata/secrets` is beschadigd; de app weigert uit veiligheid elke Hub-aanvraag. Koppel opnieuw via de Hub: die geeft een nieuw koppeltoken mee (of vul het zelf in bij `HUB_ENROLLMENT_TOKEN` in dit formulier). |
+| Statuspagina: *Koppelstatus onleesbaar* | Het koppelbestand `/appdata/secrets/hub-link.json` is beschadigd, of het heeft een verkeerde eigenaar of verkeerde rechten; de app weigert uit veiligheid elke Hub-aanvraag en toont geen formulier. Koppel opnieuw via de Hub: die geeft een nieuw koppeltoken mee (of vul het zelf in bij `HUB_ENROLLMENT_TOKEN` in dit formulier). Het onleesbare bestand blijft daarbij bewaard als `hub-link.json.onleesbaar-<tijd>`. |
+| Statuspagina: *Koppelen kan niet via dit adres* / code `host_niet_toegestaan` | Je opende de pagina via een domeinnaam die koppelen niet toelaat (bescherming tegen DNS-rebinding). Open hem via het IP-adres van de NAS, of koppel met een koppeltoken. |
+| Statuspagina: *Formulier geweigerd* / code `herkomst_geweigerd` | Het formulier kwam niet van deze pagina zelf (een andere app of website, of een browser die de herkomst niet meestuurt). Open `http://<NAS-adres>:30450` en vul het formulier daar in. |
+| Statuspagina: *Er loopt al een koppelpoging* / *Koppelen bezig* | Een koppeltoken uit de app-instellingen wordt nog afgehandeld (bijvoorbeeld omdat de Hub even niet bereikbaar is). Wacht tot die klaar is en laad de pagina opnieuw. |
 | Image kan niet worden opgehaald (`denied`) | Het GHCR-pakket staat nog op privé (wordt publiek na de scan; tot dan alleen de registry-terugval hierboven). |
 | Formulier weigert de tag met `@sha256:` | Vul alleen de versie in; het platform controleert de digest na installatie (NIET GEVALIDEERD op een echte NAS). |
 | Statuspagina: *De vingerafdruk van de Hub klopt niet* | Er is niets opgeslagen. Vergelijk de vingerafdruk met de Hub-UI; bij twijfel niet koppelen. |
 | Statuspagina: *ingetrokken* of *ontkoppeld* | De Hub heeft de koppeling beëindigd. Opnieuw koppelen gaat via de Hub (nieuw koppeltoken). |
-| Statuspagina: melding met **Code** en **Trace-ID** | Selecteer en kopieer de Trace-ID; dezelfde ID staat in de app-log (regel *statuspagina: koppelen niet gelukt (code …, Trace-ID …)*) en in het auditspoor van die poging. Een foutmelding verschijnt alleen bij een echte poging van het afgelopen kwartier; een oude of gedeelde link toont geen melding. |
-| Statuspagina: *Niet gereed — Deels onbekend, wacht op koppeling* | Geen storing: de app werkt, maar doet niets tot hij gekoppeld is. `/readyz` geeft dan gewoon 200, zodat TrueNAS de app niet herstart. |
+| Statuspagina: melding met **Code** en **Trace-ID** | Selecteer en kopieer de Trace-ID; dezelfde ID staat in de app-log (regel *statuspagina: koppelpoging afgehandeld (code …, HTTP …, Trace-ID …)*) en in het auditspoor van die poging. Een melding hoort alleen bij het antwoord op jouw verzending; laad je de pagina opnieuw, dan zie je de stand van nu. |
+| Statuspagina: *Niet gereed — Deels onbekend, wacht op koppeling* | Geen storing: de app werkt, maar doet niets tot hij gekoppeld is en de Hub de koppeling heeft bevestigd. `/readyz` geeft dan gewoon 200, zodat TrueNAS de app niet herstart. |
+| Statuspagina: *Achtergrondtaken (worker): Verouderd* of *Onbekend* | De worker heeft al een tijd geen hartslag gegeven. Kijk in de app-log; een herstart van de app start de worker opnieuw. |
 | Statuspagina: code `peil_sjabloon_ongeldig` (HTTP 500) | Het sjabloon in de image ontbreekt of is gewijzigd. De API werkt door. Installeer dezelfde versie opnieuw (tag + digest). |
 | `HUB_KEY_FINGERPRINT heeft geen geldig formaat` | Vul de vingerafdruk exact over uit de Hub-UI (16 tekens in groepen van 4). |
+| `FOUT: de app kon haar rechten niet afgeven` | Bij een start als root leegt de app eerst de *bounding set* van capabilities en wisselt dan naar 568 (contract 1.3 §2.2). Lukt dat niet, dan start de app bewust niet. Start de app opnieuw; blijft dit gebeuren, meld het met de log. |

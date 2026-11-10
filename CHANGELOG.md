@@ -92,6 +92,27 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
   - `EVIDENCE.json`: `validatie` is altijd een lijstwaarde (A4); de bewakende test controleert per Excel-blad.
   - Acht punten in het Peil-sjabloon zelf gaan als voorstel naar `ai-server-manager`.
 
+- **Contract 1.3 en Peil 1.1.1 (ADR-0016):** alle punten die de conformiteitslijst voor deze repo als NU markeert
+  (C1.3-ZPA-01 … -12); -13 (manifest) wacht op de validator van appstore-en-fork, -14 hoort bij P5.
+  - Kopieën van `PLATFORM_CONTRACTEN.md` 1.3 en `CONTRACT_1.3_CONFORMITEIT.md` met drifttest (bron `0a7143b`).
+  - Statuspagina: `Referrer-Policy: same-origin`; exacte `Origin` (`null` → 403), `Sec-Fetch-Site`, `Host`-beperking
+    tegen DNS-rebinding (403 `host_niet_toegestaan`). De POST krijgt direct de pagina met de melding en de echte
+    HTTP-status (409 `koppelen_bezig`/`al_gekoppeld`, 422 bij foute invoer, 429 bij te veel pogingen); elke POST na de
+    herkomstcontrole telt als poging; precies één logregel per poging. *Gereed* vraagt de bevestiging door de Hub.
+  - Peil 1.1.1: renderer in één doorgang, nieuwe tonen (niet-gekoppeld, nog-niet, verouderd, gate), meldingsrol,
+    onleesbaar-blok, koppelen bezig, totaalregel E10; controles ook op 1024 px en met DejaVu Sans.
+  - Koppelbestand 1.3: schema 1.3, verkeerde eigenaar of rechten = onleesbaar, vervangen alleen bij de eerste
+    schrijfactie van een poging met een nieuw env-token (origineel bewaard), vaste codes van 1.3, `rotation_sequence`.
+  - Adressen: alleen canonieke IP-vormen; `base_url` alleen als hij geldig is; verboden bereiken ook na
+    DNS-resolutie bij elke verbinding.
+  - JWT: `aud` precies één string, geen `kid` = `unknown_key`, elke mutatie verbruikt de `jti`.
+  - Sleutels: vingerafdruk over alle policy-sleutels (testvector `HN69-2PHK-XV2D-X85W`).
+  - Events: vaste `service.*`-namen en -entiteit, alleen eigen domeinen, inboxgrenzen vóór verzending.
+  - Connector: vaste checknamen (`database`, `worker`, `jobs`, `hub_link`), hartslag van de worker, totaal =
+    slechtste check, `limits.max_age_s`, `meting_verouderd`.
+  - API: foutcatalogus (o.a. 422 `idempotency_key_reused`) en een statische Idempotency-Key-test.
+  - Image: bounding set leeg bij een start als root; healthcheck met controlevlag; rooktest controleert het apart.
+
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).
 Validatie op een echte NAS: **NIET GEVALIDEERD**.

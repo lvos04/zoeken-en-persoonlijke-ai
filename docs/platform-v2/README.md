@@ -36,13 +36,17 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 
 ## Contract (bindend)
 
-- `PLATFORM_CONTRACTEN.md` — platformcontract `contracts 1.2`, byte-gelijke kopie van `lvos04/ai-server-manager`
-  (bron van waarheid; bij verschil wint die repo)
-- `CONTRACT_1.2_CONFORMITEIT.md` — wat elke repo voor 1.2 moet veranderen (hier: A1–A7, ZA1–ZA9; zie ADR-0011, ZA9 in ADR-0013)
+- `PLATFORM_CONTRACTEN.md` — platformcontract `contracts 1.3`, byte-gelijke kopie van `lvos04/ai-server-manager`
+  op commit `0a7143b` (bron van waarheid; bij verschil wint die repo). Drifttest:
+  `apps/api/tests/unit/test_contract_kopie.py`; nooit lokaal aanpassen.
+- `CONTRACT_1.3_CONFORMITEIT.md` — wat elke repo voor 1.3 moet veranderen (hier: hoofdstuk 5, C1.3-ZPA-01 … -14;
+  wat gebouwd is en wat open blijft: ADR-0016 en `EVIDENCE.json`), byte-gelijke kopie met dezelfde drifttest.
+- `CONTRACT_1.2_CONFORMITEIT.md` — historie: wat 1.2 vroeg (A1–A7, ZA1–ZA9; ADR-0011, ZA9 in ADR-0013).
 
 ## Bewijs en inventaris (deze repo)
 
-- `EVIDENCE.json` — status/validatie per Excel-ID (contract §11; nooit 'Gereed'/'Geslaagd' zonder echte NAS-run)
+- `EVIDENCE.json` — status/validatie per Excel-ID, contractpunt (`C1.3-ZPA-…`, `C1.2-…`) en review (`REVIEW-…`)
+  (contract 1.3 §11; nooit 'Gereed'/'Geslaagd' zonder echte NAS-run)
 - `DELTA_MATRIX.md` — inventaris bestaand / onvolledig / ontbrekend
 
 ## B03 Universele mediaserver (2026-11-09)

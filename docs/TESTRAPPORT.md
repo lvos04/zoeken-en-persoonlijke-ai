@@ -367,3 +367,33 @@ Daarna zijn de code en de documenten gelezen; zeven bevindingen (Q-01 t/m Q-07, 
 
 **Niet gedaan:** een echte NAS (welk bron-IP de dienst achter de poortdoorsturing ziet), een echte schermlezer, een
 echte telefoon of tv. Die blijven **NIET GEVALIDEERD**.
+
+## Contract 1.3 en Peil 1.1.1 (2026-11-10, ADR-0016)
+
+Eigen Ubuntu 26.04-machine (22 CPU, 14,5 GiB RAM, gedeeld), Python 3.12 (venv), gedeelde PostgreSQL 16 + pgvector op
+127.0.0.1:5432 (`PATH=/usr/lib/postgresql/16/bin:$PATH`), Docker Engine met buildx, Node 22 + Playwright 1.65.0
+(Chromium 158). **Geen** echte NAS, Hub of accounts: Hub-simulator (volgt 1.3) en nep-shares.
+
+| Commando | Uitkomst |
+|---|---|
+| `ruff check` + `ruff format --check` (apps/api, tests/e2e, tests/interop, tests/ui, deploy/allinone) en `mypy` (strict) | geen bevindingen (44 bronbestanden) |
+| `cd apps/api && pytest -q tests/unit/test_contract_kopie.py` | 7 geslaagd; de bron op `0a7143b` lokaal (git) én online (raw.githubusercontent.com) gelijk aan de kopie |
+| `PEIL_BRON_DIR=… PEIL_WERKBRANCH_DIR=… PEIL_BRON_VERPLICHT=1 pytest -q tests/unit/test_peil_kopie.py tests/unit/test_statuspagina_peil.py` (bron, werkbranch en `bouw/sjabloon.py` online opgehaald, zoals CI) | 169 geslaagd, 0 overgeslagen; eigen renderer byte-gelijk aan de referentie in alle 16 toestanden |
+| `cd apps/api && pytest -q` (unit + integratie) | eerste volledige run 728 geslaagd, 1 mislukt: `test_concurrent_code_pairings_only_one_reaches_the_hub` las het formulier tijdens een lopende poging, die volgens Peil 1.1.1 E02 geen formulier meer heeft; test aangepast. Tweede run: **729 geslaagd, 0 overgeslagen** |
+| `pytest -q tests/e2e -p no:cacheprovider` (API + worker als echte processen, Hub-simulator) | 7 geslaagd |
+| `python tests/ui/render_toestanden.py` + `node tests/ui/statuspagina.mjs` (renderer, 16 toestanden × 6 breedtes × 2 thema's) | 192 controles, 0 mislukt; axe 0; laagste tekstcontrast 8,34:1 (licht) en 9,32:1 (donker); reflow op 320 px ook met DejaVu Sans |
+| `python tests/ui/echte_dienst.py` (echte dienst, Hub-simulators, `make ui-echt`) | 208 controles in 16 toestanden, 0 mislukt; negatieve herkomsttests in Chromium (same-site, cross-site, sandbox `Origin: null`, domeinnaam als Host, geen cookie) → 403, niets naar de Hub |
+| `nice -n 10 flock …/docker-build.lock docker buildx build --load -f deploy/allinone/Dockerfile -t zoeken-en-persoonlijke-ai:dev .` | gebouwd |
+| `deploy/allinone/smoke-test.sh zoeken-en-persoonlijke-ai:dev` (eerste run) | 57 geslaagd, 1 mislukt: de nieuwe Referrer-Policy-controle gebruikte `curl -I` (HEAD → 405); controle herschreven naar een GET |
+| idem (tweede run) | **58 geslaagd, 0 mislukt**: elk proces Uid 568, CapEff/CapPrm/CapAmb 0, CapBnd 0 bij een root-start, NoNewPrivs 1; healthcheck apart met `--controle` (ook als Custom User 568) |
+| `python -m search_ai openapi --out docs/openapi/…` | bijgewerkt (Idempotency-Key op `/voice/v1/sessions`, 503-beschrijving, contractversie) |
+| `pip-audit -r apps/api/requirements.lock` | geen bekende kwetsbaarheden |
+| `actionlint .github/workflows/*.yml` | eerst SC2129 (losse `>> $GITHUB_ENV`), daarna geen bevindingen |
+| `shellcheck deploy/allinone/smoke-test.sh` | geen bevindingen |
+
+Negatieve controles die bewust zijn gedaan (de nieuwe test faalde op de oude code, daarna groen):
+`test_pins.py` (3 nieuwe tests faalden op de 1.2-vingerafdruk), `test_evidence_contract.py` (vond de inconsistente regel
+B07-003), de herkomsttests (een POST zonder `Origin` kreeg in 1.2 nog een koppeling).
+
+**NIET GEVALIDEERD:** de echte NAS (Host/Origin achter de poortdoorsturing, bron-IP, capabilities van de ix-app), de
+echte Hub met contract 1.3 (alleen de simulator), een echte schermlezer, telefoon of tv.
