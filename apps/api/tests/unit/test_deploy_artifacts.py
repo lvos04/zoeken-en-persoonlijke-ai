@@ -65,15 +65,50 @@ def test_manifest_is_custom_app_without_compose() -> None:
     assert m["custom_app"]["env"] == []
 
 
-def test_manifest_follows_contract_1_2_section_9() -> None:
-    m = yaml.safe_load(MANIFEST.read_text())
-    assert "platformcontract 1.2" in MANIFEST.read_text()
+def test_manifest_follows_contract_1_3_section_9() -> None:
+    """C1.3-ZPA-13: kop 1.3, geen ``HUB_*`` als parameter of env (§3.2), monitorplan, licentie, en alleen
+    waarschuwingen die met reden in ``accepted_findings`` staan (``--strict``)."""
+    text = MANIFEST.read_text()
+    m = yaml.safe_load(text)
+    assert text.startswith("# Manifest (manifeststandaard v1 van appstore-en-fork, platformcontract 1.3 §9)")
+    assert "platformcontract 1.2" not in text
     assert "ports" not in m["custom_app"]  # vervallen: network.ports is de enige bron
     assert "joins_platform_network" not in m["network"]  # vervallen: apps delen nooit een Docker-netwerk
     names = {p["name"] for p in m["network"]["ports"]}
     assert m["custom_app"]["portal"]["port"] in names
     assert m["custom_app"]["gpu"] == "none" and m["privileges"]["gpu"] == "none"
     assert m["app_id"] == "zoeken-en-persoonlijke-ai"
+    # §3.2/§9: HUB_URL, HUB_ENROLLMENT_TOKEN en HUB_KEY_FINGERPRINT zijn gereserveerd, nooit een manifestparameter
+    assert not [p for p in m["parameters"] if str(p["name"]).upper().startswith("HUB_")]
+    assert m["custom_app"]["env"] == []
+    # §9 (A32): monitorplan op /readyz (zonder auth; de koppeling telt daar niet mee, §5)
+    assert m["healthcheck"]["monitor"] == {"pad": "/readyz", "verwachte_status": 200, "timeout_s": 10, "interval_s": 60}
+    assert m["provenance"]["license"] == "GPL-3.0" and (REPO_ROOT / "LICENSE").read_text().find("GNU GENERAL") >= 0
+    # §9 (A30): alleen de bekende, tijdelijke bevinding is geaccepteerd, met een Nederlandse reden
+    assert [f["code"] for f in m["accepted_findings"]] == ["digest_pending_release"]
+    assert all(len(str(f["reden_nl"]).strip()) > 40 for f in m["accepted_findings"])
+    assert m["image"]["digest"] is None  # eerlijk: nog geen release, dus nog geen digest
+
+
+def test_manifest_strict_geldig_met_de_validator_van_appstore_en_fork() -> None:
+    """Draait ``jl-manifest validate --strict`` (validator van appstore-en-fork, contract 1.3) als die beschikbaar is
+    (``JL_MANIFEST``). In CI is hij verplicht (``MANIFEST_VALIDATOR_VERPLICHT=1``); de workflow installeert hem op een
+    vaste commit. Negatief: met ``HUB_URL`` in de env faalt hetzelfde manifest met ``reserved_env``."""
+    tool = os.environ.get("JL_MANIFEST", "")
+    if not tool:
+        if os.environ.get("MANIFEST_VALIDATOR_VERPLICHT") == "1":
+            pytest.fail("JL_MANIFEST ontbreekt terwijl de validator verplicht is")
+        pytest.skip("validator van appstore-en-fork niet beschikbaar (JL_MANIFEST niet gezet)")
+    ok = subprocess.run([tool, "validate", "--strict", str(MANIFEST)], capture_output=True, text=True, check=False)
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    assert "GELDIG — 0 fout(en)" in ok.stdout and "GEACC. image.digest" in ok.stdout
+    bad = Path(os.environ.get("TMPDIR", "/tmp")) / f"zpa-manifest-neg-{os.getpid()}.yaml"
+    try:
+        bad.write_text(MANIFEST.read_text().replace("  env: []\n", "  env:\n    - {name: HUB_URL, value: x}\n"))
+        neg = subprocess.run([tool, "validate", "--strict", str(bad)], capture_output=True, text=True, check=False)
+    finally:
+        bad.unlink(missing_ok=True)
+    assert neg.returncode != 0 and "reserved_env" in neg.stdout, neg.stdout
 
 
 def test_custom_app_doc_is_form_only() -> None:

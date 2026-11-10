@@ -2,8 +2,9 @@
 # (simulator), drift van de contractkopie (contract 1.3) en van de Peil-kopie (1.1.1, pinregel E08) met de bron in
 # ai-server-manager, statische Idempotency-Key-test en EVIDENCE-test (in de unit-tests), browsercontrole van de
 # statuspagina (Peil-controles, axe-core, 320–1440 px, CSP; ook tegen de echte dienst met testdata en de negatieve
-# herkomsttests) en de alles-in-één image bouwen + starten met healthcheck en rooktest (bounding set, healthcheck
-# apart). Acties en images op SHA/digest gepind.
+# herkomsttests), het eigen manifest met de validator van appstore-en-fork (--strict, vaste commit) en de alles-in-één
+# image bouwen + starten met healthcheck en rooktest (bounding set, healthcheck apart). Acties en images op SHA/digest
+# gepind.
 name: ci
 on:
   push:
@@ -83,6 +84,23 @@ jobs:
       - name: Drift van de contractkopie met de bron (faalt bij drift)
         working-directory: apps/api
         run: pytest -q tests/unit/test_contract_kopie.py -p no:cacheprovider
+      - name: Manifestvalidator van appstore-en-fork op een vaste commit (contract 1.3 §9, C1.3-ZPA-13; alleen lezen)
+        env:
+          VALIDATOR_COMMIT: cca4403cf6520fe9396504560863b64924944ec7
+        run: |
+          dir="$RUNNER_TEMP/appstore"
+          git init -q "$dir"
+          git -C "$dir" fetch -q --depth 1 https://github.com/lvos04/appstore-en-fork.git "$VALIDATOR_COMMIT"
+          git -C "$dir" checkout -q FETCH_HEAD
+          python -m venv "$RUNNER_TEMP/validator"
+          "$RUNNER_TEMP/validator/bin/pip" install --disable-pip-version-check -q --require-hashes \
+            -r "$dir/apps/api/requirements.lock"
+          "$RUNNER_TEMP/validator/bin/pip" install --disable-pip-version-check -q --no-deps "$dir/apps/api"
+          "$RUNNER_TEMP/validator/bin/jl-manifest" validate --strict deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml
+          {
+            echo "JL_MANIFEST=$RUNNER_TEMP/validator/bin/jl-manifest"
+            echo "MANIFEST_VALIDATOR_VERPLICHT=1"
+          } >> "$GITHUB_ENV"
       - name: Unit- en integratietests
         working-directory: apps/api
         run: pytest -q

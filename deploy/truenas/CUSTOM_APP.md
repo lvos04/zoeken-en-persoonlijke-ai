@@ -141,6 +141,14 @@ bewaart ze versleuteld in `/appdata` (`vault.key` in `/appdata/secrets`).
 Spraak (STT/TTS) en een lokaal taalmodel zijn **aparte, optionele apps die standaard uit staan**; deze app neemt
 nooit audio op.
 
+## Bewaking (monitorplan)
+
+Het manifest geeft een monitorplan (platformcontract 1.3 §9): **HTTP** op `/readyz` van deze app (de poort uit stap 2),
+verwachte status **200**, time-out **10 s**, elke **60 s**. `/readyz` vraagt geen aanmelding en toont geen geheimen; de
+koppeling met de Hub telt er bewust niet in mee (een nog niet gekoppelde app is wél klaar). De Hub maakt hier een
+monitorvoorstel van; jij neemt het over in Uptime Kuma en bevestigt het per monitor. Dat de monitor op jouw NAS werkt,
+is **NIET GEVALIDEERD** (geen echte NAS in deze bouwomgeving).
+
 ## Updaten en terugdraaien
 
 - **Updaten:** app → **Edit** → Tag naar de nieuwe versie → **Update**. Bij openstaande databasewijzigingen maakt de

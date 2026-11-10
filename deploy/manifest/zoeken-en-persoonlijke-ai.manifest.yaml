@@ -1,12 +1,14 @@
-# Manifest (manifeststandaard v1 van appstore-en-fork, platformcontract 1.2 §9) van zoeken-en-persoonlijke-ai.
+# Manifest (manifeststandaard v1 van appstore-en-fork, platformcontract 1.3 §9) van zoeken-en-persoonlijke-ai.
 # Installatie uitsluitend als standaard TrueNAS Custom App (één image + formulierwaarden); nooit compose/YAML.
-# De digest van de eigen GHCR-image vult de release-CI in (release/digests.json); tot dan is installeren niet gereed.
+# De digest van de eigen GHCR-image vult de release-CI in (release/digests.json); tot dan is installeren niet gereed
+# (digest_pending_release, met reden geaccepteerd tot de eerste release; de vertaling blokkeert met digest_not_pinned).
 # De vertaling naar het formulier zet de tag als '<tag>@<digest>' (§2.2; of het formulier '@' accepteert is NIET
-# GEVALIDEERD op een echte NAS). Bij installatie via de API geeft de Hub alleen HUB_URL, HUB_KEY_FINGERPRINT en het
-# eenmalige HUB_ENROLLMENT_TOKEN mee (§3.2); dit manifest bevat geen omgevingsvariabelen en geen geheimen.
-# Contract 1.2 §9: 'custom_app.ports' en 'network.joins_platform_network' zijn vervallen; 'network.ports' is de enige
-# bron voor de poorten van het formulier. Gevalideerd met de validator van appstore-en-fork (M1–M6, commit 837fa61) in
-# --strict (zie docs/TESTRAPPORT.md).
+# GEVALIDEERD op een echte NAS). Geen HUB_* in parameters of env: HUB_URL, HUB_ENROLLMENT_TOKEN en HUB_KEY_FINGERPRINT
+# voegt de vertaling zelf toe als de Hub koppelt (contract 1.3 §3.2); dit manifest bevat geen omgevingsvariabelen en geen
+# geheimen. Poorten staan alleen in network.ports; geen gedeeld Docker-netwerk. Monitorplan in healthcheck.monitor
+# (contract 1.3 §9): de beheerder neemt het over in Uptime Kuma en bevestigt het per monitor.
+# Gevalideerd met de validator van appstore-en-fork (contract 1.3, C1.3-ASF-08) in --strict; CI installeert die op een
+# vaste commit (.github/workflows/ci.yml) en zie docs/TESTRAPPORT.md.
 # Shares die doorzoekbaar worden, voegt de Hub later toe als extra Host Path met read_only=true onder /bronnen/<naam>
 # (app.update via de executor, R2, alleen na bronwizard + toestemming; zie docs/adr/ADR-0004). Base-images van de
 # alles-in-één image (op digest): python:3.12.16-slim-bookworm en pgvector/pgvector:0.8.7-pg16-bookworm.
@@ -100,6 +102,8 @@ privileges:
 privilege_reason: null
 healthcheck:
   type: builtin
+  # monitorplan (contract 1.3 §9): /readyz zonder auth; de koppeling met de Hub telt daar niet mee (§5)
+  monitor: {pad: /readyz, verwachte_status: 200, timeout_s: 10, interval_s: 60}
 backup:
   db_export:
     method: pg_dump
@@ -135,4 +139,9 @@ provenance:
   source_repo: https://github.com/lvos04/zoeken-en-persoonlijke-ai
   source_commit: null
   upstream_repo: null
-  license: null
+  license: GPL-3.0
+accepted_findings:
+  - code: digest_pending_release
+    reden_nl: >-
+      Eigen image vóór de eerste release: de release-CI vult de digest in (release/digests.json). Tot dan blokkeert
+      de vertaling de installatie met digest_not_pinned.
