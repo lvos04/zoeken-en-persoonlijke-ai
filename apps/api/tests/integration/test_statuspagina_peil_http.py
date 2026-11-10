@@ -107,7 +107,7 @@ def test_dead_letter_in_de_outbox_maakt_de_pagina_beperkt(paired_client: Any) ->
     with client.app.state.db.sessions() as s:
         events.emit(
             s,
-            event_type="service.hub_link.paired",
+            event_type="service.hub_link.linked",
             entity_type="hub_link",
             entity_id="hub",
             actor_type="user",

@@ -772,11 +772,9 @@ def _audit_pair(request: Request, ok: bool, code: str) -> None:
                 details={"code": code},
             )
             if ok:
-                events.emit(
+                events.emit_service(
                     s,
-                    event_type="service.hub_link.paired",
-                    entity_type="hub_link",
-                    entity_id="hub",
+                    "service.hub_link.linked",
                     actor_type="user",
                     actor_id="statuspagina",
                     trace_id=tid,

@@ -91,9 +91,10 @@ def test_jwt_roles_and_pins_survive_hub_outage(paired_client: Any, auth: Auth, s
     # gepinde sleutels: de Hub tijdelijk weg verandert niets aan het vertrouwen (en is nooit een intrekking)
     fake_hub.up = False
     assert client.get("/connector/v1/discover", headers=auth("admin")).status_code == 200
+    _heartbeat(client)
     health = client.get("/connector/v1/health", headers=svc()).json()
     checks = {c["name"]: c["status"] for c in health["checks"]}
-    assert checks["hub_sleutels"] == "healthy" and checks["hub_koppeling"] == "healthy"
+    assert checks["hub_sleutels"] == "healthy" and checks["hub_link"] == "healthy" and checks["worker"] == "healthy"
     assert health["status"] == "healthy"
     assert not any(r["path"] == "/api/v1/auth/jwks" for r in fake_hub.all_requests)  # nooit een JWKS opgehaald
 
@@ -135,8 +136,19 @@ def test_connector_contract(paired_client: Any, auth: Auth, svc: Auth, shares: A
     assert r.status_code == 403
     health = paired_client.get("/connector/v1/health", headers=svc()).json()
     checks = {c["name"]: c["status"] for c in health["checks"]}
-    assert checks["ingest"] == "unknown" and checks["spraak"] == "unknown" and checks["pgvector"] == "healthy"
+    # zonder hartslag van de worker is de connector-health eerlijk 'unknown' (totaal = slechtste check, 1.3 §6)
+    assert checks["worker"] == "unknown" and health["status"] == "unknown" and health["reason_code"] == "geen_hartslag"
+    _heartbeat(paired_client)
+    health = paired_client.get("/connector/v1/health", headers=svc()).json()
+    checks = {c["name"]: c["status"] for c in health["checks"]}
+    # niet-gebouwde functies zijn geen gezondheidscheck maar staan als capability_unavailable in discover
+    assert "ingest" not in checks and "spraak" not in checks and checks["pgvector"] == "healthy"
+    assert {"database", "worker", "jobs", "hub_link"} <= set(checks)
     assert health["status"] == "healthy"
+    disc = paired_client.get("/connector/v1/discover", headers=svc()).json()
+    assert disc["functions"]["search.ingest"] == "capability_unavailable" and disc["functions"]["voice"] == (
+        "capability_unavailable"
+    )
 
 
 def test_events_pushed_to_hub_inbox(paired_client: Any, auth: Auth, fake_hub: FakeHub, shares: Any) -> None:
@@ -156,6 +168,13 @@ def test_events_pushed_to_hub_inbox(paired_client: Any, auth: Auth, fake_hub: Fa
     assert set(ev) >= {"event_id", "source_event_id", "entity", "timestamp_utc", "trace_id", "actor", "classification"}
     w.push_step()  # niets dubbel
     assert len(fake_hub.inbox) == len(types)
+
+
+def _heartbeat(client: Any) -> None:
+    """Hartslag zoals de worker die na elke ronde schrijft (de integratietests draaien geen worker)."""
+    from search_ai.worker import Worker
+
+    Worker(client.app.state.settings).heartbeat(0)
 
 
 def test_voice_capabilities_are_honest(paired_client: Any, auth: Auth) -> None:

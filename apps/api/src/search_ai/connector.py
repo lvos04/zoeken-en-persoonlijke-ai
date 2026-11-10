@@ -1,4 +1,4 @@
-"""Connectorcontract ``/connector/v1/*`` (contract 1.2 §6).
+"""Connectorcontract ``/connector/v1/*`` (contract 1.3 §6).
 
 Deze dienst levert in P0 ``read`` (bronnen, runs, privacydekking — **nooit documentinhoud** via de connector) en
 ``stream`` als polling-outbox. ``propose``/``apply``/``rollback`` geven eerlijk ``501 capability_unavailable``: deze dienst
@@ -25,7 +25,7 @@ from .deps import get_session, trace_id
 from .enrollment import pinned_kids
 from .errors import ApiError, capability_unavailable, forbidden, not_found
 from .events import envelope
-from .health import connector_health
+from .health import connector_health, max_age_limits
 from .hublink import public_view
 from .idempotency import idempotency_key, run_idempotent
 from .models import AuditEvent, OutboxEvent
@@ -55,7 +55,7 @@ FORBIDDEN_ITEM_TYPES = {"search.document", "search.chunk", "search.embedding"}
 
 
 @router.get("/discover", summary="Wat deze dienst kan (contract §6)")
-def discover(_p: Principal = Depends(require_connector_reader)) -> dict[str, Any]:
+def discover(request: Request, _p: Principal = Depends(require_connector_reader)) -> dict[str, Any]:
     return {
         "app_id": APP_ID,
         "source_version": __version__,
@@ -82,7 +82,13 @@ def discover(_p: Principal = Depends(require_connector_reader)) -> dict[str, Any
             "voice": "capability_unavailable",
             "ai.external": "capability_unavailable (indexdata verlaat de NAS niet)",
         },
-        "limits": {"max_page_size": MAX_LIMIT, "outbound_timeout_s": {"connect": 5, "read": 15}, "max_retries": 3},
+        "limits": {
+            "max_page_size": MAX_LIMIT,
+            "outbound_timeout_s": {"connect": 5, "read": 15},
+            "max_retries": 3,
+            # §6.2 (1.3): hoe oud een meting mag zijn; daarna 'unknown' met reason_code meting_verouderd
+            "max_age_s": max_age_limits(request.app.state.settings),
+        },
         "timestamp_utc": iso(utcnow()),
     }
 
@@ -127,7 +133,12 @@ def items(
         )
     spec = ITEM_TYPES.get(type)
     if spec is None:
-        raise ApiError(400, "invalid_type", "Onbekend itemtype; zie /connector/v1/discover.", {"type": type})
+        raise ApiError(
+            422,
+            "validation_error",
+            "Onbekend itemtype; zie /connector/v1/discover.",
+            {"fouten": [{"veld": "type", "probleem": "onbekend itemtype", "type": "invalid_type"}]},
+        )
     if not principal.has_any(spec["roles"]) or principal.is_kid:
         raise forbidden("rol_ontbreekt", "Geen toestemming voor dit itemtype.")
     data: list[Any]
@@ -150,7 +161,8 @@ def items(
                 "observed_at": iso(utcnow()),
             }
         ]
-    return {"type": type, **offset_page(data, cursor, limit), "timestamp_utc": iso(utcnow())}
+    now = iso(utcnow())
+    return {"type": type, **offset_page(data, cursor, limit), "observed_at": now, "timestamp_utc": now}
 
 
 @router.post(
@@ -258,11 +270,9 @@ def hub_link_unlink(
             message_nl="Ontkoppeld van de Hub; Hub-JWT's worden vanaf nu geweigerd.",
             details={"door": principal.audit_id},
         )
-        events.emit(
+        events.emit_service(
             session,
-            event_type="service.hub_link.unlinked",
-            entity_type="hub_link",
-            entity_id="hub",
+            "service.hub_link.unlinked",
             actor_type=principal.actor_type,
             actor_id=principal.audit_id,
             trace_id=tid,
