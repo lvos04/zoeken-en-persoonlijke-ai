@@ -221,7 +221,7 @@ def test_koppelen_op_onleesbaar_is_een_alert_met_trace_id() -> None:
 def test_koppelen_bezig_verbergt_het_formulier_en_noemt_de_starttijd() -> None:
     page = _page("koppelen-bezig")
     assert '<use href="#i-nog-niet"/></svg>Koppelen bezig</span>' in page
-    assert re.search(r'gestart om <time datetime="2026-11-09T\d\d:54:00[^"]*">\d\d:54</time>', page)
+    assert re.search(r'gestart om <time datetime="2026-11-09T\d\d:54:00[^"]*">\d\d:54(?: UTC)?</time>', page)
     assert 'action="/koppelen"' not in page and "Maak in de Hub een koppelcode" not in page
     assert "Niet gereed" in _totaal(page) and "er loopt een koppelpoging" in _totaal(page)
     assert "<title>Zoeken en persoonlijke AI — niet gereed, koppelen bezig</title>" in page
@@ -241,7 +241,7 @@ def test_verouderde_worker_is_laatst_bekend_en_nooit_alles_gezond() -> None:
         '<span class="pil pil-verouderd"><svg aria-hidden="true"><use href="#i-verouderd"/></svg>Verouderd</span>'
         in page
     )
-    assert re.search(r'<time datetime="2026-11-09T\d\d:41:00[^"]*">\d\d:41</time>', page)  # tijd van de meting
+    assert re.search(r'<time datetime="2026-11-09T\d\d:41:00[^"]*">\d\d:41(?: UTC)?</time>', page)  # tijd van de meting
     assert "(code <code>meting_verouderd</code>)" in page
     totaal = _totaal(page)
     assert "Deels onbekend" in totaal and "Alles gezond" not in totaal

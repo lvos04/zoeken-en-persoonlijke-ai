@@ -157,6 +157,10 @@ root-start `CapBnd 0`; de healthcheck apart. Met "Custom User 568" mag `CapBnd` 
 - Contractmeldingen in het eindrapport: de keuze voor directe POST-antwoorden (geen PRG), het weglaten van niet-gebouwde
   functies en een niet ingestelde share uit de connector-health, `hub_incompatibel` voor andere onverwachte 4xx, en de
   eigen `gereed_uitleg`.
+- **Achter een HTTPS-proxy** (later, B10/B13) stuurt de browser `Origin: https://…`, terwijl de dienst zelf HTTP ziet
+  en proxy-koppen niet vertrouwt: de exacte `Origin`-controle weigert dan het formulier. Dat is de veilige kant;
+  koppelen gaat dan via een koppeltoken (env-enrollment, aanbevolen) of via de Hub. Een vertrouwde proxy instellen
+  vraagt een eigen ADR.
 - **NIET GEVALIDEERD:** welk bron-IP-adres de dienst achter de poortdoorsturing van TrueNAS ziet; het gedrag van een
   echte schermlezer, telefoon of tv; de bounding set en de healthcheck op een echte TrueNAS (alleen in Docker op de
   ontwikkelmachine getest); de echte Hub (alleen de simulator, die 1.3 volgt).
