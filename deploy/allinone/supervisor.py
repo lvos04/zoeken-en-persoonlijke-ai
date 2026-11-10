@@ -173,6 +173,12 @@ def check_run_user() -> None:
     Elke andere gebruiker (bv. 'Custom User' 1000 in het TrueNAS-formulier) laat initdb anders vastlopen met een
     onduidelijke Engelse melding ('could not look up effective user ID'); geef in plaats daarvan een duidelijke fout.
     """
+    if UID == 0 or GID == 0:
+        # SEARCH_AI_UID/GID zijn alleen voor ontwikkeling en mogen de wissel naar een gewone gebruiker nooit
+        # uitschakelen (contract 1.3 §2.2/§10: na de eigenaarschapsstap draait alles als 568)
+        fail(
+            "SEARCH_AI_UID en SEARCH_AI_GID mogen nooit 0 (root) zijn. Haal ze weg uit de app-instellingen (standaard 568)."
+        )
     uid, gid = os.getuid(), os.getgid()
     if uid != 0 and (uid, gid) != (UID, GID):
         fail(

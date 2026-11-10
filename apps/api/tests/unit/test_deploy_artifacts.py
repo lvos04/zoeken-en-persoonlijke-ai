@@ -187,6 +187,38 @@ def test_supervisor_refuses_other_run_user_with_clear_dutch_error(
     assert main_src.index("check_run_user()\n    prepare_dirs()") > 0  # vóór de mappen en vóór initdb
 
 
+@pytest.mark.parametrize(("env_uid", "env_gid"), [("0", "568"), ("568", "0"), ("0", "0")])
+def test_doelgebruiker_root_via_omgeving_wordt_geweigerd(
+    monkeypatch: pytest.MonkeyPatch, env_uid: str, env_gid: str
+) -> None:
+    """QA contract 1.3 (ADR-0017): ``SEARCH_AI_UID``/``SEARCH_AI_GID`` = 0 mag de wissel naar een gewone gebruiker nooit
+    uitschakelen (§2.2/§10). De bewaker stopt met een Nederlandse fout; de healthcheck geeft exit 1 (rood) zonder
+    iets te controleren. Zonder deze controle bleef alles als root draaien (setuid(0))."""
+    monkeypatch.setenv("SEARCH_AI_UID", env_uid)
+    monkeypatch.setenv("SEARCH_AI_GID", env_gid)
+    sup = _load_supervisor()
+    errors: list[str] = []
+
+    def fake_fail(msg: str, code: int = 78) -> None:
+        errors.append(msg)
+        raise SystemExit(code)
+
+    monkeypatch.setattr(sup, "fail", fake_fail)
+    monkeypatch.setattr(sup.os, "getuid", lambda: 0)
+    monkeypatch.setattr(sup.os, "getgid", lambda: 0)
+    with pytest.raises(SystemExit):
+        sup.check_run_user()
+    assert "mogen nooit 0 (root) zijn" in errors[0]
+    out = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "deploy/allinone/healthcheck.py"), "--controle"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "SEARCH_AI_UID": env_uid, "SEARCH_AI_GID": env_gid},
+    )
+    assert out.returncode == 1 and out.stdout == ""  # vóór elke wissel of controle gestopt
+
+
 def test_smoke_test_inspects_secrets_via_container_not_as_host_user() -> None:
     # /appdata/secrets is 0700/568: de niet-root host-gebruiker (bv. de GitHub-runner) mag er terecht niet in
     smoke = (REPO_ROOT / "deploy/allinone/smoke-test.sh").read_text()

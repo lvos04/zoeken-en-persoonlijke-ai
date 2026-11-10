@@ -50,6 +50,8 @@ def drop_privileges() -> bool:
     return started_as_root
 
 
+if UID == 0 or GID == 0:
+    sys.exit(1)  # de doelgebruiker is nooit root (SEARCH_AI_UID/GID alleen voor ontwikkeling)
 try:
     root_start = drop_privileges()
 except (OSError, AttributeError, ValueError):
