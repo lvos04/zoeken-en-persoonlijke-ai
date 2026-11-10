@@ -15,8 +15,10 @@
   360,
   390,
   768,
+  1024,
   1440
  ],
+ "lettertype_reflow": "DejaVu Sans",
  "themas": [
   "licht",
   "donker"
@@ -25,6 +27,8 @@
   "niet-gekoppeld",
   "veldfout-koppelcode",
   "koppelen-mislukt",
+  "adres-zonder-koppelen",
+  "host-geweigerd",
   "gekoppeld-melding",
   "gekoppeld",
   "ontkoppeld",
@@ -32,56 +36,160 @@
   "niet-gereed",
   "formulier-verlopen",
   "te-veel-pogingen",
+  "koppelen-bezig",
+  "koppelen-bezig-poging",
   "koppelstatus-onleesbaar",
   "sjabloon-ongeldig"
  ],
  "stappen": [
   {
    "naam": "veldfout-koppelcode",
-   "url": "http://127.0.0.1:40133/?melding=koppelcode_ongeldig&poging=…",
-   "velden_leeg_na_fout": true,
+   "http": 422,
+   "code": "koppelcode_ongeldig",
+   "herkomst": {
+    "origin": "http://127.0.0.1:34639",
+    "sfs": "same-origin",
+    "cookie": true
+   },
+   "velden_leeg_na_antwoord": true,
    "skiplink": {
     "tekst": "Naar de koppelcode (fout)",
     "href": "#koppelcode"
    },
    "focus_na_skiplink": {
     "id": "koppelcode",
-    "invalid": "true",
-    "beschreven": "code-hulp code-fout"
-   }
+    "invalid": "true"
+   },
+   "verwacht": true
   },
   {
    "naam": "koppelen-mislukt",
-   "url": "http://127.0.0.1:40133/?melding=hub_weigerde&poging=…",
-   "velden_leeg_na_fout": true,
+   "http": 422,
+   "code": "hub_weigerde",
+   "herkomst": {
+    "origin": "http://127.0.0.1:34639",
+    "sfs": "same-origin",
+    "cookie": true
+   },
+   "velden_leeg_na_antwoord": true,
    "skiplink": {
     "tekst": "Naar de koppelcode (fout)",
     "href": "#koppelcode"
    },
    "focus_na_skiplink": {
     "id": "koppelcode",
-    "invalid": "true",
-    "beschreven": "code-hulp code-fout"
-   }
+    "invalid": "true"
+   },
+   "verwacht": true
   },
   {
-   "naam": "koppelen-gelukt",
-   "url": "http://127.0.0.1:40133/?melding=gekoppeld",
-   "velden_leeg_na_fout": true,
+   "naam": "herkomst-same-site",
+   "http": 403,
+   "code": "herkomst_geweigerd",
+   "herkomst": {
+    "origin": "http://127.0.0.1:36663",
+    "sfs": "same-site",
+    "cookie": true
+   },
+   "verwacht": true
+  },
+  {
+   "naam": "herkomst-cross-site",
+   "http": 403,
+   "code": "herkomst_geweigerd",
+   "herkomst": {
+    "origin": "http://aanvaller.voorbeeld:36663",
+    "sfs": "cross-site",
+    "cookie": false
+   },
+   "verwacht": true
+  },
+  {
+   "naam": "herkomst-origin-null",
+   "http": 403,
+   "code": null,
+   "herkomst": {
+    "origin": "null",
+    "sfs": "cross-site",
+    "cookie": false
+   },
+   "verwacht": true
+  },
+  {
+   "naam": "host-niet-toegestaan",
+   "http": 403,
+   "code": "host_niet_toegestaan",
+   "herkomst": {
+    "origin": "http://zoeken.voorbeeld.nl:34639",
+    "cookie": true
+   },
+   "velden_leeg_na_antwoord": true,
    "skiplink": {
     "tekst": "Naar de inhoud",
     "href": "#inhoud"
    },
    "focus_na_skiplink": {
     "id": "",
-    "invalid": null,
-    "beschreven": null
-   }
+    "invalid": null
+   },
+   "verwacht": true
+  },
+  {
+   "naam": "geen-cookie",
+   "http": 403,
+   "code": "ongeldig_formulier",
+   "herkomst": {
+    "origin": "http://127.0.0.1:34639",
+    "sfs": "same-origin",
+    "cookie": false
+   },
+   "velden_leeg_na_antwoord": true,
+   "skiplink": {
+    "tekst": "Naar de inhoud",
+    "href": "#inhoud"
+   },
+   "focus_na_skiplink": {
+    "id": "",
+    "invalid": null
+   },
+   "verwacht": true
+  },
+  {
+   "naam": "geweigerd-niets-naar-de-hub",
+   "enroll_voor": 1,
+   "enroll_na": 1,
+   "verwacht": true
+  },
+  {
+   "naam": "koppelen-gelukt",
+   "http": 200,
+   "code": null,
+   "herkomst": {
+    "origin": "http://127.0.0.1:34639",
+    "sfs": "same-origin",
+    "cookie": true
+   },
+   "velden_leeg_na_antwoord": true,
+   "skiplink": {
+    "tekst": "Naar de inhoud",
+    "href": "#inhoud"
+   },
+   "focus_na_skiplink": {
+    "id": "",
+    "invalid": null
+   },
+   "verwacht": true
   },
   {
    "naam": "testbronnen",
    "bron": "aangemaakt",
    "toestemming": 200
+  },
+  {
+   "naam": "al-gekoppeld",
+   "http": 409,
+   "code": "al_gekoppeld",
+   "verwacht": true
   },
   {
    "naam": "ontkoppelen-door-hub",
@@ -93,15 +201,39 @@
   },
   {
    "naam": "formulier-verlopen",
-   "http": 303,
-   "location": "/?melding=ongeldig_formulier&poging=…"
+   "http": 403,
+   "code": "ongeldig_formulier",
+   "herkomst": {
+    "origin": "http://127.0.0.1:49023",
+    "sfs": "same-origin",
+    "cookie": false
+   },
+   "velden_leeg_na_antwoord": true,
+   "skiplink": {
+    "tekst": "Naar de inhoud",
+    "href": "#inhoud"
+   },
+   "focus_na_skiplink": {
+    "id": "",
+    "invalid": null
+   },
+   "verwacht": true
   },
   {
    "naam": "te-veel-pogingen",
-   "location": "/?melding=te_veel_pogingen&poging=…"
+   "http": 429,
+   "code": "te_veel_pogingen",
+   "retry_after": "900",
+   "verwacht": true
+  },
+  {
+   "naam": "koppelen-bezig-409",
+   "http": 409,
+   "code": "koppelen_bezig",
+   "verwacht": true
   }
  ],
- "controles": 132,
+ "controles": 208,
  "mislukt": 0,
  "resultaten": [
   {
@@ -115,8 +247,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.89,
-   "ui_min_waar": "input#hub",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
    "inline_links": [],
@@ -126,12 +258,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -139,8 +271,16 @@
     "eerste": "a \"Naar de inhoud\"",
     "ringMin": 8.34
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": "niet-gekoppeld-320-licht.png"
   },
   {
@@ -155,7 +295,7 @@
    "tekst_min_waar": "button.knop",
    "tekst_onder_7": [],
    "ui_min": 6.11,
-   "ui_min_waar": "input#hub",
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
    "inline_links": [],
@@ -165,12 +305,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -191,8 +331,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.89,
-   "ui_min_waar": "input#hub",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
    "inline_links": [],
@@ -202,12 +342,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -229,7 +369,7 @@
    "tekst_min_waar": "button.knop",
    "tekst_onder_7": [],
    "ui_min": 6.11,
-   "ui_min_waar": "input#hub",
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
    "inline_links": [],
@@ -239,12 +379,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -265,8 +405,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.89,
-   "ui_min_waar": "input#hub",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
    "inline_links": [],
@@ -276,12 +416,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -303,7 +443,7 @@
    "tekst_min_waar": "button.knop",
    "tekst_onder_7": [],
    "ui_min": 6.11,
-   "ui_min_waar": "input#hub",
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
    "inline_links": [],
@@ -313,12 +453,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -339,8 +479,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.89,
-   "ui_min_waar": "input#hub",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
    "inline_links": [],
@@ -350,12 +490,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -377,7 +517,7 @@
    "tekst_min_waar": "button.knop",
    "tekst_onder_7": [],
    "ui_min": 6.11,
-   "ui_min_waar": "input#hub",
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
    "inline_links": [],
@@ -387,12 +527,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -401,6 +541,80 @@
     "ringMin": 8.63
    },
    "schermafdruk": "niet-gekoppeld-768-donker.png"
+  },
+  {
+   "toestand": "niet-gekoppeld",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": "niet-gekoppeld-1024-licht.png"
+  },
+  {
+   "toestand": "niet-gekoppeld",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": "niet-gekoppeld-1024-donker.png"
   },
   {
    "toestand": "niet-gekoppeld",
@@ -413,8 +627,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.89,
-   "ui_min_waar": "input#hub",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
    "inline_links": [],
@@ -424,12 +638,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -451,7 +665,7 @@
    "tekst_min_waar": "button.knop",
    "tekst_onder_7": [],
    "ui_min": 6.11,
-   "ui_min_waar": "input#hub",
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
    "inline_links": [],
@@ -461,12 +675,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -484,8 +698,6 @@
    "onbekend_randen": [
     "dashed",
     "dashed",
-    "dashed",
-    "dashed",
     "dashed"
    ]
   },
@@ -493,7 +705,7 @@
    "toestand": "veldfout-koppelcode",
    "breedte": 320,
    "thema": "licht",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -513,12 +725,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -526,15 +738,23 @@
     "eerste": "a \"Naar de koppelcode (fout)\"",
     "ringMin": 7.79
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": null
   },
   {
    "toestand": "veldfout-koppelcode",
    "breedte": 320,
    "thema": "donker",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -554,12 +774,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -573,7 +793,7 @@
    "toestand": "veldfout-koppelcode",
    "breedte": 360,
    "thema": "licht",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -593,12 +813,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -612,7 +832,7 @@
    "toestand": "veldfout-koppelcode",
    "breedte": 360,
    "thema": "donker",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -632,12 +852,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -651,7 +871,7 @@
    "toestand": "veldfout-koppelcode",
    "breedte": 390,
    "thema": "licht",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -671,12 +891,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -690,7 +910,7 @@
    "toestand": "veldfout-koppelcode",
    "breedte": 390,
    "thema": "donker",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -710,12 +930,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -729,7 +949,7 @@
    "toestand": "veldfout-koppelcode",
    "breedte": 768,
    "thema": "licht",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -749,12 +969,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -768,7 +988,7 @@
    "toestand": "veldfout-koppelcode",
    "breedte": 768,
    "thema": "donker",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -788,12 +1008,90 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 8,
+    "eerste": "a \"Naar de koppelcode (fout)\"",
+    "ringMin": 8.04
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "veldfout-koppelcode",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 422,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [
+    "Naar het veld Koppelcode (636×46)"
+   ],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 8,
+    "eerste": "a \"Naar de koppelcode (fout)\"",
+    "ringMin": 7.79
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "veldfout-koppelcode",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 422,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [
+    "Naar het veld Koppelcode (636×46)"
+   ],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -807,7 +1105,7 @@
    "toestand": "veldfout-koppelcode",
    "breedte": 1440,
    "thema": "licht",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -827,12 +1125,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -846,7 +1144,7 @@
    "toestand": "veldfout-koppelcode",
    "breedte": 1440,
    "thema": "donker",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -866,12 +1164,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -889,8 +1187,6 @@
    "onbekend_randen": [
     "dashed",
     "dashed",
-    "dashed",
-    "dashed",
     "dashed"
    ]
   },
@@ -898,7 +1194,7 @@
    "toestand": "koppelen-mislukt",
    "breedte": 320,
    "thema": "licht",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -918,12 +1214,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -931,15 +1227,23 @@
     "eerste": "a \"Naar de koppelcode (fout)\"",
     "ringMin": 7.79
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": "koppelen-mislukt-320-licht.png"
   },
   {
    "toestand": "koppelen-mislukt",
    "breedte": 320,
    "thema": "donker",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -959,12 +1263,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -978,7 +1282,7 @@
    "toestand": "koppelen-mislukt",
    "breedte": 360,
    "thema": "licht",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -998,12 +1302,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -1017,7 +1321,7 @@
    "toestand": "koppelen-mislukt",
    "breedte": 360,
    "thema": "donker",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -1037,12 +1341,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -1056,7 +1360,7 @@
    "toestand": "koppelen-mislukt",
    "breedte": 390,
    "thema": "licht",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -1076,12 +1380,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -1095,7 +1399,7 @@
    "toestand": "koppelen-mislukt",
    "breedte": 390,
    "thema": "donker",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -1115,12 +1419,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -1134,7 +1438,7 @@
    "toestand": "koppelen-mislukt",
    "breedte": 768,
    "thema": "licht",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -1154,12 +1458,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -1173,7 +1477,7 @@
    "toestand": "koppelen-mislukt",
    "breedte": 768,
    "thema": "donker",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -1193,12 +1497,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -1210,9 +1514,87 @@
   },
   {
    "toestand": "koppelen-mislukt",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 422,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [
+    "Naar het veld Koppelcode (205×22)"
+   ],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 8,
+    "eerste": "a \"Naar de koppelcode (fout)\"",
+    "ringMin": 7.79
+   },
+   "schermafdruk": "koppelen-mislukt-1024-licht.png"
+  },
+  {
+   "toestand": "koppelen-mislukt",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 422,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [
+    "Naar het veld Koppelcode (205×22)"
+   ],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 8,
+    "eerste": "a \"Naar de koppelcode (fout)\"",
+    "ringMin": 8.04
+   },
+   "schermafdruk": "koppelen-mislukt-1024-donker.png"
+  },
+  {
+   "toestand": "koppelen-mislukt",
    "breedte": 1440,
    "thema": "licht",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -1232,12 +1614,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -1251,7 +1633,7 @@
    "toestand": "koppelen-mislukt",
    "breedte": 1440,
    "thema": "donker",
-   "http": 200,
+   "http": 422,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -1271,12 +1653,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Koppelen is mislukt · niet gereed, niet gekoppeld",
    "focus": {
@@ -1294,6 +1676,934 @@
    "onbekend_randen": [
     "dashed",
     "dashed",
+    "dashed"
+   ]
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 320,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 320,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 320,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 320,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 360,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 360,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 360,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 360,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 390,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 390,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": "adres-zonder-koppelen-390-licht.png"
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 390,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 390,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": "adres-zonder-koppelen-390-donker.png"
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 768,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 768,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 768,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 768,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 1440,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1440,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 1440,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1440,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "adres-zonder-koppelen",
+   "breedte": 390,
+   "thema": "forced-colors",
+   "problemen": [],
+   "onbekend_randen": [
+    "dashed",
+    "dashed",
+    "dashed"
+   ]
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 320,
+   "thema": "licht",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 320,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 320,
+   "thema": "donker",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 320,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 360,
+   "thema": "licht",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 360,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 360,
+   "thema": "donker",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 360,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 390,
+   "thema": "licht",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 390,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": "host-geweigerd-390-licht.png"
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 390,
+   "thema": "donker",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 390,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": "host-geweigerd-390-donker.png"
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 768,
+   "thema": "licht",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 768,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 768,
+   "thema": "donker",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 768,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 1440,
+   "thema": "licht",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1440,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 1440,
+   "thema": "donker",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1440,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Koppelen kan niet via dit adres · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "host-geweigerd",
+   "breedte": 390,
+   "thema": "forced-colors",
+   "problemen": [],
+   "onbekend_randen": [
     "dashed",
     "dashed",
     "dashed"
@@ -1314,9 +2624,7 @@
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1326,8 +2634,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1335,8 +2643,16 @@
     "eerste": "a \"Naar de inhoud\"",
     "ringMin": 8.34
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": null
   },
   {
@@ -1347,16 +2663,14 @@
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
-   "tekst_min": 9.6,
+   "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
    "ui_min": 6.11,
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1366,8 +2680,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1392,9 +2706,7 @@
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1404,8 +2716,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1423,16 +2735,14 @@
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
-   "tekst_min": 9.6,
+   "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
    "ui_min": 6.11,
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1442,8 +2752,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1468,9 +2778,7 @@
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1480,8 +2788,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1499,16 +2807,14 @@
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
-   "tekst_min": 9.6,
+   "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
    "ui_min": 6.11,
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1518,8 +2824,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1544,9 +2850,7 @@
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1556,8 +2860,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1575,16 +2879,14 @@
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
-   "tekst_min": 9.6,
+   "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
    "ui_min": 6.11,
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1594,8 +2896,80 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
+   "focus": {
+    "aantal": 4,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "gekoppeld-melding",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.89,
+   "ui_min_waar": "span.pil.pil-neutraal",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-gezond:Alles gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-neutraal:Gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
+   "focus": {
+    "aantal": 4,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "gekoppeld-melding",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-neutraal",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-gezond:Alles gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-neutraal:Gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1620,9 +2994,7 @@
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1632,8 +3004,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1651,16 +3023,14 @@
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
-   "tekst_min": 9.6,
+   "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
    "ui_min": 6.11,
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1670,8 +3040,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1686,10 +3056,7 @@
    "breedte": 390,
    "thema": "forced-colors",
    "problemen": [],
-   "onbekend_randen": [
-    "dashed",
-    "dashed"
-   ]
+   "onbekend_randen": []
   },
   {
    "toestand": "gekoppeld",
@@ -1706,9 +3073,7 @@
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1718,8 +3083,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1727,8 +3092,16 @@
     "eerste": "a \"Naar de inhoud\"",
     "ringMin": 8.34
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": "gekoppeld-320-licht.png"
   },
   {
@@ -1739,16 +3112,14 @@
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
-   "tekst_min": 9.6,
+   "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
    "ui_min": 6.11,
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1758,8 +3129,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1784,9 +3155,7 @@
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1796,8 +3165,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1815,16 +3184,14 @@
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
-   "tekst_min": 9.6,
+   "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
    "ui_min": 6.11,
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1834,8 +3201,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1860,9 +3227,7 @@
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1872,8 +3237,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1891,16 +3256,14 @@
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
-   "tekst_min": 9.6,
+   "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
    "ui_min": 6.11,
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1910,8 +3273,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1936,9 +3299,7 @@
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1948,8 +3309,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1967,16 +3328,14 @@
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
-   "tekst_min": 9.6,
+   "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
    "ui_min": 6.11,
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -1986,8 +3345,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -1996,6 +3355,78 @@
     "ringMin": 8.63
    },
    "schermafdruk": "gekoppeld-768-donker.png"
+  },
+  {
+   "toestand": "gekoppeld",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.89,
+   "ui_min_waar": "span.pil.pil-neutraal",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-gezond:Alles gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-neutraal:Gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
+   "focus": {
+    "aantal": 4,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": "gekoppeld-1024-licht.png"
+  },
+  {
+   "toestand": "gekoppeld",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-neutraal",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-gezond:Alles gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-neutraal:Gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
+   "focus": {
+    "aantal": 4,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": "gekoppeld-1024-donker.png"
   },
   {
    "toestand": "gekoppeld",
@@ -2012,9 +3443,7 @@
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -2024,8 +3453,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -2043,16 +3472,14 @@
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
-   "tekst_min": 9.6,
+   "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
    "ui_min": 6.11,
    "ui_min_waar": "span.pil.pil-neutraal",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
-   "inline_links": [
-    "Hub openen (93×22)"
-   ],
+   "inline_links": [],
    "pillen": [
     "pil-gezond:Alles gezond",
     "pil-gezond:Gezond",
@@ -2062,8 +3489,8 @@
     "pil-neutraal:Gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — alles gezond, gekoppeld",
    "focus": {
@@ -2078,10 +3505,7 @@
    "breedte": 390,
    "thema": "forced-colors",
    "problemen": [],
-   "onbekend_randen": [
-    "dashed",
-    "dashed"
-   ]
+   "onbekend_randen": []
   },
   {
    "toestand": "ontkoppeld",
@@ -2094,7 +3518,7 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 6.36,
+   "ui_min": 5.41,
    "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
@@ -2105,12 +3529,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ontkoppeld",
-    "pil-onbekend:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
    "focus": {
@@ -2118,8 +3542,16 @@
     "eerste": "a \"Naar de inhoud\"",
     "ringMin": 8.34
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": null
   },
   {
@@ -2133,8 +3565,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
    "inline_links": [],
@@ -2144,12 +3576,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ontkoppeld",
-    "pil-onbekend:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
    "focus": {
@@ -2170,7 +3602,7 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 6.36,
+   "ui_min": 5.41,
    "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
@@ -2181,12 +3613,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ontkoppeld",
-    "pil-onbekend:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
    "focus": {
@@ -2207,8 +3639,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
    "inline_links": [],
@@ -2218,12 +3650,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ontkoppeld",
-    "pil-onbekend:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
    "focus": {
@@ -2244,7 +3676,7 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 6.36,
+   "ui_min": 5.41,
    "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
@@ -2255,12 +3687,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ontkoppeld",
-    "pil-onbekend:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
    "focus": {
@@ -2281,8 +3713,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
    "inline_links": [],
@@ -2292,12 +3724,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ontkoppeld",
-    "pil-onbekend:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
    "focus": {
@@ -2318,7 +3750,7 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 6.36,
+   "ui_min": 5.41,
    "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
@@ -2329,12 +3761,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ontkoppeld",
-    "pil-onbekend:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
    "focus": {
@@ -2355,8 +3787,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
    "inline_links": [],
@@ -2366,12 +3798,86 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ontkoppeld",
-    "pil-onbekend:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "ontkoppeld",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "ontkoppeld",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
    "focus": {
@@ -2392,7 +3898,7 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 6.36,
+   "ui_min": 5.41,
    "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
@@ -2403,12 +3909,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ontkoppeld",
-    "pil-onbekend:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
    "focus": {
@@ -2429,8 +3935,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
    "inline_links": [],
@@ -2440,12 +3946,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ontkoppeld",
-    "pil-onbekend:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
+    "pil-niet-gekoppeld:Ontkoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ontkoppeld",
    "focus": {
@@ -2463,8 +3969,6 @@
    "onbekend_randen": [
     "dashed",
     "dashed",
-    "dashed",
-    "dashed",
     "dashed"
    ]
   },
@@ -2479,7 +3983,7 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 6.36,
+   "ui_min": 5.41,
    "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
@@ -2490,12 +3994,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ingetrokken",
-    "pil-onbekend:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
    "focus": {
@@ -2503,8 +4007,16 @@
     "eerste": "a \"Naar de inhoud\"",
     "ringMin": 8.34
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": "ingetrokken-320-licht.png"
   },
   {
@@ -2518,8 +4030,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
    "inline_links": [],
@@ -2529,12 +4041,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ingetrokken",
-    "pil-onbekend:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
    "focus": {
@@ -2555,7 +4067,7 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 6.36,
+   "ui_min": 5.41,
    "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
@@ -2566,12 +4078,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ingetrokken",
-    "pil-onbekend:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
    "focus": {
@@ -2592,8 +4104,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
    "inline_links": [],
@@ -2603,12 +4115,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ingetrokken",
-    "pil-onbekend:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
    "focus": {
@@ -2629,7 +4141,7 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 6.36,
+   "ui_min": 5.41,
    "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
@@ -2640,12 +4152,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ingetrokken",
-    "pil-onbekend:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
    "focus": {
@@ -2666,8 +4178,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
    "inline_links": [],
@@ -2677,12 +4189,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ingetrokken",
-    "pil-onbekend:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
    "focus": {
@@ -2703,7 +4215,7 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 6.36,
+   "ui_min": 5.41,
    "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
@@ -2714,12 +4226,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ingetrokken",
-    "pil-onbekend:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
    "focus": {
@@ -2740,8 +4252,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
    "inline_links": [],
@@ -2751,12 +4263,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ingetrokken",
-    "pil-onbekend:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
    "focus": {
@@ -2765,6 +4277,80 @@
     "ringMin": 9.51
    },
    "schermafdruk": "ingetrokken-768-donker.png"
+  },
+  {
+   "toestand": "ingetrokken",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": "ingetrokken-1024-licht.png"
+  },
+  {
+   "toestand": "ingetrokken",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": "ingetrokken-1024-donker.png"
   },
   {
    "toestand": "ingetrokken",
@@ -2777,7 +4363,7 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 6.36,
+   "ui_min": 5.41,
    "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
@@ -2788,12 +4374,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ingetrokken",
-    "pil-onbekend:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
    "focus": {
@@ -2814,8 +4400,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
    "inline_links": [],
@@ -2825,12 +4411,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
-    "pil-onbekend:Ingetrokken",
-    "pil-onbekend:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
+    "pil-niet-gekoppeld:Ingetrokken",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, ingetrokken",
    "focus": {
@@ -2848,8 +4434,6 @@
    "onbekend_randen": [
     "dashed",
     "dashed",
-    "dashed",
-    "dashed",
     "dashed"
    ]
   },
@@ -2864,8 +4448,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.89,
-   "ui_min_waar": "input#hub",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
    "inline_links": [],
@@ -2875,12 +4459,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -2888,8 +4472,16 @@
     "eerste": "a \"Naar de inhoud\"",
     "ringMin": 8.34
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": "niet-gereed-320-licht.png"
   },
   {
@@ -2904,7 +4496,7 @@
    "tekst_min_waar": "button.knop",
    "tekst_onder_7": [],
    "ui_min": 6.11,
-   "ui_min_waar": "input#hub",
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
    "inline_links": [],
@@ -2914,12 +4506,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -2940,8 +4532,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.89,
-   "ui_min_waar": "input#hub",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
    "inline_links": [],
@@ -2951,12 +4543,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -2978,7 +4570,7 @@
    "tekst_min_waar": "button.knop",
    "tekst_onder_7": [],
    "ui_min": 6.11,
-   "ui_min_waar": "input#hub",
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
    "inline_links": [],
@@ -2988,12 +4580,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -3014,8 +4606,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.89,
-   "ui_min_waar": "input#hub",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
    "inline_links": [],
@@ -3025,12 +4617,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -3052,7 +4644,7 @@
    "tekst_min_waar": "button.knop",
    "tekst_onder_7": [],
    "ui_min": 6.11,
-   "ui_min_waar": "input#hub",
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
    "inline_links": [],
@@ -3062,12 +4654,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -3088,8 +4680,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.89,
-   "ui_min_waar": "input#hub",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
    "inline_links": [],
@@ -3099,12 +4691,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -3126,7 +4718,7 @@
    "tekst_min_waar": "button.knop",
    "tekst_onder_7": [],
    "ui_min": 6.11,
-   "ui_min_waar": "input#hub",
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
    "inline_links": [],
@@ -3136,12 +4728,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -3150,6 +4742,80 @@
     "ringMin": 8.63
    },
    "schermafdruk": "niet-gereed-768-donker.png"
+  },
+  {
+   "toestand": "niet-gereed",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-storing:Niet gereed",
+    "pil-storing:Storing",
+    "pil-onbekend:Onbekend",
+    "pil-onbekend:Onbekend",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": "niet-gereed-1024-licht.png"
+  },
+  {
+   "toestand": "niet-gereed",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-storing:Niet gereed",
+    "pil-storing:Storing",
+    "pil-onbekend:Onbekend",
+    "pil-onbekend:Onbekend",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": "niet-gereed-1024-donker.png"
   },
   {
    "toestand": "niet-gereed",
@@ -3162,8 +4828,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.89,
-   "ui_min_waar": "input#hub",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
    "inline_links": [],
@@ -3173,12 +4839,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -3200,7 +4866,7 @@
    "tekst_min_waar": "button.knop",
    "tekst_onder_7": [],
    "ui_min": 6.11,
-   "ui_min_waar": "input#hub",
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
    "inline_links": [],
@@ -3210,12 +4876,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, niet gekoppeld",
    "focus": {
@@ -3234,8 +4900,6 @@
     "dashed",
     "dashed",
     "dashed",
-    "dashed",
-    "dashed",
     "dashed"
    ]
   },
@@ -3243,7 +4907,7 @@
    "toestand": "formulier-verlopen",
    "breedte": 320,
    "thema": "licht",
-   "http": 200,
+   "http": 403,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3261,12 +4925,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3274,15 +4938,23 @@
     "eerste": "a \"Naar de inhoud\"",
     "ringMin": 8.34
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": null
   },
   {
    "toestand": "formulier-verlopen",
    "breedte": 320,
    "thema": "donker",
-   "http": 200,
+   "http": 403,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3300,12 +4972,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3319,7 +4991,7 @@
    "toestand": "formulier-verlopen",
    "breedte": 360,
    "thema": "licht",
-   "http": 200,
+   "http": 403,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3337,12 +5009,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3356,7 +5028,7 @@
    "toestand": "formulier-verlopen",
    "breedte": 360,
    "thema": "donker",
-   "http": 200,
+   "http": 403,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3374,12 +5046,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3393,7 +5065,7 @@
    "toestand": "formulier-verlopen",
    "breedte": 390,
    "thema": "licht",
-   "http": 200,
+   "http": 403,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3411,12 +5083,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3430,7 +5102,7 @@
    "toestand": "formulier-verlopen",
    "breedte": 390,
    "thema": "donker",
-   "http": 200,
+   "http": 403,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3448,12 +5120,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3467,7 +5139,7 @@
    "toestand": "formulier-verlopen",
    "breedte": 768,
    "thema": "licht",
-   "http": 200,
+   "http": 403,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3485,12 +5157,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3504,7 +5176,7 @@
    "toestand": "formulier-verlopen",
    "breedte": 768,
    "thema": "donker",
-   "http": 200,
+   "http": 403,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3522,12 +5194,86 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "formulier-verlopen",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-storing:Niet gereed",
+    "pil-storing:Storing",
+    "pil-onbekend:Onbekend",
+    "pil-onbekend:Onbekend",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "formulier-verlopen",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 403,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-storing:Niet gereed",
+    "pil-storing:Storing",
+    "pil-onbekend:Onbekend",
+    "pil-onbekend:Onbekend",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3541,7 +5287,7 @@
    "toestand": "formulier-verlopen",
    "breedte": 1440,
    "thema": "licht",
-   "http": 200,
+   "http": 403,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3559,12 +5305,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3578,7 +5324,7 @@
    "toestand": "formulier-verlopen",
    "breedte": 1440,
    "thema": "donker",
-   "http": 200,
+   "http": 403,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3596,12 +5342,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Het formulier is verlopen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3620,8 +5366,6 @@
     "dashed",
     "dashed",
     "dashed",
-    "dashed",
-    "dashed",
     "dashed"
    ]
   },
@@ -3629,7 +5373,7 @@
    "toestand": "te-veel-pogingen",
    "breedte": 320,
    "thema": "licht",
-   "http": 200,
+   "http": 429,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3647,12 +5391,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3660,15 +5404,23 @@
     "eerste": "a \"Naar de inhoud\"",
     "ringMin": 8.34
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": null
   },
   {
    "toestand": "te-veel-pogingen",
    "breedte": 320,
    "thema": "donker",
-   "http": 200,
+   "http": 429,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3686,12 +5438,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3705,7 +5457,7 @@
    "toestand": "te-veel-pogingen",
    "breedte": 360,
    "thema": "licht",
-   "http": 200,
+   "http": 429,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3723,12 +5475,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3742,7 +5494,7 @@
    "toestand": "te-veel-pogingen",
    "breedte": 360,
    "thema": "donker",
-   "http": 200,
+   "http": 429,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3760,12 +5512,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3779,7 +5531,7 @@
    "toestand": "te-veel-pogingen",
    "breedte": 390,
    "thema": "licht",
-   "http": 200,
+   "http": 429,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3797,12 +5549,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3816,7 +5568,7 @@
    "toestand": "te-veel-pogingen",
    "breedte": 390,
    "thema": "donker",
-   "http": 200,
+   "http": 429,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3834,12 +5586,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3853,7 +5605,7 @@
    "toestand": "te-veel-pogingen",
    "breedte": 768,
    "thema": "licht",
-   "http": 200,
+   "http": 429,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3871,12 +5623,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3890,7 +5642,7 @@
    "toestand": "te-veel-pogingen",
    "breedte": 768,
    "thema": "donker",
-   "http": 200,
+   "http": 429,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3908,12 +5660,86 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.63
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "te-veel-pogingen",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 429,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-storing:Niet gereed",
+    "pil-storing:Storing",
+    "pil-onbekend:Onbekend",
+    "pil-onbekend:Onbekend",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
+   "focus": {
+    "aantal": 7,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "te-veel-pogingen",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 429,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.32,
+   "tekst_min_waar": "button.knop",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-storing:Niet gereed",
+    "pil-storing:Storing",
+    "pil-onbekend:Onbekend",
+    "pil-onbekend:Onbekend",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3927,7 +5753,7 @@
    "toestand": "te-veel-pogingen",
    "breedte": 1440,
    "thema": "licht",
-   "http": 200,
+   "http": 429,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3945,12 +5771,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
    "focus": {
@@ -3964,7 +5790,7 @@
    "toestand": "te-veel-pogingen",
    "breedte": 1440,
    "thema": "donker",
-   "http": 200,
+   "http": 429,
    "problemen": [],
    "axe_overtredingen": 0,
    "axe_onvolledig": [],
@@ -3982,12 +5808,12 @@
     "pil-onbekend:Onbekend",
     "pil-onbekend:Onbekend",
     "pil-gezond:Gezond",
-    "pil-onbekend:Niet gekoppeld",
-    "pil-onbekend:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — Te veel pogingen · niet gereed, niet gekoppeld",
    "focus": {
@@ -4006,6 +5832,958 @@
     "dashed",
     "dashed",
     "dashed",
+    "dashed"
+   ]
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 320,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 320,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 320,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 320,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 360,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 360,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 360,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 360,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 390,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 390,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": "koppelen-bezig-390-licht.png"
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 390,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 390,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": "koppelen-bezig-390-donker.png"
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 768,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 768,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 768,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 768,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 1440,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1440,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 1440,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1440,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig",
+   "breedte": 390,
+   "thema": "forced-colors",
+   "problemen": [],
+   "onbekend_randen": [
+    "dashed",
+    "dashed",
+    "dashed"
+   ]
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 320,
+   "thema": "licht",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 320,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 320,
+   "thema": "donker",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 320,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 360,
+   "thema": "licht",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 360,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 360,
+   "thema": "donker",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 360,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 390,
+   "thema": "licht",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 390,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": "koppelen-bezig-poging-390-licht.png"
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 390,
+   "thema": "donker",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 390,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": "koppelen-bezig-poging-390-donker.png"
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 768,
+   "thema": "licht",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 768,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 768,
+   "thema": "donker",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 768,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 1440,
+   "thema": "licht",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 4.86,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1440,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 1440,
+   "thema": "donker",
+   "http": 409,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.69,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1440,
+   "inline_links": [],
+   "pillen": [
+    "pil-onbekend:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-niet-gekoppeld:Niet gekoppeld",
+    "pil-nog-niet:Koppelen bezig",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — Er loopt al een koppelpoging · niet gereed, koppelen bezig",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelen-bezig-poging",
+   "breedte": 390,
+   "thema": "forced-colors",
+   "problemen": [],
+   "onbekend_randen": [
     "dashed",
     "dashed",
     "dashed"
@@ -4022,8 +6800,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.71,
-   "ui_min_waar": "div.melding.melding-fout",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
    "inline_links": [],
@@ -4034,10 +6812,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
    "focus": {
@@ -4045,8 +6825,16 @@
     "eerste": "a \"Naar de inhoud\"",
     "ringMin": 8.34
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": null
   },
   {
@@ -4060,8 +6848,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 320,
    "inline_links": [],
@@ -4072,10 +6860,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
    "focus": {
@@ -4096,8 +6886,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.71,
-   "ui_min_waar": "div.melding.melding-fout",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
    "inline_links": [],
@@ -4108,10 +6898,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
    "focus": {
@@ -4132,8 +6924,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 360,
    "inline_links": [],
@@ -4144,10 +6936,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
    "focus": {
@@ -4168,8 +6962,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.71,
-   "ui_min_waar": "div.melding.melding-fout",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
    "inline_links": [],
@@ -4180,10 +6974,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
    "focus": {
@@ -4204,8 +7000,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 390,
    "inline_links": [],
@@ -4216,10 +7012,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
    "focus": {
@@ -4240,8 +7038,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.71,
-   "ui_min_waar": "div.melding.melding-fout",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
    "inline_links": [],
@@ -4252,10 +7050,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
    "focus": {
@@ -4276,8 +7076,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 768,
    "inline_links": [],
@@ -4288,10 +7088,88 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 9.51
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelstatus-onleesbaar",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 8.34,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-storing:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
+   ],
+   "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
+   "focus": {
+    "aantal": 3,
+    "eerste": "a \"Naar de inhoud\"",
+    "ringMin": 8.34
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "koppelstatus-onleesbaar",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 200,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 10.58,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
+   "min_lettermaat": 14,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [
+    "pil-storing:Niet gereed",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-gezond:Gezond",
+    "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
+    "pil-gate:Alleen met toestemming",
+    "pil-gezond:Gezond",
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
    "focus": {
@@ -4312,8 +7190,8 @@
    "tekst_min": 8.34,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 5.71,
-   "ui_min_waar": "div.melding.melding-fout",
+   "ui_min": 5.41,
+   "ui_min_waar": "span.pil.pil-onbekend",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
    "inline_links": [],
@@ -4324,10 +7202,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
    "focus": {
@@ -4348,8 +7228,8 @@
    "tekst_min": 10.58,
    "tekst_min_waar": "a",
    "tekst_onder_7": [],
-   "ui_min": 7.78,
-   "ui_min_waar": "span.pil.pil-onbekend",
+   "ui_min": 6.11,
+   "ui_min_waar": "span.pil.pil-nog-niet",
    "min_lettermaat": 14,
    "scroll_breedte": 1440,
    "inline_links": [],
@@ -4360,10 +7240,12 @@
     "pil-gezond:Gezond",
     "pil-gezond:Gezond",
     "pil-storing:Onleesbaar",
+    "pil-onbekend:Onbekend",
+    "pil-storing:Onleesbaar",
     "pil-gate:Alleen met toestemming",
     "pil-gezond:Gezond",
-    "pil-onbekend:Nog niet beschikbaar",
-    "pil-onbekend:Nog niet beschikbaar"
+    "pil-nog-niet:Nog niet beschikbaar",
+    "pil-nog-niet:Nog niet beschikbaar"
    ],
    "titel": "Zoeken en persoonlijke AI — niet gereed, koppelstatus onleesbaar",
    "focus": {
@@ -4379,7 +7261,6 @@
    "thema": "forced-colors",
    "problemen": [],
    "onbekend_randen": [
-    "dashed",
     "dashed"
    ]
   },
@@ -4406,8 +7287,16 @@
     "eerste": "a \"/healthz (proces leeft)\"",
     "ringMin": 9.4
    },
-   "tekstafstand_overloop": 0,
-   "tekstafstand_buiten_vak": [],
+   "reflow_320": {
+    "tekstafstand (1.4.12)": {
+     "overloop": 0,
+     "buiten_vak": []
+    },
+    "lettertype DejaVu Sans": {
+     "overloop": 0,
+     "buiten_vak": []
+    }
+   },
    "schermafdruk": null
   },
   {
@@ -4575,6 +7464,56 @@
    "ui_min_waar": "code.selecteer",
    "min_lettermaat": 15,
    "scroll_breedte": 768,
+   "inline_links": [],
+   "pillen": [],
+   "titel": "Zoeken en persoonlijke AI — statuspagina niet beschikbaar",
+   "focus": {
+    "aantal": 2,
+    "eerste": "a \"/healthz (proces leeft)\"",
+    "ringMin": 7.84
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "sjabloon-ongeldig",
+   "breedte": 1024,
+   "thema": "licht",
+   "http": 500,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 9.4,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 21,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 15,
+   "scroll_breedte": 1024,
+   "inline_links": [],
+   "pillen": [],
+   "titel": "Zoeken en persoonlijke AI — statuspagina niet beschikbaar",
+   "focus": {
+    "aantal": 2,
+    "eerste": "a \"/healthz (proces leeft)\"",
+    "ringMin": 9.4
+   },
+   "schermafdruk": null
+  },
+  {
+   "toestand": "sjabloon-ongeldig",
+   "breedte": 1024,
+   "thema": "donker",
+   "http": 500,
+   "problemen": [],
+   "axe_overtredingen": 0,
+   "axe_onvolledig": [],
+   "tekst_min": 7.84,
+   "tekst_min_waar": "a",
+   "tekst_onder_7": [],
+   "ui_min": 18.73,
+   "ui_min_waar": "code.selecteer",
+   "min_lettermaat": 15,
+   "scroll_breedte": 1024,
    "inline_links": [],
    "pillen": [],
    "titel": "Zoeken en persoonlijke AI — statuspagina niet beschikbaar",
