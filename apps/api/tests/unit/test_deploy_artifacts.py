@@ -47,7 +47,7 @@ def test_image_ships_the_pinned_peil_copy() -> None:
     ignored = (REPO_ROOT / ".dockerignore").read_text().split()
     assert "design" not in ignored and "design/ontwerptaal" not in ignored
     smoke = (REPO_ROOT / "deploy/allinone/smoke-test.sh").read_text()
-    assert "Peil statuspagina.css 1.1.0" in smoke
+    assert "Peil statuspagina.css 1.1.1" in smoke
 
 
 def test_supervisor_never_touches_sources() -> None:
@@ -196,7 +196,11 @@ def test_no_root_init_supervisor_is_pid_1() -> None:
         "privs_all_568",
         "pid1_is_supervisor",
         "no_zombies_after_orphan",
-        'CapEff") == ["0000000000000000"]',
+        'f.get("CapEff") == leeg and f.get("CapPrm") == leeg',
+        'f.get("CapAmb") == leeg',
+        '(not root_start or f.get("CapBnd") == leeg)',
+        "healthcheck_drops_privs $NAME root",
+        "healthcheck_drops_privs $NAME-568 custom-user",
     ):
         assert needle in smoke
     assert "! log_has $NAME 'ontkoppelcode'" in smoke
@@ -225,8 +229,73 @@ def test_reap_orphans_only_reaps_unknown_zombies() -> None:
 
 
 def test_healthcheck_drops_root_first() -> None:
+    """Contract 1.3 §2.2: exec-vorm; als eerste handeling (bij root) bounding set legen, dan gid/uid, dan no_new_privs;
+    pas daarna iets controleren. Met --controle meldt hij de rechten na de wissel (rooktest, apart)."""
     hc = (REPO_ROOT / "deploy/allinone/healthcheck.py").read_text()
-    assert hc.index("os.setuid(UID)") < hc.index("urlopen") and "prctl(38, 1" in hc
+    code = hc[hc.index("def drop_privileges()") :]
+    assert code.index("libc.prctl(PR_CAPBSET_DROP, cap") < code.index("os.setgroups([])") < code.index("os.setuid(UID)")
+    assert code.index("os.setuid(UID)") < code.index("libc.prctl(PR_SET_NO_NEW_PRIVS, 1") < code.index("urlopen(")
+    assert '"--controle" in sys.argv' in hc and "sys.exit(1)  # nooit als root doorgaan" in hc
+    assert 'HEALTHCHECK --interval=30s --timeout=8s --start-period=90s --retries=3 \\\n  CMD ["python",' in (
+        DOCKERFILE.read_text()
+    )
+
+
+def test_healthcheck_controlevlag_faalt_buiten_568() -> None:
+    """Negatief: buiten de container (geen 568) meldt de controlevlag FOUT en exit 1; nooit een HTTP-verzoek."""
+    out = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "deploy/allinone/healthcheck.py"), "--controle"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "SEARCH_AI_UID": "568", "SEARCH_AI_GID": "568"},
+    )
+    if os.getuid() == 568:  # pragma: no cover - alleen in een container als 568
+        pytest.skip("draait al als 568")
+    assert out.returncode == 1 and "controle: FOUT" in out.stdout and "NoNewPrivs: 1" in out.stdout
+
+
+def test_supervisor_leegt_de_bounding_set_voor_de_wissel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """K3: bij een start als root eerst PR_CAPBSET_DROP voor elke capability; een capability die de kernel niet kent
+    (EINVAL) wordt overgeslagen, elke andere fout stopt de start (nooit doorstarten met een volle bounding set)."""
+    import ctypes
+    import errno
+
+    sup = _load_supervisor()
+    src = (REPO_ROOT / "deploy/allinone/supervisor.py").read_text()
+    demote = src[src.index("def demote() -> None:") :]
+    assert demote.index("drop_bounding_set()") < demote.index("os.setgroups([])") < demote.index("os.setuid(UID)")
+    calls: list[int] = []
+
+    class FakeLibc:
+        def __init__(self, fout: int | None) -> None:
+            self.fout = fout
+
+        def prctl(self, op: int, cap: int, *_a: int) -> int:
+            assert op == sup.PR_CAPBSET_DROP
+            calls.append(cap)
+            if cap == 40:
+                ctypes.set_errno(errno.EINVAL)
+                return -1
+            if self.fout is not None and cap == 3:
+                ctypes.set_errno(self.fout)
+                return -1
+            return 0
+
+    monkeypatch.setattr(sup, "_cap_last", lambda: 40)
+    monkeypatch.setattr(sup, "_status_field", lambda name: "0000000000000000")
+    monkeypatch.setattr(sup.ctypes, "CDLL", lambda *_a, **_k: FakeLibc(None))
+    sup.drop_bounding_set()
+    assert calls == list(range(41))
+    monkeypatch.setattr(sup.ctypes, "CDLL", lambda *_a, **_k: FakeLibc(errno.EPERM))
+    with pytest.raises(RuntimeError, match="PR_CAPBSET_DROP 3"):
+        sup.drop_bounding_set()
+    monkeypatch.setattr(sup.ctypes, "CDLL", lambda *_a, **_k: FakeLibc(None))
+    monkeypatch.setattr(sup, "_status_field", lambda name: "000001ffffffffff")
+    with pytest.raises(RuntimeError, match="bounding set"):
+        sup.drop_bounding_set()
+    main = src[src.index("def main() -> None:") :]
+    assert "except (RuntimeError, OSError) as exc:" in main and "rechten niet afgeven" in main
 
 
 @pytest.mark.parametrize("sub", ["postgres", "secrets", "backups", "logs"])

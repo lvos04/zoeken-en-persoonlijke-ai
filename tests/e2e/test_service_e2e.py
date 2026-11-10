@@ -1,5 +1,5 @@
 """Dienst-E2E over echte HTTP (echte processen: API + worker van deze dienst, Hub-simulator in een eigen proces):
-koppelen volgens contract 1.2 (env-token + vingerafdruk, pinning, bevestigen), B07-001 (bronselectie, toestemming,
+koppelen volgens contract 1.3 (env-token + vingerafdruk, pinning, bevestigen), B07-001 (bronselectie, toestemming,
 ACL vóór ranking, intrekken), dienst-JWT, bodygrens, tokenrotatie, uitval van de Hub en intrekking (EX16).
 
 De index wordt hier gevuld met een **simulatie van de toekomstige ingest** (B07-002 is nog niet gebouwd): de test schrijft
@@ -218,7 +218,7 @@ def test_03_connector_with_hub_service_jwt(stack: Stack) -> None:
     assert httpx.get(f"{stack.api}/search/v1/search", params={"q": "x"}, headers=hdr).status_code == 403
     link = httpx.get(f"{stack.api}/connector/v1/hub-link", headers=hdr).json()
     assert link["state"] == "gekoppeld" and link["keyset_fingerprint"] == stack.fingerprint
-    # het eigen service-token wordt inkomend nooit geaccepteerd (contract 1.2 §4.3)
+    # het eigen service-token wordt inkomend nooit geaccepteerd (contract 1.3 §4.3)
     tok = httpx.get(f"{stack.hub}/sim/service-token").json()["token"]
     r = httpx.get(f"{stack.api}/connector/v1/discover", headers={"Authorization": f"Bearer {tok}"})
     assert r.status_code == 401 and r.json()["details"]["reason"] == "service_token_not_accepted"

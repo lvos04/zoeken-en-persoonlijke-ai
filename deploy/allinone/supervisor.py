@@ -9,8 +9,11 @@ Regels (gebaseerd op het werkende MSO-voorbeeld):
   als 568 (PostgreSQL weigert root). **/bronnen wordt nooit aangeraakt** (geen chown/chmod: alleen lezen). Als root
   volgt de bewaker nooit een symbolische koppeling: een link als eigen submap van /appdata → duidelijke fout; een link
   als socketmap in /tmp wordt vervangen door een gewone map (anders kan 568 root buiten /appdata laten chownen).
-- Na de gebruikerswissel zet de bewaker zelf ``no_new_privs`` (prctl) voor zichzelf en elk kindproces (contract 1.2
-  §2.2): het standaard Custom App-formulier van TrueNAS zet geen no-new-privileges en geen cap_drop (ADR-0010).
+- Bij een start als root leegt de bewaker eerst de **bounding set** (``PR_CAPBSET_DROP`` voor elke capability; mislukt
+  dat, dan stopt de start met een Nederlandse melding), wisselt dan volledig naar 568:568 en zet ``no_new_privs``
+  (prctl) voor zichzelf en elk kindproces (contract 1.3 §2.2, K3): het standaard Custom App-formulier van TrueNAS zet
+  geen no-new-privileges en geen cap_drop (ADR-0010). Met "Custom User 568" kan de bounding set niet geleegd worden; dan
+  blijven CapEff, CapPrm en CapAmb 0 en NoNewPrivs 1 verplicht.
 - De bewaker is zelf **PID 1** (geen root-init zoals dumb-init): na de eigenaarschapsstap draait ook PID 1 als 568, met
   ``CapEff 0`` en ``NoNewPrivs 1`` (contract 1.2 §2.2/§10, R11). Als PID 1 ruimt hij verweesde processen (zombies) op
   en vangt hij SIGTERM/SIGINT zelf af (PID 1 krijgt anders geen standaard-signaalafhandeling).
@@ -25,6 +28,7 @@ Regels (gebaseerd op het werkende MSO-voorbeeld):
 from __future__ import annotations
 
 import ctypes
+import errno
 import grp
 import os
 import pwd
@@ -48,6 +52,8 @@ DB_URL = f"postgresql+psycopg://{DB_USER}@/{DB_NAME}?host={SOCKET_DIR}"
 MANAGED = ("postgres", "secrets", "backups", "logs")
 STOP = threading.Event()
 PR_SET_NO_NEW_PRIVS = 38
+PR_CAPBSET_DROP = 24
+EMPTY_CAPS = "0000000000000000"
 
 
 def log(msg: str) -> None:
@@ -77,8 +83,44 @@ def no_new_privs_active() -> bool:
         return False
 
 
+def _status_field(name: str) -> str | None:
+    try:
+        with open("/proc/self/status", encoding="ascii") as fh:
+            for line in fh:
+                key, _, value = line.partition(":")
+                if key == name:
+                    return value.strip()
+    except OSError:
+        return None
+    return None
+
+
+def _cap_last() -> int:
+    try:
+        return int(Path("/proc/sys/kernel/cap_last_cap").read_text(encoding="ascii").strip())
+    except (OSError, ValueError):
+        return 63  # onbekend: alles proberen; een capability die de kernel niet kent geeft EINVAL
+
+
+def drop_bounding_set() -> None:
+    """Contract 1.3 §2.2 (K3): bij een start als root de bounding set legen, vóór de gebruikerswissel (vraagt
+    CAP_SETPCAP, die root in de Docker-standaardset heeft). ``RuntimeError`` als het niet lukt: dan nooit doorstarten."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    for cap in range(_cap_last() + 1):
+        if int(libc.prctl(PR_CAPBSET_DROP, cap, 0, 0, 0)) != 0:
+            err = ctypes.get_errno()
+            if err == errno.EINVAL:  # deze kernel kent die capability niet
+                continue
+            raise RuntimeError(f"PR_CAPBSET_DROP {cap}: {os.strerror(err)}")
+    if _status_field("CapBnd") != EMPTY_CAPS:
+        raise RuntimeError(f"bounding set na het legen: {_status_field('CapBnd')}")
+
+
 def demote() -> None:
+    """Volledig naar 568:568: bij root eerst de bounding set legen, dan groepen/gid/uid, dan no_new_privs. Ook als
+    ``preexec_fn`` van kindprocessen (die dan al als 568 draaien: alleen no_new_privs)."""
     if os.getuid() == 0:
+        drop_bounding_set()
         os.setgroups([])
         os.setgid(GID)
         os.setuid(UID)  # van 0 naar 568: permitted/effective capabilities vervallen (geen ambient caps)
@@ -414,7 +456,13 @@ def main() -> None:
     log(f"Zoeken en persoonlijke AI (alles-in-één) · versie {version} · data {DATA} · poort {PORT} · pid {os.getpid()}")
     check_run_user()
     prepare_dirs()
-    demote()  # vanaf hier draait niets meer als root, en met no_new_privs (erft over op alle kinderen)
+    try:
+        demote()  # vanaf hier draait niets meer als root, en met no_new_privs (erft over op alle kinderen)
+    except (RuntimeError, OSError) as exc:
+        fail(
+            f"de app kon haar rechten niet afgeven ({exc}). Zonder lege bounding set start de app niet. Start de app "
+            "opnieuw; blijft dit gebeuren, meld het dan met deze log."
+        )
     if not no_new_privs_active():
         log("WAARSCHUWING: no-new-privileges kon niet worden gezet (prctl); de processen draaien wel als 568")
     py = sys.executable

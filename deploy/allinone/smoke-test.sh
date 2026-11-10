@@ -8,9 +8,12 @@
 # verkeerde maprechten en een verkeerde gebruiker, dat een alleen-lezen share onder /bronnen NIET wordt aangeraakt, en
 # dat de bewaker als root nooit een symbolische koppeling volgt (in /appdata of als socketmap in /tmp).
 # Zoals het standaard TrueNAS Custom App-formulier start de test ZONDER '--security-opt no-new-privileges' en ZONDER
-# '--cap-drop': de image moet zelf naar 568 wisselen en no_new_privs zetten. Voor ELK proces in de container, ook
-# PID 1, geldt daarna Uid 568, CapEff 0000000000000000 en NoNewPrivs 1 (contract 1.2 §2.2/§10, ADR-0011). Alleen
-# 'docker exec'-sessies van buitenaf (PPid 0, zoals deze controle zelf en de Docker-healthcheck) tellen niet mee.
+# '--cap-drop': de image moet zelf de bounding set legen, naar 568 wisselen en no_new_privs zetten. Voor ELK proces in de
+# container, ook PID 1, geldt daarna Uid 568, CapEff/CapPrm/CapAmb 0000000000000000, NoNewPrivs 1 en — bij een start
+# als root — CapBnd 0000000000000000 (contract 1.3 §2.2, K3). Alleen 'docker exec'-sessies van buitenaf (PPid 0, zoals
+# deze controle zelf en de Docker-healthcheck) tellen niet mee. De healthcheck wordt APART gecontroleerd: hetzelfde
+# commando met de controlevlag (--controle) meldt na de wissel Uid 568, CapEff/CapPrm 0, NoNewPrivs 1 (en CapBnd 0 als
+# hij als root start).
 # De test werkt met elke host-gebruiker (ook de niet-root 'runner' van GitHub Actions): /appdata/secrets is bewust
 # 0700/568, dus alles daaronder wordt bekeken via een wegwerpcontainer met een alleen-lezen mount (ADR-0009).
 set -euo pipefail
@@ -80,13 +83,16 @@ SQL
     && grep -qx 'dims=3' "$WORK/vec.txt"
 }
 
-# Contract 1.2 §2.2: elk proces van de container (ook PID 1) als 568 (echte én effectieve uid), zonder effectieve
-# capabilities en met no_new_privs. Uitgezonderd: 'docker exec'-sessies (PPid 0, behalve PID 1) en hun kinderen.
+# Contract 1.3 §2.2: elk proces van de container (ook PID 1) als 568 (echte én effectieve uid), zonder effectieve,
+# toegestane of ambient capabilities, met no_new_privs en — bij een start als root (2e argument "root") — een lege
+# bounding set. Uitgezonderd: 'docker exec'-sessies (PPid 0, behalve PID 1) en hun kinderen.
 privs_all_568() {
   docker exec "$1" python -c '
-import os
+import os, sys
+root_start = sys.argv[1] == "root"
 me = os.getpid()
 ok = bad = 0
+leeg = ["0000000000000000"]
 for p in filter(str.isdigit, os.listdir("/proc")):
     try:
         lines = open(f"/proc/{p}/status").read().splitlines()
@@ -96,14 +102,22 @@ for p in filter(str.isdigit, os.listdir("/proc")):
     ppid = f.get("PPid", ["0"])[0]
     if int(p) == me or int(ppid) == me or (ppid == "0" and p != "1"):
         continue
-    good = (f.get("Uid", [""])[:2] == ["568", "568"] and f.get("CapEff") == ["0000000000000000"]
-            and f.get("NoNewPrivs") == ["1"])
+    good = (f.get("Uid", [""])[:2] == ["568", "568"] and f.get("CapEff") == leeg and f.get("CapPrm") == leeg
+            and f.get("CapAmb") == leeg and f.get("NoNewPrivs") == ["1"] and (not root_start or f.get("CapBnd") == leeg))
     ok += good
     bad += not good
     if not good:
-        print("FOUT proces", p, f.get("Name"), f.get("Uid"), f.get("CapEff"), f.get("NoNewPrivs"))
+        print("FOUT proces", p, f.get("Name"), f.get("Uid"), f.get("CapEff"), f.get("CapPrm"), f.get("CapBnd"), f.get("NoNewPrivs"))
 raise SystemExit(0 if ok >= 4 and bad == 0 else 1)
-'
+' "${2:-root}"
+}
+
+# De healthcheck apart (§2.2): hetzelfde commando als de Docker-healthcheck, met de controlevlag
+healthcheck_drops_privs() {
+  docker exec "$1" python /usr/local/lib/search-ai/healthcheck.py --controle > "$WORK/hc.txt" 2>&1 || { cat "$WORK/hc.txt"; return 1; }
+  grep -q '^Uid: 568[[:space:]]568' "$WORK/hc.txt" && grep -q '^CapEff: 0000000000000000$' "$WORK/hc.txt" \
+    && grep -q '^CapPrm: 0000000000000000$' "$WORK/hc.txt" && grep -q '^NoNewPrivs: 1$' "$WORK/hc.txt" \
+    && { [ "${2:-root}" != root ] || grep -q '^CapBnd: 0000000000000000$' "$WORK/hc.txt"; }
 }
 
 # PID 1 is de bewaker zelf (geen dumb-init/tini die als root blijft draaien)
@@ -164,8 +178,10 @@ check "pgvector werkt echt (HNSW-index, KNN via de index, vector_dims)" "pgvecto
 check "migraties op de nieuwste revisie (samengestelde bron-sleutels aanwezig)" \
   "[ \"\$(sql $NAME -c \"SELECT count(*) FROM pg_constraint WHERE conname = 'fk_embedding_chunk_id_chunk' AND array_length(conkey, 1) = 2\")\" = 1 ]"
 check "statuspagina toont 'niet gekoppeld'" "http_has / 'niet gekoppeld'"
-check "statuspagina in Peil 1.1.0 (sjabloon uit de image, sha256 gecontroleerd)" "http_has / 'Peil statuspagina.css 1.1.0'"
-check "koppelformulier met verplicht vingerafdrukveld (contract 1.2 §3.7)" "http_has / 'name=\"hub_vingerafdruk\" required'"
+check "statuspagina in Peil 1.1.1 (sjabloon uit de image, sha256 gecontroleerd)" "http_has / 'Peil statuspagina.css 1.1.1'"
+check "koppelformulier met verplicht vingerafdrukveld (contract 1.3 §3.7)" "http_has / 'name=\"hub_vingerafdruk\" required'"
+check "statuspagina met Referrer-Policy same-origin (contract 1.3 §3.7)" \
+  "curl -fsS -D $WORK/kop.txt -o /dev/null http://127.0.0.1:$PORT/ && tr -d '\r' < $WORK/kop.txt | grep -qi '^referrer-policy: same-origin$'"
 check "statuspagina zonder JavaScript" "http_has / '</html>' && ! grep -qi '<script' $WORK/http.txt"
 check "API zonder token geeft 401 unauthorized" \
   "[ \"\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$PORT/search/v1/sources)\" = 401 ]"
@@ -176,8 +192,10 @@ check "geen enkel proces draait als root, ook PID 1 niet (alleen de Docker-healt
 check "PID 1 is de bewaker zelf, als 568 zonder capabilities (geen root-init)" "pid1_is_supervisor $NAME"
 check "postgres, api en worker draaien als 568" \
   "[ \"\$(awk '(\$2==\"568\" || \$2==\"apps\") && /postgres -D|search_ai api|search_ai worker/' $WORK/ps.txt | wc -l)\" -ge 3 ]"
-check "elk proces (ook PID 1): Uid 568, CapEff 0 en NoNewPrivs 1, zonder --security-opt/--cap-drop" \
-  "privs_all_568 $NAME"
+check "elk proces (ook PID 1): Uid 568, CapEff/CapPrm/CapAmb 0, CapBnd 0 en NoNewPrivs 1, zonder --security-opt/--cap-drop" \
+  "privs_all_568 $NAME root"
+check "healthcheck apart (--controle): na de wissel Uid 568, CapEff/CapPrm 0, CapBnd 0, NoNewPrivs 1" \
+  "healthcheck_drops_privs $NAME root"
 check "PID 1 ruimt verweesde processen (zombies) op" "no_zombies_after_orphan $NAME"
 check "geen netwerkpoort voor PostgreSQL (alleen unix-socket)" \
   "! docker exec $NAME python -c 'import socket;s=socket.socket();s.settimeout(1);s.connect((\"127.0.0.1\",5432))' 2>/dev/null"
@@ -188,7 +206,7 @@ check "andere gebruiker in de container kan de database niet bereiken" \
 check "secrets-map 0700 en eigenaar 568" "[ \"\$(disk_mode root/secrets)\" = '700 568' ]"
 check "geheimen 0600 en eigenaar 568" \
   "[ \"\$(disk_mode root/secrets/vault.key)\" = '600 568' ] && [ \"\$(disk_mode root/secrets/identity.ed25519)\" = '600 568' ]"
-check "geen lokale ontkoppelcode meer in de app-log (contract 1.2 §3.7)" "! log_has $NAME 'ontkoppelcode'"
+check "geen lokale ontkoppelcode meer in de app-log (contract 1.3 §3.7)" "! log_has $NAME 'ontkoppelcode'"
 check "nog niet gekoppeld: geen hub-link.json" "! on_disk test -e /w/root/secrets/hub-link.json"
 check "share wordt als alleen-lezen gemeld" "log_has $NAME 'documenten: alleen-lezen'"
 check "share ongewijzigd (eigenaar, rechten, inhoud, tijden)" \
@@ -225,7 +243,10 @@ echo "== 4. start direct als 568 op een 568-map"
 docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c 'chown 568:568 /w/u568' >/dev/null
 run "$NAME-568" "$WORK/u568" --user 568:568
 check "als 568 gestart ('Custom User' 568 in het formulier) en healthy" "wait_healthy $NAME-568"
-check "ook dan elk proces: Uid 568, CapEff 0, NoNewPrivs 1" "privs_all_568 $NAME-568"
+check "ook dan elk proces: Uid 568, CapEff/CapPrm/CapAmb 0, NoNewPrivs 1 (CapBnd mag de Docker-standaardset zijn)" \
+  "privs_all_568 $NAME-568 custom-user"
+check "healthcheck apart als Custom User 568: Uid 568, CapEff/CapPrm 0, NoNewPrivs 1" \
+  "healthcheck_drops_privs $NAME-568 custom-user"
 docker rm -f "$NAME-568" >/dev/null
 
 echo "== 5. verkeerde rechten (568 op een root-dataset) geven een duidelijke Nederlandse fout"
@@ -262,7 +283,7 @@ check "doel van de link niet aangeraakt (blijft van root)" \
 check "socketmap is weer een gewone map van 568" \
   "[ \"\$(docker exec $NAME stat -c '%F %u' /tmp/search-ai-pg)\" = 'directory 568' ]"
 check "databasegegevens behouden" "marker_ok $NAME"
-check "ook daarna elk proces: Uid 568, CapEff 0, NoNewPrivs 1" "privs_all_568 $NAME"
+check "ook daarna elk proces: Uid 568, CapEff/CapPrm/CapAmb 0, CapBnd 0, NoNewPrivs 1" "privs_all_568 $NAME root"
 docker rm -f "$NAME" >/dev/null
 
 echo

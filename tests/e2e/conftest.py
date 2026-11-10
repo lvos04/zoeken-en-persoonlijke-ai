@@ -48,7 +48,7 @@ def wait_http(url: str, timeout: float = 40) -> None:
 
 
 class FreshAuth(Mapping[str, str]):
-    """Bij elke lezing een nieuwe Hub-JWT (nieuwe ``jti``), zoals de Hub per mutatie doet (contract 1.2 §4.6)."""
+    """Bij elke lezing een nieuwe Hub-JWT (nieuwe ``jti``), zoals de Hub per mutatie doet (contract 1.3 §4.6)."""
 
     def __init__(self, mint: Callable[[], str]) -> None:
         self._mint = mint
@@ -146,7 +146,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         stderr=subprocess.STDOUT,
     )
     wait_http(f"{hub_url}/sim/fingerprint")  # niet via /api: dat zou in de verzoeklijst van de Hub belanden
-    # zoals de Hub bij installatie via de API: eenmalig token + verwachte vingerafdruk (contract 1.2 §3.2)
+    # zoals de Hub bij installatie via de API: eenmalig token + verwachte vingerafdruk (contract 1.3 §3.2)
     enroll_token = httpx.post(f"{hub_url}/sim/enrollment-token", timeout=5).json()["token"]
     fingerprint = httpx.get(f"{hub_url}/sim/fingerprint", timeout=5).json()["fingerprint"]
     svc_env = {
