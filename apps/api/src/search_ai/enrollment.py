@@ -37,7 +37,7 @@ from sqlalchemy.orm import Session
 from . import APP_ID, __version__
 from .config import Settings
 from .db import Database
-from .hubclient import HubClient, HubUrlError, validate_base_url, validate_hub_url
+from .hubclient import HubClient, HubUrlError, retry_after_s, validate_base_url, validate_hub_url
 from .hublink import HubLinkStore, empty_doc, error, public_view
 from .models import ServiceState
 from .security.auth import sha256_hex
@@ -344,7 +344,9 @@ class EnrollmentService:
             outcome = Outcome(False, "rate_limited", retryable=True, retry_after_s=_retry_after(resp))
             return self._retry(kind, secret_hash, outcome)
         if 300 <= status < 400 or status >= 500:  # redirects volgen we nooit: storing
-            return self._retry(kind, secret_hash, Outcome(False, "hub_onbereikbaar", retryable=True))
+            # §5: bij een 503 met Retry-After nooit eerder opnieuw (de worker neemt de grootste van backoff en wachttijd)
+            outcome = Outcome(False, "hub_onbereikbaar", retryable=True, retry_after_s=retry_after_s(resp))
+            return self._retry(kind, secret_hash, outcome)
         if status != 200:
             # 401 invalid_enrollment → hub_weigerde; 404 → enroll_endpoint_ontbreekt; 413/422 en andere 4xx →
             # hub_incompatibel (de Hub kan dit verzoek niet aannemen): definitief voor dit geheim (§3.3, §3.5)
@@ -644,7 +646,13 @@ class EnrollmentService:
             except httpx.HTTPError:
                 return Outcome(False, "hub_onbereikbaar", retryable=True)
             if resp.status_code != 200:
-                return Outcome(False, "hub_onbereikbaar", retryable=True, detail={"http": resp.status_code})
+                return Outcome(
+                    False,
+                    "hub_onbereikbaar",
+                    retryable=True,
+                    retry_after_s=retry_after_s(resp),  # §5: de volgende poll niet vóór Retry-After
+                    detail={"http": resp.status_code},
+                )
             try:
                 items = resp.json().get("items")
                 if not isinstance(items, list):
@@ -690,6 +698,8 @@ class EnrollmentService:
                 doc["last_error"] = error("sleutelrotatie_ongeldig", now)
                 # een geweigerde rotatie blijft zichtbaar (extra veld, §3.5): de reeks die niet toegepast kon worden
                 result["blocked_sequence"] = int(pins.get("rotation_sequence") or 0) + 1
+                # één melding per geblokkeerde reeks: een volgende poll op dezelfde blokkade meldt niets nieuws
+                result["nieuw_geblokkeerd"] = doc.get("key_rotation_blocked_sequence") != result["blocked_sequence"]
                 doc["key_rotation_blocked_sequence"] = result["blocked_sequence"]
             else:
                 doc["key_rotation_blocked_sequence"] = None
@@ -805,15 +815,58 @@ def _vault_row_exists(session: Session, ref: str) -> bool:
     return session.get(VaultSecret, ref) is not None
 
 
+@dataclass(frozen=True)
+class LinkRecord:
+    """Audit-regel + vast ``service.*``-event (§7) voor een wijziging van de koppeling; de aanroeper legt het vast."""
+
+    action: str
+    message_nl: str
+    event_type: str
+    payload: dict[str, Any]
+    details: dict[str, Any]
+
+
+def key_rotation_record(outcome: Outcome) -> LinkRecord | None:
+    """Wat er na een poll van sleutelrotaties vastgelegd moet worden, door welk proces de poll ook deed (worker of de
+    achtergrondpoll van de API bij een onbekende ``kid``): ``service.key_rotation.applied`` bij toegepaste statements,
+    ``service.key_rotation.rejected`` één keer per geblokkeerde reeks (niet bij elke volgende poll op dezelfde
+    blokkade). ``None`` als er niets te melden is."""
+    if outcome.code == "rotatie_toegepast":
+        applied = int(outcome.detail.get("applied") or 0)
+        return LinkRecord(
+            "hub.key_rotated",
+            "Hub-sleutels bijgewerkt via een ondertekende rotatie.",
+            "service.key_rotation.applied",
+            {"toegepast": applied, "rotation_sequence": outcome.detail.get("rotation_sequence")},
+            dict(outcome.detail),
+        )
+    if outcome.code == "sleutelrotatie_ongeldig" and outcome.detail.get("nieuw_geblokkeerd", True):
+        blocked = outcome.detail.get("blocked_sequence")
+        return LinkRecord(
+            "hub.key_rotation_rejected",
+            "Een sleutelrotatie van de Hub was ongeldig en is niet toegepast.",
+            "service.key_rotation.rejected",
+            {"rotation_sequence": blocked, "ernst": "hoog"},
+            {"blocked_sequence": blocked, "applied": outcome.detail.get("applied")},
+        )
+    return None
+
+
 # ------------------------------------------------------------------ achtergrondpoll bij een onbekende kid (§4.5)
 class KeyRotationTrigger:
     """Een JWT met een onbekende ``kid`` krijgt direct 401; daarnaast start dit hooguit 1× per 30 s een poll op de
-    achtergrond (het verzoek wacht daar niet op)."""
+    achtergrond (het verzoek wacht daar niet op). ``on_outcome`` legt een toegepaste of geweigerde rotatie vast (audit +
+    ``service.key_rotation.*``), zodat dat niet afhangt van welk proces de rotatie als eerste zag."""
 
     def __init__(
-        self, enrollment: EnrollmentService, min_interval_s: float, clock: Callable[[], float] = time.monotonic
+        self,
+        enrollment: EnrollmentService,
+        min_interval_s: float,
+        clock: Callable[[], float] = time.monotonic,
+        on_outcome: Callable[[Outcome], None] | None = None,
     ):
         self.enrollment, self.min_interval_s, self.clock = enrollment, min_interval_s, clock
+        self.on_outcome = on_outcome
         self._last: float | None = None
         self._lock = threading.Lock()
         self.started = 0
@@ -829,7 +882,9 @@ class KeyRotationTrigger:
 
     def _run(self) -> None:
         try:
-            self.enrollment.poll_key_rotations()
+            outcome = self.enrollment.poll_key_rotations()
+            if self.on_outcome is not None:
+                self.on_outcome(outcome)
         except Exception:  # nooit de API laten vallen
             log.exception("achtergrondpoll van sleutelrotaties mislukt")
 

@@ -1,8 +1,10 @@
 """Worker: koppelen met het omgevingstoken, koppeling onderhouden, outbox pushen, retentie en opruimen.
 
 Koppeling (contract 1.3 §3.3–§3.8, §4.5):
-- env-token: backoff vanaf 5 s (×2, max. 15 min, met jitter), ``429`` → niet vóór ``Retry-After``; definitief na
-  401/404/413/422, een ongeldig antwoord, een verkeerde vingerafdruk of 60 min na de eerste poging.
+- env-token: backoff vanaf 5 s (×2, max. 15 min, met jitter), ``429``/``503`` → niet vóór ``Retry-After`` (§5);
+  definitief na 401/404/413/422, een ongeldig antwoord, een verkeerde vingerafdruk of 60 min na de eerste poging.
+- Outbox: niet gekoppeld (ook na een 401 die een intrekking blijkt) = niet pushen en geen poging tellen (§7, RV12);
+  een 429/503 met ``Retry-After`` stopt de ronde en het event wacht minstens die tijd.
 - ``gekoppeld`` zonder ``confirmed_at`` → alleen bevestigen met ``GET /api/v1/services/self``.
 - Elke ~4 min ``services/self`` (zo wordt een rotatieverzoek binnen 5 min opgemerkt en een intrekking ontdekt).
 - ``Hub-Token-Rotation: required`` → ``POST /api/v1/services/self/rotate`` (de aanvraag overleeft een herstart via
@@ -30,9 +32,9 @@ from sqlalchemy.dialects.postgresql import insert
 from . import APP_ID, audit, events
 from .config import Settings
 from .db import Database
-from .enrollment import EVENTS_INBOX_PATH, EnrollmentService, Outcome, migrate_legacy_link
+from .enrollment import EVENTS_INBOX_PATH, EnrollmentService, Outcome, key_rotation_record, migrate_legacy_link
 from .health import WORKER_HEARTBEAT_KEY
-from .hubclient import HubClient
+from .hubclient import HubClient, retry_after_s
 from .hublink import HubLinkStore
 from .idempotency import purge_expired
 from .models import JwtReplay, ServiceState
@@ -190,23 +192,11 @@ class Worker:
                 self._after_hub_call(outcome, now)
         if now >= st.next_key_poll_at:
             outcome = self.enrollment.poll_key_rotations()
-            st.next_key_poll_at = now + min(s.key_rotation_poll_s, 900)
-            if outcome.code == "rotatie_toegepast":
-                applied = int(outcome.detail.get("applied") or 0)
-                self._record(
-                    "hub.key_rotated",
-                    "Hub-sleutels bijgewerkt via een ondertekende rotatie.",
-                    "service.key_rotation.applied",
-                    {"toegepast": applied, "rotation_sequence": outcome.detail.get("rotation_sequence")},
-                    **outcome.detail,
-                )
-            elif outcome.code == "sleutelrotatie_ongeldig":
-                self._record(
-                    "hub.key_rotation_rejected",
-                    "Een sleutelrotatie van de Hub was ongeldig en is niet toegepast.",
-                    "service.key_rotation.rejected",
-                    {"rotation_sequence": outcome.detail.get("blocked_sequence"), "ernst": "hoog"},
-                )
+            # ≤ elke 15 min (§4.5), maar nooit vóór een Retry-After van de Hub (§5)
+            st.next_key_poll_at = now + max(min(s.key_rotation_poll_s, 900), outcome.retry_after_s or 0.0)
+            rec = key_rotation_record(outcome)
+            if rec is not None:
+                self._record(rec.action, rec.message_nl, rec.event_type, rec.payload, **rec.details)
 
     def _after_hub_call(self, _outcome: Outcome | None = None, _now: float | None = None) -> None:
         """Eén keer per intrekking een audit-regel + incident-event (EX16: geen open toegang, wel een melding)."""
@@ -234,22 +224,30 @@ class Worker:
                     events.mark_invalid(ev, problems)
                     log.error("event %s niet verstuurd: %s", ev.event_id, "; ".join(problems))
                     continue
+                wait: float | None = None
                 try:
                     resp = self.enrollment.authed_request("POST", EVENTS_INBOX_PATH, json=env)
                     if resp is None:
                         break  # intussen ontkoppeld of ingetrokken
+                    if resp.status_code == 401 and not self._linked():
+                        # de Hub heeft de koppeling ingetrokken (services/self gaf ook 401): niet gekoppeld = geen
+                        # poging tellen; het event wacht in de outbox op een nieuwe koppeling (§7, RV12)
+                        break
                     ok = resp.status_code in (200, 201, 202, 204, 409)  # 409 = al ontvangen (dedupe in de Hub)
                     err = f"http_{resp.status_code}"
+                    wait = retry_after_s(resp)
                 except httpx.HTTPError as exc:
                     ok, err = False, type(exc).__name__
                 if ok:
                     events.mark_delivered(ev)
                     self.state.stats["pushed"] += 1
                 else:
-                    events.mark_failed(ev, err)
+                    events.mark_failed(ev, err, not_before_s=wait)
                     self.state.stats["push_failed"] += 1
                 if not self._linked():
                     break
+                if wait is not None:
+                    break  # 429/503 met Retry-After: deze ronde niets meer naar de Hub (§5)
             s.commit()
         self._after_hub_call()
 

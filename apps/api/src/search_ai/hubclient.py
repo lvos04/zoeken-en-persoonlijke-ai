@@ -19,6 +19,8 @@ import re
 import socket
 import time
 from collections.abc import Callable, Iterable
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -29,6 +31,8 @@ from . import __version__
 from .config import Settings
 
 RETRY_STATUS = {429, 502, 503, 504}
+RETRY_AFTER_STATUS = {429, 503}  # contract §5: bij 429 of 503 nooit eerder opnieuw dan Retry-After
+MAX_INLINE_WAIT_S = 8.0  # langer wachten gebeurt niet binnen één aanroep: dan krijgt de aanroeper het antwoord terug
 REDIRECT = range(300, 400)  # nooit volgen: 3xx = storing (contract §3.2)
 MAX_URL_LEN = 512  # contract 1.3 §3.3 (base_url) en §3.7 (Hub-adres op de statuspagina)
 _NUMERIC_LABEL = re.compile(r"(?:[0-9]+|0x[0-9a-f]*)")
@@ -40,6 +44,25 @@ Address = ipaddress.IPv4Address | ipaddress.IPv6Address
 
 class HubUrlError(ValueError):
     """Ongeldig adres; de boodschap is Nederlands en mag aan de gebruiker getoond worden."""
+
+
+def retry_after_s(resp: httpx.Response) -> float | None:
+    """``Retry-After`` van een 429/503 in seconden (geheel getal of HTTP-datum), begrensd op 1 uur; ``None`` als de
+    header ontbreekt of onleesbaar is (contract §5: dan geldt de gewone backoff)."""
+    if resp.status_code not in RETRY_AFTER_STATUS:
+        return None
+    raw = resp.headers.get("Retry-After", "").strip()
+    if not raw:
+        return None
+    if raw.isdigit():
+        return float(min(3600, int(raw)))
+    try:
+        when = parsedate_to_datetime(raw)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if when.tzinfo is None:
+        return None
+    return float(min(3600.0, max(0.0, (when - datetime.now(UTC)).total_seconds())))
 
 
 def forbidden_ip(ip: Address, allow_loopback: bool = False) -> str | None:
@@ -263,11 +286,15 @@ class HubClient:
         headers: dict[str, str] | None = None,
         attempts: int | None = None,
     ) -> httpx.Response:
-        """Voert een call uit met maximaal ``http_max_attempts`` pogingen bij netwerkfouten en 429/5xx-gateway-fouten."""
+        """Voert een call uit met maximaal ``http_max_attempts`` pogingen bij netwerkfouten en 429/5xx-gateway-fouten.
+
+        Bij 429 of 503 met ``Retry-After`` nooit eerder opnieuw dan die tijd (contract §5); vraagt de Hub langer dan
+        ``MAX_INLINE_WAIT_S`` te wachten, dan krijgt de aanroeper het antwoord direct terug (die plant zelf later)."""
         max_attempts = attempts or self.settings.http_max_attempts
         last_exc: Exception | None = None
         with self._client(base_url) as client:
             for attempt in range(1, max_attempts + 1):
+                wait = min(8.0, 0.5 * (2 ** (attempt - 1))) * random.uniform(0.5, 1.5)  # noqa: S311 - jitter
                 try:
                     resp = client.request(method, path, json=json, headers=headers)
                 except httpx.TransportError as exc:
@@ -275,8 +302,13 @@ class HubClient:
                 else:
                     if resp.status_code not in RETRY_STATUS or attempt == max_attempts:
                         return resp
+                    asked = retry_after_s(resp)
+                    if asked is not None:
+                        if asked > MAX_INLINE_WAIT_S:
+                            return resp
+                        wait = max(wait, asked)
                 if attempt < max_attempts:
-                    self.sleep(min(8.0, 0.5 * (2 ** (attempt - 1))) * random.uniform(0.5, 1.5))  # noqa: S311
+                    self.sleep(wait)
         if last_exc is None:  # pragma: no cover - onbereikbaar: de lus geeft altijd een respons of een fout
             raise RuntimeError("geen respons")
         raise last_exc

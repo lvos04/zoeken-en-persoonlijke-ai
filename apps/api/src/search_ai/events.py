@@ -261,11 +261,14 @@ def mark_delivered(ev: OutboxEvent) -> None:
     ev.last_error = None
 
 
-def mark_failed(ev: OutboxEvent, error: str) -> None:
+def mark_failed(ev: OutboxEvent, error: str, not_before_s: float | None = None) -> None:
+    """Mislukte levering: backoff (×2 vanaf 5 s, met jitter), maar nooit vóór ``Retry-After`` van een 429/503 (§5)."""
     ev.attempts += 1
     ev.last_error = error[:300]
     if ev.attempts >= MAX_ATTEMPTS:
         ev.delivery_status = "dead_letter"
         return
-    base = min(3600.0, 5.0 * (2 ** (ev.attempts - 1)))
-    ev.next_attempt_at = utcnow() + timedelta(seconds=base * random.uniform(0.8, 1.2))  # noqa: S311 (jitter)
+    delay = min(3600.0, 5.0 * (2 ** (ev.attempts - 1))) * random.uniform(0.8, 1.2)  # noqa: S311 (jitter)
+    if not_before_s is not None:
+        delay = max(delay, float(not_before_s))
+    ev.next_attempt_at = utcnow() + timedelta(seconds=delay)

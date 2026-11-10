@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Request, Response
 
-from . import APP_ID, CONNECTOR_PREFIX, SEARCH_PREFIX, VOICE_PREFIX, __version__
+from . import APP_ID, CONNECTOR_PREFIX, SEARCH_PREFIX, VOICE_PREFIX, __version__, audit, events
 from .bodylimit import MAX_BODY_BYTES, BodyLimitMiddleware
 from .config import Settings
 from .connector import router as connector_router
 from .db import Database
-from .enrollment import EnrollmentService, KeyRotationTrigger, migrate_legacy_link
+from .enrollment import (
+    EnrollmentService,
+    KeyRotationTrigger,
+    Outcome,
+    key_rotation_record,
+    migrate_legacy_link,
+)
 from .errors import TRACE_HEADER, install_handlers, trace_id_for
 from .health import router as health_router
 from .hubclient import HubClient
@@ -49,7 +56,35 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
     hub = HubClient(settings, transport=transport)
     store = HubLinkStore(settings.secrets_dir, APP_ID)
     enrollment = EnrollmentService(settings, store, identity, hub)
-    trigger = KeyRotationTrigger(enrollment, settings.key_rotation_min_interval_s)
+
+    def record_key_rotation(outcome: Outcome) -> None:
+        """Achtergrondpoll van de API (onbekende ``kid``): een toegepaste of geweigerde rotatie krijgt dezelfde
+        audit-regel en hetzelfde ``service.key_rotation.*``-event als in de worker (§7)."""
+        rec = key_rotation_record(outcome)
+        if rec is None:
+            return
+        tid = str(uuid.uuid4())
+        try:
+            with db.sessions() as s:
+                audit.record(
+                    s,
+                    domain="platform",
+                    action=rec.action,
+                    entity_type="hub_link",
+                    entity_id="hub",
+                    principal=None,
+                    trace_id=tid,
+                    message_nl=rec.message_nl,
+                    details=rec.details,
+                )
+                events.emit_service(
+                    s, rec.event_type, actor_type="system", actor_id="api", trace_id=tid, payload=rec.payload
+                )
+                s.commit()
+        except Exception:  # de pins staan al vast in hub-link.json; het auditspoor mag dat niet ongedaan maken
+            log.warning("auditspoor voor %s kon niet worden vastgelegd", rec.action)
+
+    trigger = KeyRotationTrigger(enrollment, settings.key_rotation_min_interval_s, on_outcome=record_key_rotation)
     policy = JwtPolicy(settings.jwt_issuer, settings.jwt_audience, settings.jwt_max_lifetime_s, settings.jwt_leeway_s)
 
     @asynccontextmanager
