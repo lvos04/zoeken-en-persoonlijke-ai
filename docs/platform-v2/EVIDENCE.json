@@ -5,9 +5,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_unselected_share_indexes_nothing_and_never_leaves_nas; apps/api/tests/integration/test_b07_001_consent.py::test_consent_only_by_owner_bound_to_snapshot; apps/api/tests/integration/test_b07_001_consent.py::test_source_validation_rejects_paths_outside_allowlist; apps/api/tests/integration/test_b07_001_consent.py::test_readonly_mount_required_for_consent; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; apps/api/tests/integration/test_b07_001_consent.py::test_owner_only_documents_and_paused_sources; apps/api/tests/integration/test_b07_001_consent.py::test_kid_profile_restrictions; apps/api/tests/integration/test_b07_001_consent.py::test_revoke_purges_index_and_embeddings_but_not_originals; apps/api/tests/integration/test_b07_001_consent.py::test_narrowing_selection_purges_outside_docs; apps/api/tests/integration/test_review_p0.py::test_preview_shows_names_only_to_owner; apps/api/tests/integration/test_review_p0.py::test_expired_consent_is_treated_as_revocation; apps/api/tests/unit/test_paths.py; tests/e2e/test_service_e2e.py::test_02_b07_001_flow_over_http; deploy/allinone/smoke-test.sh (32/32 alleen als root, alleen-lezen share onder /bronnen ongewijzigd); commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_acl_before_ranking_survives_limit_and_pagination; apps/api/tests/integration/test_review_p0_qa.py::test_kid_profile_sees_nothing_blocked_anywhere; apps/api/tests/integration/test_review_p0_qa.py::test_revoke_leaves_no_rest_data_anywhere; commit c60d34a, ef10e18 (P0 afmaken, ADR-0009); GitHub Actions ci run 42619280743 groen (python + image); deploy/allinone/smoke-test.sh 37/37 lokaal als uid 1000 én op de GitHub-runner (alleen-lezen share ongewijzigd); commit e7ede0f, 18bfa05, 561fba1, 72d3714 (QA P0-afronding, ADR-0010); apps/api/tests/unit/test_paths.py::test_selected_path_through_symlinked_ancestor_is_refused_and_never_walked; apps/api/tests/integration/test_qa_p0_afronding.py::test_selected_path_via_symlink_never_opens_unselected_share; apps/api/tests/integration/test_qa_p0_afronding.py::test_kid_as_owner_never_gets_admin_view; apps/api/tests/integration/test_qa_p0_afronding.py::test_expires_at_without_timezone_is_422_not_500; apps/api/tests/integration/test_qa_p0_afronding.py::test_blank_name_or_owner_is_rejected; pytest lokaal 107 + E2E 4 geslaagd; GitHub Actions ci run 42622755067 (commit eb6854c) groen: job python 107 + 4 geslaagd, job image rooktest 39/39 op de GitHub-runner",
   "blokkade": "Echte acceptatie vereist shares als Read Only Host Path op de NAS (D02, datasets onbekend), de Hub (bronwizard-UI, Hub-JWT) en de ingest (B07-002, nog niet gebouwd) — NIET GEVALIDEERD (echte NAS).",
-  "opmerking": "Consent-register met scopes per bronsoort, gebonden aan een momentopname (paden/uitsluitingen/adres/scopes); alleen de gegevenseigenaar geeft toestemming; lees-padenallowlist (leeswortels /bronnen, paden per bron, vaste uitsluitingen, symlinks niet gevolgd); gebruikers-ACL in de WHERE vóór ts_rank; beheerder ziet geen inhoud zonder ACL; kinderprofiel wint altijd; intrekken en verlopen toestemming verwijderen index/embeddings met telcontrole; 'ai.external' bestaat niet (verlaat NAS niet). Index in tests gevuld via simulatie, niet via echte ingest. Review P0: ACL vóór ranking ook met limiet/paginering getoetst; kinderprofiel ziet nergens iets geblokkeerds (ook met extra rol admin). QA P0-afronding: een gekozen pad dat onder de leeswortel via een symlink liep (/bronnen/a/link-naar-b/sub) werd geaccepteerd en de voorvertoning las dan de niet-geselecteerde share B; nu geweigerd bij kiezen (422 pad_via_symlink), overgeslagen bij lezen en geen toestemming (409 bron_niet_klaar, via_symlink). Ook: vervaldatum zonder tijdzone 422 i.p.v. 500, geen lege naam/eigenaar, kinderprofiel nooit de beheerweergave.",
+  "opmerking": "Consent-register met scopes per bronsoort, gebonden aan een momentopname (paden/uitsluitingen/adres/scopes); alleen de gegevenseigenaar geeft toestemming; lees-padenallowlist (leeswortels /bronnen, paden per bron, vaste uitsluitingen, symlinks niet gevolgd); gebruikers-ACL in de WHERE vóór ts_rank; beheerder ziet geen inhoud zonder ACL; kinderprofiel wint altijd; intrekken en verlopen toestemming verwijderen index/embeddings met telcontrole; 'ai.external' bestaat niet (verlaat NAS niet). Index in tests gevuld via simulatie, niet via echte ingest. Review P0: ACL vóór ranking ook met limiet/paginering getoetst; kinderprofiel ziet nergens iets geblokkeerds (ook met extra rol admin). QA P0-afronding: een gekozen pad dat onder de leeswortel via een symlink liep (/bronnen/a/link-naar-b/sub) werd geaccepteerd en de voorvertoning las dan de niet-geselecteerde share B; nu geweigerd bij kiezen (422 pad_via_symlink), overgeslagen bij lezen en geen toestemming (409 bron_niet_klaar, via_symlink). Ook: vervaldatum zonder tijdzone 422 i.p.v. 500, geen lege naam/eigenaar, kinderprofiel nooit de beheerweergave. Rest naast de NAS-test nog bouwwerk: de ingest (B07-002; stappen S-P5-10 t/m S-P5-12, zoeken-en-persoonlijke-ai; gemeten 2026-11-12: er is nog geen ingest-pakket onder apps/api/src/search_ai/search/) en het scherm Bronnen en rechten in de Hub (S-P5-58, ai-server-manager).",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-09"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "B07-002",
@@ -25,9 +25,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; apps/api/tests/integration/test_schema_constraints.py::test_vector_roundtrip_and_dimension_check; commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_vector_index_acl_b07_003; apps/api/tests/integration/test_review_p0_qa.py::test_acl_before_ranking_survives_limit_and_pagination; apps/api/tests/integration/test_review_p0_qa.py::test_derived_rows_cannot_cross_sources",
   "blokkade": "Semantisch/hybride zoeken via de API vereist een lokaal embeddingmodel (optionele app, standaard uit) en B07-002; de vectorzoeker is alleen met vaste testvectoren getoetst. NIET GEVALIDEERD (echte NAS).",
-  "opmerking": "Reikwijdte validatie: full-text + vectorzoeker met ACL vóór ranking, ook met HNSW-index; semantische API niet beschikbaar. GET /search/v1/search (full-text, GIN-index) met ACL in de WHERE; mode=semantic/hybrid → 501. search/semantic.py: ACL, model, versie en dimensie in de WHERE vóór de cosinusafstand; acceptatie 'B kan niet in privéfile van A zoeken via de vectorindex' Sim-getest (ook met limit=1 en een echte HNSW-index). Fuzzy zoeken, filters type/datum/score en RLS volgen.",
+  "opmerking": "Reikwijdte validatie: full-text + vectorzoeker met ACL vóór ranking, ook met HNSW-index; semantische API niet beschikbaar. GET /search/v1/search (full-text, GIN-index) met ACL in de WHERE; mode=semantic/hybrid → 501. search/semantic.py: ACL, model, versie en dimensie in de WHERE vóór de cosinusafstand; acceptatie 'B kan niet in privéfile van A zoeken via de vectorindex' Sim-getest (ook met limit=1 en een echte HNSW-index). Fuzzy zoeken, filters type/datum/score en RLS volgen. Rest naast de NAS-test nog bouwwerk in zoeken-en-persoonlijke-ai: paginering over een momentopname en filters (S-P5-13), semantisch en hybride zoeken met een optionele embeddingbron (S-P5-14), rijbeveiliging met een aparte querierol (S-P5-15), discover en statuspagina (S-P5-24) en de ingest (B07-002, S-P5-10 t/m S-P5-12); daarnaast het zoekscherm in de Hub (S-P5-57, ai-server-manager).",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "B07-004",
@@ -135,9 +135,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_acl_applied_before_ranking; apps/api/tests/unit/test_models_and_vector.py::test_embedding_has_model_and_dimension_metadata; commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_vector_index_acl_b07_003",
   "blokkade": "NAS-versie (D01) en appimage-digest op de NAS onbekend.",
-  "opmerking": "ACL per bron + embeddings met model/versie/dimensie; retentie-tabel met privacyvriendelijke standaarden.",
+  "opmerking": "ACL per bron + embeddings met model/versie/dimensie; retentie-tabel met privacyvriendelijke standaarden. Rest naast de NAS-test nog bouwwerk: het image- en manifestdeel (S-P5-23, zoeken-en-persoonlijke-ai), de controlelijst I14 (S-P5-85, jelly-leon-platform) en de eerste release v0.1.0 met de image-digest (S-P6-06; gemeten 2026-11-12: geen release en geen tag in lvos04/zoeken-en-persoonlijke-ai, manifest image.digest null met de geaccepteerde bevinding digest_pending_release).",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-09"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "I14-14-02",
@@ -145,9 +145,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit 4bd082b, ebeeca0; deploy/allinone/smoke-test.sh (pgvector 0.8.7 in de ingebouwde database; alleen-lezen share ongewijzigd); commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); deploy/allinone/smoke-test.sh 32/32 alleen als root (pgvector werkt echt: HNSW-index + KNN via de index; databehoud na herstart, harde kill en nieuwe container); unit/integratie/E2E (87 + 4) geslaagd tegen een PostgreSQL uit de gebouwde image (PG 16.15 + pgvector 0.8.7); commit c60d34a, ef10e18 (P0 afmaken, ADR-0009); GitHub Actions ci run 42619280743 groen (python + image); deploy/allinone/smoke-test.sh 37/37 lokaal als uid 1000 én op de GitHub-runner; apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_refuses_other_run_user_with_clear_dutch_error; commit 72d3714 (QA P0-afronding, ADR-0010); apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_sets_no_new_privs_for_itself_and_children; deploy/allinone/smoke-test.sh 39/39 lokaal als uid 1000 (start zonder --security-opt, elk proces van 568 NoNewPrivs 1); GitHub Actions ci run 42622755067 (commit eb6854c) groen: job python 107 + 4 geslaagd, job image rooktest 39/39 op de GitHub-runner; commit 558c474, f1fb078, 5b74b00 (contract 1.2); deploy/allinone/smoke-test.sh 43/43 lokaal (elk proces ook PID 1: Uid 568, CapEff 0, NoNewPrivs 1; PID 1 = bewaker; zombies opgeruimd; nette stop op SIGTERM); GitHub Actions ci run 42638210849 (commit 2f79922): python 258 + 7 geslaagd, image rooktest 43/43; contract 1.3 (ADR-0016, commit 385525a): deploy/allinone/smoke-test.sh 58/58 lokaal (Docker op de ontwikkelmachine): elk proces ook PID 1 Uid 568, CapEff/CapPrm/CapAmb 0, CapBnd 0 bij een root-start, NoNewPrivs 1; healthcheck apart met --controle; ook als Custom User 568; apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_leegt_de_bounding_set_voor_de_wissel; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
   "blokkade": "Niet op TrueNAS geïnstalleerd; GHCR-release/digest nog niet uitgebracht. NIET GEVALIDEERD (echte NAS).",
-  "opmerking": "Officiële image pgvector/pgvector:0.8.7-pg16-bookworm@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f; CREATE EXTENSION vector in migratie 0001. P0 afmaken: CI-job 'image' was rood doordat de rooktest /appdata/secrets (bewust 0700/568) als niet-root host-gebruiker las; nu via een alleen-lezen wegwerpcontainer. Bewaker geeft een NL-fout bij een andere run-gebruiker dan root/568 (Custom User). QA P0-afronding: zonder --security-opt (het TrueNAS-formulier kan die vlag niet zetten) draaiden alle processen met NoNewPrivs 0; de bewaker zet nu zelf PR_SET_NO_NEW_PRIVS en de rooktest start zoals het formulier. Contract 1.2: geen root-PID 1 meer (dumb-init verwijderd; de bewaker is PID 1 en wisselt zelf naar 568); de Docker-healthcheck zakt als eerste naar 568. Manifest volgens §9 zonder custom_app.ports/joins_platform_network, lokaal geldig volgens de validator van appstore-en-fork 837fa61 (in --strict alleen nog digest_pending_release, want er is in deze ronde bewust geen release). Of het TrueNAS-formulier een tag met @sha256 accepteert: NIET GEVALIDEERD (echte NAS).",
+  "opmerking": "Officiële image pgvector/pgvector:0.8.7-pg16-bookworm@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f; CREATE EXTENSION vector in migratie 0001. P0 afmaken: CI-job 'image' was rood doordat de rooktest /appdata/secrets (bewust 0700/568) als niet-root host-gebruiker las; nu via een alleen-lezen wegwerpcontainer. Bewaker geeft een NL-fout bij een andere run-gebruiker dan root/568 (Custom User). QA P0-afronding: zonder --security-opt (het TrueNAS-formulier kan die vlag niet zetten) draaiden alle processen met NoNewPrivs 0; de bewaker zet nu zelf PR_SET_NO_NEW_PRIVS en de rooktest start zoals het formulier. Contract 1.2: geen root-PID 1 meer (dumb-init verwijderd; de bewaker is PID 1 en wisselt zelf naar 568); de Docker-healthcheck zakt als eerste naar 568. Manifest volgens §9 zonder custom_app.ports/joins_platform_network, lokaal geldig volgens de validator van appstore-en-fork 837fa61 (in --strict alleen nog digest_pending_release, want er is in deze ronde bewust geen release). Of het TrueNAS-formulier een tag met @sha256 accepteert: NIET GEVALIDEERD (echte NAS). Rest naast de NAS-test nog bouwwerk: het image- en manifestdeel (S-P5-23, zoeken-en-persoonlijke-ai), de controlelijst I14 (S-P5-85, jelly-leon-platform) en de release v0.1.0 met de GHCR-image en digest (S-P6-06; gemeten 2026-11-12: geen release en geen tag in lvos04/zoeken-en-persoonlijke-ai, manifest image.digest null met de geaccepteerde bevinding digest_pending_release).",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "I14-14-03",
@@ -165,9 +165,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit db0810f, e8adee6, 502555c, 4bd082b, ebeeca0; apps/api/tests/integration/test_b07_001_consent.py::test_unselected_share_indexes_nothing_and_never_leaves_nas; apps/api/tests/unit/test_paths.py; commit b85e353, 0d43772, 3fba0e6, 08e8cc0 (review P0); apps/api/tests/integration/test_review_p0_qa.py::test_revoke_leaves_no_rest_data_anywhere; commit e7ede0f, 18bfa05, 561fba1, 72d3714 (QA P0-afronding, ADR-0010); apps/api/tests/unit/test_paths.py::test_selected_path_through_symlinked_ancestor_is_refused_and_never_walked; apps/api/tests/integration/test_qa_p0_afronding.py::test_selected_path_via_symlink_never_opens_unselected_share; GitHub Actions ci run 42622755067 (commit eb6854c) groen: job python 107 + 4 geslaagd, job image rooktest 39/39 op de GitHub-runner",
   "blokkade": "Immich/Jellyfin-bronnen (adapters) nog niet gebouwd; shares op de echte NAS onbekend (D02).",
-  "opmerking": "Niet toegestane paden blijven buiten de index (leeswortels, allowlist, vaste uitsluitingen, symlinks). QA P0-afronding: ook een bronpad dat zelf via een symlink naar een andere share loopt, blijft buiten de index.",
+  "opmerking": "Niet toegestane paden blijven buiten de index (leeswortels, allowlist, vaste uitsluitingen, symlinks). QA P0-afronding: ook een bronpad dat zelf via een symlink naar een andere share loopt, blijft buiten de index. Rest naast de NAS-test nog bouwwerk: de ingest met de adapters voor bestanden, Immich en Jellyfin/Jelly Leon (S-P5-10, S-P5-11 en S-P5-12, zoeken-en-persoonlijke-ai), het image- en manifestdeel (S-P5-23) en de controlelijst I25 (S-P5-85, jelly-leon-platform).",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-09"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "I25-25-02",
@@ -235,9 +235,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit 1045860; apps/api/tests/integration/test_statuspagina_peil_http.py::test_get_is_peil_1_1_1_zonder_js_met_strikte_kopregels; apps/api/tests/integration/test_statuspagina_peil_http.py::test_geweigerde_herkomst_is_403_gaat_niet_naar_de_hub_en_telt_niet; apps/api/tests/unit/test_statuspagina_peil.py::test_host_beperking; tests/ui/echte_dienst.mjs (Chromium: same-site, cross-site, sandbox met Origin null, domeinnaam als Host, geen cookie → 403, niets naar de Hub); GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
   "blokkade": "Of TrueNAS de Host- en Origin-koppen ongewijzigd doorgeeft achter de poortdoorsturing: NIET GEVALIDEERD (echte NAS).",
-  "opmerking": "Referrer-Policy same-origin; Origin exact <schema>://<Host> (ontbreekt/null → 403); Sec-Fetch-Site same-site/cross-site → 403; Host-beperking (403 host_niet_toegestaan).",
+  "opmerking": "alleen NAS-test nodig. Referrer-Policy same-origin; Origin exact <schema>://<Host> (ontbreekt/null → 403); Sec-Fetch-Site same-site/cross-site → 403; Host-beperking (403 host_niet_toegestaan).",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "C1.3-ZPA-02",
@@ -245,9 +245,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit 1045860; apps/api/tests/integration/test_statuspagina_peil_http.py::test_melding_uit_de_url_doet_niets; apps/api/tests/integration/test_statuspagina_peil_http.py::test_elke_post_na_de_herkomst_telt_ook_ongeldige_invoer; apps/api/tests/integration/test_statuspagina_peil_http.py::test_al_gekoppeld_is_409_en_telt_mee; apps/api/tests/integration/test_statuspagina_peil_http.py::test_koppelen_bezig_is_409_en_gaat_niet_naar_de_hub; apps/api/tests/integration/test_statuspagina_peil_http.py::test_te_lange_of_ongeldige_invoer_is_422_en_nooit_afgekapt; apps/api/tests/integration/test_statuspagina_peil_http.py::test_een_logregel_per_poging_zonder_hub_adres; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
   "blokkade": "Welk bron-IP-adres de dienst achter de poortdoorsturing van TrueNAS ziet (limiet per IP): NIET GEVALIDEERD (echte NAS).",
-  "opmerking": "De POST krijgt direct de pagina met de melding en de HTTP-status (ADR-0016 besluit 2); geen ?melding= meer.",
+  "opmerking": "alleen NAS-test nodig. De POST krijgt direct de pagina met de melding en de HTTP-status (ADR-0016 besluit 2); geen ?melding= meer.",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "C1.3-ZPA-03",
@@ -265,9 +265,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit 83489a7; apps/api/tests/unit/test_koppelbestand_1_3.py::test_rotation_sequence_uit_het_enroll_antwoord; apps/api/tests/unit/test_koppelbestand_1_3.py::test_hub_1_2_zonder_rotation_sequence_geeft_0; apps/api/tests/unit/test_koppelbestand_1_3.py::test_schrijft_schema_1_3_en_leest_elke_1_x_met_extra_velden; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db; commit 6f9767b (QA contract 1.3): tests/interop/test_real_hub.py::test_real_hub_lifecycle lokaal tegen de echte Hub-code ai-server-manager@5e21775 (contract 1.3, C1.3-ASM-02): schema_version 1.3 en rotation_sequence 0 uit het enroll-antwoord in hub-link.json (1 geslaagd)",
   "blokkade": "Getest tegen de simulator (CI) en lokaal tegen de Hub-code met contract 1.3, niet tegen een op een NAS geïnstalleerde Hub: NIET GEVALIDEERD (echte NAS).",
-  "opmerking": "",
+  "opmerking": "alleen NAS-test nodig",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "C1.3-ZPA-05",
@@ -275,9 +275,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit fc5d708; apps/api/tests/unit/test_events_1_3.py::test_verboden_event_types; apps/api/tests/unit/test_events_1_3.py::test_service_events_hebben_entiteit_service_en_de_eigen_app_id; apps/api/tests/unit/test_events_1_3.py::test_inboxgrenzen_voor_verzending; apps/api/tests/integration/test_connector_events_1_3.py::test_service_events_komen_ongeweigerd_door_de_inbox; apps/api/tests/integration/test_connector_events_1_3.py::test_ongeldig_event_gaat_niet_over_het_lan_maar_direct_naar_dead_letter; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db; commit 8704fee (QA contract 1.3, ADR-0017): apps/api/tests/integration/test_qa_contract_1_3.py::test_rotatie_via_de_achtergrondpoll_van_de_api_wordt_vastgelegd; apps/api/tests/integration/test_qa_contract_1_3.py::test_geweigerde_rotatie_wordt_een_keer_gemeld_niet_bij_elke_poll; apps/api/tests/integration/test_qa_contract_1_3.py::test_401_van_de_inbox_door_intrekking_telt_geen_poging; apps/api/tests/integration/test_qa_contract_1_3.py::test_inbox_429_met_retry_after_stopt_de_ronde_en_wacht; commit 6f9767b: tests/interop/test_real_hub.py::test_real_hub_lifecycle (service.hub_link.linked en service.token.rotated met entiteit service/<app_id> in de inbox van de echte Hub-code ai-server-manager@5e21775); GitHub Actions ci run 42788684178 (commit c5cfba9) groen: python 750 geslaagd (validator --strict verplicht, Peil- en contractbron verplicht) + E2E 7, contractdrift 7, Peil-drift 12, manifest --strict GELDIG, pip-audit zonder bevindingen; statuspagina-ui renderer 192/0 en echte dienst 208/0; image rooktest 58/58",
   "blokkade": "De inbox met domeinen en werkwoorden (C1.3-ASM-09) is lokaal getest tegen de Hub-code, niet tegen een op een NAS geïnstalleerde Hub: NIET GEVALIDEERD (echte NAS).",
-  "opmerking": "QA contract 1.3: service.key_rotation.applied ook als de achtergrondpoll van de API de rotatie toepast; rejected één keer per geblokkeerde reeks; een 401 die een intrekking blijkt telt geen poging (RV12); na 429/503 met Retry-After niet eerder (§5).",
+  "opmerking": "alleen NAS-test nodig. QA contract 1.3: service.key_rotation.applied ook als de achtergrondpoll van de API de rotatie toepast; rejected één keer per geblokkeerde reeks; een 401 die een intrekking blijkt telt geen poging (RV12); na 429/503 met Retry-After niet eerder (§5).",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "C1.3-ZPA-06",
@@ -315,9 +315,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit 385525a; deploy/allinone/smoke-test.sh 58/58 lokaal (Docker, zonder --security-opt/--cap-drop); apps/api/tests/unit/test_deploy_artifacts.py::test_supervisor_leegt_de_bounding_set_voor_de_wissel; apps/api/tests/unit/test_deploy_artifacts.py::test_healthcheck_drops_root_first; apps/api/tests/unit/test_deploy_artifacts.py::test_healthcheck_controlevlag_faalt_buiten_568; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db; commit 699ac92 (QA contract 1.3): apps/api/tests/unit/test_deploy_artifacts.py::test_doelgebruiker_root_via_omgeving_wordt_geweigerd (SEARCH_AI_UID/GID 0 → bewaker stopt met een NL-fout, healthcheck exit 1; ook in de gebouwde image nagegaan); deploy/allinone/smoke-test.sh 58/58 opnieuw na de reparatie; GitHub Actions ci run 42788684178 (commit c5cfba9) groen: python 750 geslaagd (validator --strict verplicht, Peil- en contractbron verplicht) + E2E 7, contractdrift 7, Peil-drift 12, manifest --strict GELDIG, pip-audit zonder bevindingen; statuspagina-ui renderer 192/0 en echte dienst 208/0; image rooktest 58/58",
   "blokkade": "Gedrag van de ix-app op een echte TrueNAS (capabilities, healthcheck als root): NIET GEVALIDEERD (echte NAS).",
-  "opmerking": "",
+  "opmerking": "alleen NAS-test nodig",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "C1.3-ZPA-10",
@@ -355,9 +355,9 @@
   "validatie": "Unit-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit d4829c5 (QA contract 1.3, ADR-0017); deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml (kop platformcontract 1.3, healthcheck.monitor /readyz 200/10 s/60 s, licentie GPL-3.0, alleen digest_pending_release met reden in accepted_findings, geen HUB_* in parameters of env); apps/api/tests/unit/test_deploy_artifacts.py::test_manifest_follows_contract_1_3_section_9; apps/api/tests/unit/test_deploy_artifacts.py::test_manifest_strict_geldig_met_de_validator_van_appstore_en_fork (jl-manifest validate --strict met de validator van appstore-en-fork cca4403: 0 fouten; negatief: HUB_URL in env → reserved_env); .github/workflows/ci.yml (validator op een vaste commit, verplicht in CI); GitHub Actions ci run 42788684178 (commit c5cfba9) groen: python 750 geslaagd (validator --strict verplicht, Peil- en contractbron verplicht) + E2E 7, contractdrift 7, Peil-drift 12, manifest --strict GELDIG, pip-audit zonder bevindingen; statuspagina-ui renderer 192/0 en echte dienst 208/0; image rooktest 58/58",
   "blokkade": "Installatie via dit manifest op een echte TrueNAS en de monitor in Uptime Kuma: NIET GEVALIDEERD (echte NAS). De digest volgt pas met de eerste release (digest_pending_release, de vertaling blokkeert tot dan).",
-  "opmerking": "Was Niet gestart omdat de validator (C1.3-ASF-08) ontbrak; die is intussen gebouwd (appstore-en-fork 1090fc9). Gebouwd in de QA-ronde van contract 1.3.",
+  "opmerking": "Was Niet gestart omdat de validator (C1.3-ASF-08) ontbrak; die is intussen gebouwd (appstore-en-fork 1090fc9). Gebouwd in de QA-ronde van contract 1.3. Rest naast de NAS-test nog de eerste release v0.1.0, die de digest in het manifest invult (S-P6-06, zoeken-en-persoonlijke-ai; gemeten 2026-11-12: geen release en geen tag in lvos04/zoeken-en-persoonlijke-ai, manifest image.digest null met de geaccepteerde bevinding digest_pending_release).",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "C1.3-ZPA-14",
@@ -375,9 +375,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (hardware)",
   "bewijs": "commit f821031, 1045860 (Peil 1.1.1); apps/api/tests/unit/test_statuspagina_peil.py::test_zelfde_uitkomst_als_de_referentie_renderer; apps/api/tests/unit/test_peil_kopie.py::test_pinregel_ten_opzichte_van_de_werkbranch_van_de_bron; tests/ui/statuspagina.mjs (16 toestanden, 192 controles, 0 mislukt); tests/ui/echte_dienst.mjs (208 controles, 0 mislukt); GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
   "blokkade": "Echte schermlezer, telefoon en tv: NIET GEVALIDEERD (hardware).",
-  "opmerking": "Statuspagina in Peil, sinds 2026-11-10 op 1.1.1.",
+  "opmerking": "alleen NAS-test nodig. Statuspagina in Peil, sinds 2026-11-10 op 1.1.1.",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "REVIEW-zoeken-en-persoonlijke-ai-statuspagina",
@@ -385,9 +385,9 @@
   "validatie": "Sim-getest; NIET GEVALIDEERD (hardware)",
   "bewijs": "commit 1045860; docs/screenshots/peil/statuspagina/CONTROLE.json; docs/ontwerp/PEIL_REVIEW.md; tests/ui/echte_dienst.mjs (320, 360, 390, 768, 1024, 1440 px × licht/donker; reflow met DejaVu Sans; axe 0); GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
   "blokkade": "Echte schermlezer, telefoon en tv: NIET GEVALIDEERD (hardware).",
-  "opmerking": "Ontwerpreview van de statuspagina na Peil 1.1.1 en contract 1.3, tegen de echte dienst met Hub-simulators.",
+  "opmerking": "alleen NAS-test nodig. Ontwerpreview van de statuspagina na Peil 1.1.1 en contract 1.3, tegen de echte dienst met Hub-simulators.",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  },
  {
   "id": "REVIEW-zoeken-en-persoonlijke-ai-contract-1.3",
@@ -395,8 +395,8 @@
   "validatie": "Unit-getest; Sim-getest; NIET GEVALIDEERD (echte NAS)",
   "bewijs": "commit 8704fee, d4829c5, 6f9767b, 699ac92, 285b4cc; docs/adr/ADR-0017-qa-contract-1-3.md; docs/TESTRAPPORT.md (QA contract 1.3); apps/api/tests/integration/test_qa_contract_1_3.py::test_sleutelpoll_met_503_en_retry_after_pollt_niet_eerder; apps/api/tests/integration/test_qa_contract_1_3.py::test_401_zonder_intrekking_telt_wel_een_poging; apps/api/tests/unit/test_hubclient_retry_after.py::test_retry_after_als_http_datum_en_onleesbaar; lokaal: cd apps/api && pytest -q 747 geslaagd (0 overgeslagen; validator, Peil- en contractbron verplicht), tests/e2e 7, tests/interop 1 (echte Hub-code 5e21775), statuspagina-ui 192/0 en 208/0, smoke-test.sh 58/58; GitHub Actions ci run 42788684178 (commit c5cfba9) groen: python 750 geslaagd (validator --strict verplicht, Peil- en contractbron verplicht) + E2E 7, contractdrift 7, Peil-drift 12, manifest --strict GELDIG, pip-audit zonder bevindingen; statuspagina-ui renderer 192/0 en echte dienst 208/0; image rooktest 58/58",
   "blokkade": "Een echte NAS, een geïnstalleerde Hub en echte accounts zijn hier niet beschikbaar: NIET GEVALIDEERD (echte NAS).",
-  "opmerking": "Onafhankelijke QA van de bouwronde contract 1.3 en Peil 1.1.1. Zeven bevindingen (ADR-0017), alle met een test die zonder de reparatie faalt. Kopieën van contract, conformiteitslijst en Peil byte-gelijk met de bron.",
+  "opmerking": "alleen NAS-test nodig. Onafhankelijke QA van de bouwronde contract 1.3 en Peil 1.1.1. Zeven bevindingen (ADR-0017), alle met een test die zonder de reparatie faalt. Kopieën van contract, conformiteitslijst en Peil byte-gelijk met de bron.",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-12"
  }
 ]
