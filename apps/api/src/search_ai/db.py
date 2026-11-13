@@ -40,7 +40,8 @@ class Timestamps:
 class Database:
     def __init__(self, url: str) -> None:
         self.url = url
-        self.engine: Engine = create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=5)
+        # hide_parameters (V-094): een databasefout noemt geen parameterwaarden (mogelijk geheimen) in fout of log.
+        self.engine: Engine = create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=5, hide_parameters=True)
         self.sessions = sessionmaker(self.engine, expire_on_commit=False, autoflush=False)
 
     def session(self) -> Iterator[Session]:

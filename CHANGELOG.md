@@ -131,6 +131,8 @@ Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V
   - **Image:** `SEARCH_AI_UID`/`SEARCH_AI_GID` = 0 wordt geweigerd, zodat nooit alles als root blijft draaien.
   - **Interop:** de test tegen de echte Hub-code (contract 1.3) controleert ook schema 1.3, `rotation_sequence` en de
     `service.*`-events in de inbox van de Hub.
+- **Databasefouten (V-094):** de engines van de dienst en van de migraties staan op `hide_parameters`, zodat een
+  databasefout geen parameterwaarden (mogelijk geheimen) meer in de foutmelding of de log zet.
 
 Niet gebouwd (eerlijk `capability_unavailable`): ingest (B07-002), semantisch/hybride zoeken (B07-003),
 mediamomenten (B07-004), vraag-en-antwoord (B07-005), opschoonrapport/export (B07-006), alle spraakfuncties (B15).
