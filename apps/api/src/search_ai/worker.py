@@ -28,6 +28,7 @@ from typing import Any
 import httpx
 from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import DBAPIError
 
 from . import APP_ID, audit, events
 from .config import Settings
@@ -37,6 +38,7 @@ from .health import WORKER_HEARTBEAT_KEY
 from .hubclient import HubClient, retry_after_s
 from .hublink import HubLinkStore
 from .idempotency import purge_expired
+from .logfilter import db_error_text
 from .models import JwtReplay, ServiceState
 from .search.models import SearchQuery
 from .search.service import expire_consents, sweep_revoked
@@ -289,6 +291,9 @@ class Worker:
         ):
             try:
                 step()
+            except DBAPIError as exc:  # KLEIN-35: zonder de DETAIL-regel van PostgreSQL
+                failed += 1
+                log.error("workerstap mislukt: %s", db_error_text(exc))
             except Exception:  # een fout in één stap mag de andere niet blokkeren
                 failed += 1
                 log.exception("workerstap mislukt")
