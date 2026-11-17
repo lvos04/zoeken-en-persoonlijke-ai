@@ -345,9 +345,9 @@
   "validatie": "Unit-getest",
   "bewijs": "commit 0306c98; apps/api/tests/unit/test_contract_kopie.py::test_kopie_heeft_de_vastgelegde_sha256; apps/api/tests/unit/test_contract_kopie.py::test_geen_drift_met_de_bron_op_de_bron_commit; apps/api/tests/unit/test_evidence_contract.py::test_niet_gevalideerd_in_blokkade_staat_ook_in_validatie; GitHub Actions ci run 42783664084 (commit 49988db) groen: python 729 geslaagd (0 overgeslagen; referentie-renderer en drift tegen de bron verplicht) + E2E 7, contractdrift 7 en Peil-drift 12, statuspagina-ui renderer 192/0 en echte dienst 208/0, image rooktest 58/58; de run daarvoor (42782974064) faalde op 2 tests die de tijd zonder ' UTC' verwachtten, hersteld in 49988db",
   "blokkade": "",
-  "opmerking": "Kopie van ai-server-manager@0a7143b; EVIDENCE-test volgt §11 van 1.3 (vond de inconsistente regel B07-003).",
+  "opmerking": "kopie aanvulling C-12, bron e88a290. Kopie van ai-server-manager@e88a290; EVIDENCE-test volgt §11 van 1.3 (vond de inconsistente regel B07-003).",
   "repo": "zoeken-en-persoonlijke-ai",
-  "bijgewerkt": "2026-11-10"
+  "bijgewerkt": "2026-11-17"
  },
  {
   "id": "C1.3-ZPA-13",

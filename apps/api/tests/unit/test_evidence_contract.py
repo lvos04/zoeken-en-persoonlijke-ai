@@ -26,12 +26,14 @@ from tests.conftest import REPO_ROOT
 EVIDENCE = REPO_ROOT / "docs" / "platform-v2" / "EVIDENCE.json"
 EXCEL_TAKEN = REPO_ROOT / "docs" / "platform-v2" / "EXCEL_TAKEN.json"
 CONFORMITEIT = REPO_ROOT / "docs" / "platform-v2" / "CONTRACT_1.3_CONFORMITEIT.md"
+CONTRACT = REPO_ROOT / "docs" / "platform-v2" / "PLATFORM_CONTRACTEN.md"
 NOOIT = {"Gereed", "Geslaagd"}
 NIET_GEVALIDEERD = {
     "NIET GEVALIDEERD (echte NAS)",
     "NIET GEVALIDEERD (hardware)",
     "NIET GEVALIDEERD (account)",
     "NIET GEVALIDEERD (Mac/Xcode)",
+    "NIET GEVALIDEERD (echte Hub)",  # aanvulling C-12 (C12-6)
 }
 ALTIJD = NIET_GEVALIDEERD | {"Intel-iGPU-getest (ontwikkelmachine)", "Niet getest"}
 WERKPAKKET = {"Niet gestart", "Bezig", "Geblokkeerd", "N.v.t."}
@@ -91,6 +93,21 @@ def test_niet_gevalideerd_in_blokkade_staat_ook_in_validatie(item: dict[str, Any
     for gevonden in NG_IN_TEKST.findall(item["blokkade"]):
         assert gevonden in NIET_GEVALIDEERD, f"{item['id']}: {gevonden!r} is geen waarde uit de vaste lijst"
         assert gevonden in waarden, f"{item['id']}: {gevonden!r} staat in blokkade maar niet in validatie"
+
+
+def test_vaste_lijst_is_de_tabel_van_paragraaf_11() -> None:
+    """De vaste lijst volgt het contract: een waarde erbij of eraf zonder contracttekst is rood (C12-6: echte Hub)."""
+    tekst = CONTRACT.read_text(encoding="utf-8")
+    begin = tekst.index("## 11. Bewijs en Excel")
+    p11 = tekst[begin : tekst.index("## 12.", begin)]
+    in_tabel: set[str] = set()
+    for ruw in p11.splitlines():
+        regel = ruw.strip()
+        if regel.startswith("| `"):
+            in_tabel.update(re.findall(r"`([^`]+)`", regel.split(" | ")[0]))
+    vast = set().union(*(v for _, _, v in BLADEN))
+    assert in_tabel == vast, f"verschil met contract §11: {sorted(in_tabel ^ vast)}"
+    assert "NIET GEVALIDEERD (echte Hub)" in NIET_GEVALIDEERD
 
 
 def test_contractpunten_bestaan_in_de_conformiteitslijst() -> None:
