@@ -36,8 +36,9 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 
 ## Contract (bindend)
 
-- `PLATFORM_CONTRACTEN.md` — platformcontract `contracts 1.3`, byte-gelijke kopie van `lvos04/ai-server-manager`
-  op commit `0a7143b` (bron van waarheid; bij verschil wint die repo). Drifttest:
+- `PLATFORM_CONTRACTEN.md` — platformcontract `contracts 1.3`; contractkopie byte-gelijk aan
+  `lvos04/ai-server-manager@e88a290` (aanvulling C-12, blijft contracts 1.3; bron van waarheid, bij verschil wint
+  die repo). Drifttest:
   `apps/api/tests/unit/test_contract_kopie.py`; nooit lokaal aanpassen.
 - `CONTRACT_1.3_CONFORMITEIT.md` — wat elke repo voor 1.3 moet veranderen (hier: hoofdstuk 5, C1.3-ZPA-01 … -14;
   wat gebouwd is en wat open blijft: ADR-0016 en `EVIDENCE.json`), byte-gelijke kopie met dezelfde drifttest.
