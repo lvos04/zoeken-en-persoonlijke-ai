@@ -447,3 +447,26 @@ Dezelfde machine en dezelfde omgeving als hierboven. **Geen** echte NAS, geen ac
   capabilities van de ix-app);
 - een op een NAS geïnstalleerde Hub (de interop draaide lokaal tegen de Hub-code);
 - een echte schermlezer, telefoon of tv.
+
+## KLEIN-104 — pin-update manifestvalidator (2026-11-17)
+
+De actieve pin staat uitsluitend in `.github/workflows/ci.yml`, `VALIDATOR_COMMIT`: van
+`77ea6296011aae7fcbe7c6a757b404ff762aebb2` naar `a994c2a51f45b81b2c48c6533b0ccf51ba857f5a` van
+`appstore-en-fork` (ADR-0023 daar, C1.3-ASF-15). Volgens ADR-0017 blijft dit een installatie vanaf een vaste commit,
+met `pip --require-hashes` op het bron-lockbestand en `--no-deps` voor het bronpakket. Deze repo bevat geen
+validatorkopie, geen gekopieerd appstore-schema en geen controlelijst. De gedeelde contractkopieën blijven intact.
+
+Nulmeting vóór de eerste repowijziging en nameting: hetzelfde bestand met `jl-manifest validate --strict` en
+aanvullend `--format json`, elk in een eigen tijdelijke venv vanuit `git archive` van de betreffende broncommit.
+Alle 17 geïnstalleerde bestanden van de manifestvalidator (inclusief schema's) zijn byte-gelijk aan de nieuwe bron.
+
+| Bestand | Oude pin | Nieuwe pin | Meldingen en verschillen |
+|---|---|---|---|
+| `deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml` | exit 0 | exit 0 | 0 fouten; alleen geaccepteerd `digest_pending_release` op `image.digest`: "Eigen image zonder digest: de release-CI vult die in; installeren vereist de digest." Tekstuitvoer byte-gelijk; in JSON verschilt alleen `schema_sha256`. |
+
+De bestandshash blijft `02b27ae08f0ea8a16e41cd49453bebc415e5a06cd12126706948951a80b30a90`. De schemahash verandert
+van `sha256:a86a65aa463a71f2694fb09f0a89072a5127db2976cfeccca096f3bf86c397d0` naar
+`sha256:f2f1201a12e28ec88db1ea7e49af2bb7f10b8970dc8b68fae30ec7b33b243ce1`. Geen manifestwijziging of nieuwe
+acceptatie; status en validatie in EVIDENCE blijven gelijk. Meetuitvoer, exitcodes, slotregels en bytevergelijking
+staan in de lokale ketenmap `KLEIN-104` (`meting/`, `overname-gelijkheid.json`, `commando-log.jsonl`); de volledige
+controle- en CI-uitkomst staat in `RAPPORT-A-BOUW.md` in die map. Echte NAS en echte accounts niet benaderd.

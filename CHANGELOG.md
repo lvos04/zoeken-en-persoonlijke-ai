@@ -4,6 +4,12 @@
 
 Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V2).
 
+- **Manifestvalidator (KLEIN-104):** CI gebruikt nu de vaste commit
+  `a994c2a51f45b81b2c48c6533b0ccf51ba857f5a` van `appstore-en-fork` (ADR-0023, C1.3-ASF-15): `accounts`, de
+  uitgebreide accountnamenlijst, variant B, `vault_ref_not_allowed` ook in validate en de extra checklistwaarde.
+  Het eigen manifest blijft ongewijzigd: vóór en na exit 0 met alleen de geaccepteerde `digest_pending_release`;
+  alleen de schemahash verandert. Zie `docs/TESTRAPPORT.md`; de bewijsstatus blijft gelijk.
+
 - **Dienstkern:** FastAPI + SQLAlchemy 2 + Alembic op een ingebouwde PostgreSQL 16 met pgvector 0.8.7; authenticatie
   met Hub-JWT (JWKS, gecachet, fail-closed) en service-token; koppelen met eenmalig enrollment-token of koppelcode;
   foutformaat met trace-id; Idempotency-Key; healthz/readyz; connectorcontract; outbox naar de Hub; NL-statuspagina.

@@ -49,6 +49,12 @@ met contract 1.3 (`ai-server-manager@5e21775`, eigen venv, hun werkmap niet aang
    `jl-manifest validate --strict`. De unit-test eist de validator in CI (`MANIFEST_VALIDATOR_VERPLICHT=1`) en toetst
    ook negatief: `HUB_URL` in de env geeft `reserved_env`. Een vaste commit en niet de branch-kop: zo breekt een
    latere validatorwijziging deze CI niet onverwacht, en een nieuwe regel volgt met een bewuste pin-update.
+
+   **Pin-update KLEIN-104 (2026-11-17):** de huidige pin in `.github/workflows/ci.yml` is
+   `a994c2a51f45b81b2c48c6533b0ccf51ba857f5a` van `appstore-en-fork` (ADR-0023 daar, C1.3-ASF-15). De hierboven
+   genoemde `cca4403` beschrijft de oorspronkelijke QA-meting. De overname volgt dezelfde installatie met het
+   gehashte lockbestand en `validate --strict`, zonder lokale validatorkopie. Nul- en nameting van het ongewijzigde
+   eigen manifest: exit 0, alleen de bestaande geaccepteerde `digest_pending_release`; zie `docs/TESTRAPPORT.md`.
 2. **Retry-After** (Q13-02). `retry_after_s()` leest de waarde (seconden of HTTP-datum, alleen bij 429/503, hooguit
    1 uur). Een korte wachttijd (≤ 8 s) wacht de client binnen de aanroep af. Bij een langere krijgt de aanroeper het
    antwoord terug, en die plant zelf:
