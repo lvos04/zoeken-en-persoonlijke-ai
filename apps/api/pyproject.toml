@@ -33,6 +33,9 @@ dev = [
 [project.scripts]
 search-ai = "search_ai.cli:main"
 
+[project.urls]
+Repository = "https://git.medialeon.nl/leon/zoeken-en-persoonlijke-ai"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

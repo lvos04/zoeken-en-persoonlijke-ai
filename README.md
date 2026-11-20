@@ -1,5 +1,7 @@
 # zoeken-en-persoonlijke-ai
 
+[Broncode op Forgejo](https://git.medialeon.nl/leon/zoeken-en-persoonlijke-ai) · [![CI](https://git.medialeon.nl/leon/zoeken-en-persoonlijke-ai/actions/workflows/ci.yml/badge.svg?branch=ccr-c133d7a0-kuz1cv)](https://git.medialeon.nl/leon/zoeken-en-persoonlijke-ai/actions?workflow=ci.yml)
+
 Dienst van het **TrueNAS Home Platform V2**: de persoonlijke zoekmachine (**B07**, PostgreSQL 16 + pgvector) en
 — later — spraak/persoonlijke AI (**B15**). API-dienst met alleen een kleine Nederlandse statuspagina; alle schermen
 staan in de Hub-UI van `ai-server-manager`.

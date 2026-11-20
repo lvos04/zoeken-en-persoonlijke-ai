@@ -1,6 +1,10 @@
 {
   "name": "zoeken-en-persoonlijke-ai-statuspagina-ui",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.medialeon.nl/leon/zoeken-en-persoonlijke-ai.git"
+  },
   "description": "Browsercontrole van de Peil-statuspagina (axe-core, overloop op 320 px, CSP, schermafdrukken). Alleen ontwikkeling/CI; geen installatiemethode.",
   "type": "module",
   "scripts": {
