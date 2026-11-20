@@ -36,6 +36,56 @@ jobs:
       - name: Mypy
         working-directory: apps/api
         run: mypy
+      - name: Peil en platformcontract ophalen uit ai-server-manager
+        env:
+          BRON_TOKEN: ${{ secrets.BRON_LEESTOKEN }}
+        run: |
+          peil=$(sed -n '1s/.* @ \([0-9a-f]\{40\}\) .*/\1/p' design/ontwerptaal/statuspagina.html)
+          contract=$(sed -n 's/^BRON_COMMIT = "\([0-9a-f]\{40\}\)"$/\1/p' apps/api/tests/unit/test_contract_kopie.py)
+          test -n "$peil"
+          test -n "$contract"
+          raw="$GITHUB_SERVER_URL/api/v1/repos/leon/ai-server-manager/raw"
+          mkdir -p "$RUNNER_TEMP/peil-bron" "$RUNNER_TEMP/peil-werkbranch" "$RUNNER_TEMP/contract-bron"
+          for f in statuspagina.html statuspagina.css; do
+            curl -fsS --retry 4 -H "Authorization: token $BRON_TOKEN" -o "$RUNNER_TEMP/peil-bron/$f" \
+              "$raw/design/ontwerptaal/$f?ref=$peil"
+            curl -fsS --retry 4 -H "Authorization: token $BRON_TOKEN" -o "$RUNNER_TEMP/peil-werkbranch/$f" \
+              "$raw/design/ontwerptaal/$f?ref=ccr-c133d7a0-kuz1cv"
+          done
+          curl -fsS --retry 4 -H "Authorization: token $BRON_TOKEN" -o "$RUNNER_TEMP/peil-bron/sjabloon.py" \
+            "$raw/design/ontwerptaal/bouw/sjabloon.py?ref=$peil"
+          for f in PLATFORM_CONTRACTEN.md CONTRACT_1.3_CONFORMITEIT.md; do
+            curl -fsS --retry 4 -H "Authorization: token $BRON_TOKEN" -o "$RUNNER_TEMP/contract-bron/$f" \
+              "$raw/docs/platform-v2/$f?ref=$contract"
+          done
+          {
+            echo "PEIL_BRON_DIR=$RUNNER_TEMP/peil-bron"
+            echo "PEIL_WERKBRANCH_DIR=$RUNNER_TEMP/peil-werkbranch"
+            echo "PEIL_BRON_VERPLICHT=1"
+            echo "CONTRACT_BRON_DIR=$RUNNER_TEMP/contract-bron"
+            echo "CONTRACT_BRON_VERPLICHT=1"
+          } >> "$GITHUB_ENV"
+      - name: Manifestvalidator ophalen uit appstore-en-fork
+        env:
+          BRON_TOKEN: ${{ secrets.BRON_LEESTOKEN }}
+          VALIDATOR_COMMIT: a994c2a51f45b81b2c48c6533b0ccf51ba857f5a
+        run: |
+          curl -fsS --retry 4 -H "Authorization: token $BRON_TOKEN" -o "$RUNNER_TEMP/validator.tar.gz" \
+            "$GITHUB_SERVER_URL/api/v1/repos/leon/appstore-en-fork/archive/$VALIDATOR_COMMIT.tar.gz"
+      - name: Manifest met de gepinde validator controleren
+        run: |
+          dir="$RUNNER_TEMP/appstore"
+          mkdir -p "$dir"
+          tar -xzf "$RUNNER_TEMP/validator.tar.gz" --strip-components=1 -C "$dir"
+          python -m venv "$RUNNER_TEMP/validator"
+          "$RUNNER_TEMP/validator/bin/pip" install --disable-pip-version-check -q --require-hashes \
+            -r "$dir/apps/api/requirements.lock"
+          "$RUNNER_TEMP/validator/bin/pip" install --disable-pip-version-check -q --no-deps "$dir/apps/api"
+          "$RUNNER_TEMP/validator/bin/jl-manifest" validate --strict deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml
+          {
+            echo "JL_MANIFEST=$RUNNER_TEMP/validator/bin/jl-manifest"
+            echo "MANIFEST_VALIDATOR_VERPLICHT=1"
+          } >> "$GITHUB_ENV"
       - name: Unit- en integratietests
         working-directory: apps/api
         run: |

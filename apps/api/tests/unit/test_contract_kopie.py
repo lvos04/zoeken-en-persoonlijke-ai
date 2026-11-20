@@ -87,7 +87,7 @@ def test_geen_drift_met_de_bron_op_de_bron_commit(naam: str) -> None:
     assert (DOCS / naam).read_bytes() == bron, f"drift: kopie {naam} wijkt af van de bron"
 
 
-@pytest.mark.parametrize("workflow", [".forgejo/workflows/broncontrole.yml", ".github/workflows/ci.yml"])
+@pytest.mark.parametrize("workflow", [".forgejo/workflows/ci.yml", ".github/workflows/ci.yml"])
 def test_ci_haalt_de_bron_op_de_vastgelegde_commit_op(workflow: str) -> None:
     """CI leest de commit uit dit bestand (één bron voor de pin) en haalt de bron verplicht op."""
     ci = (REPO_ROOT / workflow).read_text(encoding="utf-8")
