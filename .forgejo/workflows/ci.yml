@@ -85,6 +85,7 @@ jobs:
           echo "$RUNNER_TEMP/dienst/bin" >> "$GITHUB_PATH"
           echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
           bash .forgejo/testdatabase.sh
+          echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/zoek-chromium" >> "$GITHUB_ENV"
       - uses: https://code.forgejo.org/actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
@@ -92,7 +93,9 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check -r apps/api/requirements.lock
           python -m pip install --disable-pip-version-check --no-deps -e apps/api
-          cd tests/ui && npm ci --no-audit --no-fund && npx playwright install --with-deps chromium
+          cd tests/ui
+          npm ci --no-audit --no-fund
+          node node_modules/playwright/cli.js install --with-deps chromium
       - name: Toestanden renderen met de echte renderer en het Peil-sjabloon
         run: python tests/ui/render_toestanden.py --out "$RUNNER_TEMP/statuspagina"
       - name: Peil-controles (axe-core 0, contrast in de DOM, 44 px, 320 px, focus, woorden), CSP, schermafdrukken
@@ -132,4 +135,4 @@ jobs:
           image="zoeken-en-persoonlijke-ai:ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           trap 'docker image rm "$image" >/dev/null' EXIT
           docker buildx build --load -f deploy/allinone/Dockerfile --build-arg "VERSION=$GITHUB_SHA" -t "$image" .
-          deploy/allinone/smoke-test.sh "$image"
+          bash deploy/allinone/smoke-test.sh "$image"
