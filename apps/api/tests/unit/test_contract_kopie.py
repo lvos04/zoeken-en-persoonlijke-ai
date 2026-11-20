@@ -87,9 +87,10 @@ def test_geen_drift_met_de_bron_op_de_bron_commit(naam: str) -> None:
     assert (DOCS / naam).read_bytes() == bron, f"drift: kopie {naam} wijkt af van de bron"
 
 
-def test_ci_haalt_de_bron_op_de_vastgelegde_commit_op() -> None:
+@pytest.mark.parametrize("platform", [".forgejo", ".github"])
+def test_ci_haalt_de_bron_op_de_vastgelegde_commit_op(platform: str) -> None:
     """CI leest de commit uit dit bestand (één bron voor de pin) en haalt de bron verplicht op."""
-    ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    ci = (REPO_ROOT / platform / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "s/^BRON_COMMIT = " in ci and "apps/api/tests/unit/test_contract_kopie.py)" in ci
     assert re.search(r"^BRON_COMMIT = \"[0-9a-f]{40}\"$", Path(__file__).read_text(encoding="utf-8"), re.M)
     assert "CONTRACT_BRON_VERPLICHT=1" in ci

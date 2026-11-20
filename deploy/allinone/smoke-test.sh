@@ -14,23 +14,30 @@
 # deze controle zelf en de Docker-healthcheck) tellen niet mee. De healthcheck wordt APART gecontroleerd: hetzelfde
 # commando met de controlevlag (--controle) meldt na de wissel Uid 568, CapEff/CapPrm 0, NoNewPrivs 1 (en CapBnd 0 als
 # hij als root start).
-# De test werkt met elke host-gebruiker (ook de niet-root 'runner' van GitHub Actions): /appdata/secrets is bewust
-# 0700/568, dus alles daaronder wordt bekeken via een wegwerpcontainer met een alleen-lezen mount (ADR-0009).
+# De jobcontainer en de Docker-daemon kunnen verschillende bestandssystemen en netwerkruimten hebben.
+# Het testvolume en het interne netwerk horen bij deze proef; HTTP wordt vanuit een tweede container getoetst.
 set -euo pipefail
 
 IMAGE="${1:-zoeken-en-persoonlijke-ai:dev}"
 WORK="$(mktemp -d)"
-NAME="sai-smoke-$$"
-PORT="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+NAME="sai-smoke-${WORK##*/}"
+VOLUME="$NAME-data"
+NETWORK="$NAME-net"
 PASS=0
 FAIL=0
 
 cleanup() {
-  docker rm -f "$NAME" "$NAME-568" "$NAME-bad" "$NAME-uid" "$NAME-link" >/dev/null 2>&1 || true
-  docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c 'rm -rf /w/* /w/.[!.]* 2>/dev/null || true' >/dev/null 2>&1 || true
+  docker rm -fv "$NAME" "$NAME-568" "$NAME-bad" "$NAME-uid" "$NAME-link" >/dev/null 2>&1 || true
+  docker network rm "$NETWORK" >/dev/null 2>&1 || true
+  docker volume rm "$VOLUME" >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
 trap cleanup EXIT
+
+docker network create --internal "$NETWORK" >/dev/null
+docker volume create "$VOLUME" >/dev/null
+# Bind mounts van de submappen worden door dezelfde daemon opgezocht.
+DATA="$(docker volume inspect --format '{{.Mountpoint}}' "$VOLUME")"
 
 ok() { echo "OK   $*"; PASS=$((PASS + 1)); }
 nok() { echo "FOUT $*"; FAIL=$((FAIL + 1)); }
@@ -50,14 +57,26 @@ wait_healthy() {
 }
 
 # zonder pipes (pipefail + grep -q geeft anders vals-negatieve SIGPIPE-fouten)
-http_has() { curl -fsS "http://127.0.0.1:$PORT$1" -o "$WORK/http.txt" && grep -q -- "$2" "$WORK/http.txt"; }
+http() {
+  docker run --rm --network "$NETWORK" --entrypoint python "$IMAGE" -c '
+import httpx, sys
+naam, pad, uitvoer = sys.argv[1:]
+r = httpx.get(f"http://{naam}:30450{pad}", headers={"Host": "localhost:30450"}, trust_env=False)
+if uitvoer == "status":
+    print(r.status_code)
+else:
+    r.raise_for_status()
+    print(r.text if uitvoer == "body" else r.headers[uitvoer])
+' "$NAME" "$@"
+}
+http_has() { http "$1" body > "$WORK/http.txt" && grep -q -- "$2" "$WORK/http.txt"; }
 log_has() { docker logs "$1" > "$WORK/log.txt" 2>&1; grep -q -- "$2" "$WORK/log.txt"; }
 # wacht (hooguit 30 s) tot een melding in de log staat, i.p.v. een vaste slaaptijd
 wait_log() { for _ in $(seq 1 30); do log_has "$1" "$2" && return 0; sleep 1; done; docker logs "$1" 2>&1 | tail -10; return 1; }
 
 # Bestanden op de host-map bekijken zoals ze op schijf staan, via een wegwerpcontainer (root in de container,
 # alleen-lezen mount). Nodig omdat /appdata/secrets 0700/568 is: de host-gebruiker mag daar terecht niet in.
-on_disk() { docker run --rm --network none -v "$WORK:/w:ro" --entrypoint "$1" "$IMAGE" "${@:2}"; }
+on_disk() { docker run --rm --network none -v "$VOLUME:/w:ro" --entrypoint "$1" "$IMAGE" "${@:2}"; }
 disk_mode() { on_disk stat -c '%a %u' "/w/$1"; }
 disk_sum() { on_disk sha256sum "/w/$1" | cut -d' ' -f1; }
 
@@ -154,20 +173,22 @@ marker_ok() { [ "$(sql "$1" -c "SELECT value->>'m' FROM service_state WHERE key 
 
 run() { # naam, datamap, extra args (geen --security-opt: dat kan het TrueNAS-formulier ook niet)
   local n="$1" d="$2"; shift 2
-  docker run -d --name "$n" -p "127.0.0.1:$PORT:30450" -v "$d:/appdata" \
+  docker run -d --name "$n" --network "$NETWORK" -v "$d:/appdata" \
     --health-interval 3s --health-start-period 60s "$@" "$IMAGE" >/dev/null
 }
 
-mkdir -p "$WORK/root" "$WORK/u568" "$WORK/bad" "$WORK/u1000" "$WORK/link" "$WORK/share/werk"
-echo "offerte keuken" > "$WORK/share/werk/offerte.txt"
-# root-eigendom-map zoals een nieuwe TrueNAS-dataset; 'bad' is van root (0755) zodat 568 er nooit in mag schrijven
-# en 'u1000' is van 1000 — ongeacht de uid van de host-gebruiker die de test draait
-docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c \
-  'chown -R 1000:1000 /w/share /w/u1000 && chown 0:0 /w/root /w/bad && chmod 0755 /w/root /w/bad' >/dev/null
-SHARE_BEFORE="$(cd "$WORK/share" && find . -printf '%p %u %g %m %s %T@\n' | sort | sha256sum)"
+# 'bad' is van root (0755) zodat 568 er nooit in mag schrijven; 'u1000' is van 1000.
+docker run --rm --network none -v "$VOLUME:/w" --entrypoint sh "$IMAGE" -ec '
+  mkdir -p /w/root /w/u568 /w/bad /w/u1000 /w/link /w/share/werk
+  echo "offerte keuken" > /w/share/werk/offerte.txt
+  chown -R 1000:1000 /w/share /w/u1000
+  chown 0:0 /w/root /w/bad
+  chmod 0755 /w/root /w/bad'
+share_state() { on_disk find /w/share -printf '%P %u %g %m %s %T@\n' | sort | sha256sum; }
+SHARE_BEFORE="$(share_state)"
 
 echo "== 1. start als root op een root-eigendom-map, met een alleen-lezen share onder /bronnen"
-run "$NAME" "$WORK/root" -v "$WORK/share:/bronnen/documenten:ro"
+run "$NAME" "$DATA/root" -v "$DATA/share:/bronnen/documenten:ro"
 check "healthcheck wordt healthy" "wait_healthy $NAME"
 check "/healthz geeft 200" "http_has /healthz '\"status\":\"ok\"'"
 check "/readyz geeft ready" "http_has /readyz '\"ready\"'"
@@ -181,10 +202,10 @@ check "statuspagina toont 'niet gekoppeld'" "http_has / 'niet gekoppeld'"
 check "statuspagina in Peil 1.1.1 (sjabloon uit de image, sha256 gecontroleerd)" "http_has / 'Peil statuspagina.css 1.1.1'"
 check "koppelformulier met verplicht vingerafdrukveld (contract 1.3 §3.7)" "http_has / 'name=\"hub_vingerafdruk\" required'"
 check "statuspagina met Referrer-Policy same-origin (contract 1.3 §3.7)" \
-  "curl -fsS -D $WORK/kop.txt -o /dev/null http://127.0.0.1:$PORT/ && tr -d '\r' < $WORK/kop.txt | grep -qi '^referrer-policy: same-origin$'"
+  "[ \"\$(http / Referrer-Policy)\" = 'same-origin' ]"
 check "statuspagina zonder JavaScript" "http_has / '</html>' && ! grep -qi '<script' $WORK/http.txt"
 check "API zonder token geeft 401 unauthorized" \
-  "[ \"\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$PORT/search/v1/sources)\" = 401 ]"
+  "[ \"\$(http /search/v1/sources status)\" = 401 ]"
 docker top "$NAME" -eo pid,user,args > "$WORK/ps.txt"
 check "procestabel is leesbaar" "[ \"\$(wc -l < $WORK/ps.txt)\" -ge 5 ]"
 check "geen enkel proces draait als root, ook PID 1 niet (alleen de Docker-healthcheck start even als root)" \
@@ -210,7 +231,7 @@ check "geen lokale ontkoppelcode meer in de app-log (contract 1.3 §3.7)" "! log
 check "nog niet gekoppeld: geen hub-link.json" "! on_disk test -e /w/root/secrets/hub-link.json"
 check "share wordt als alleen-lezen gemeld" "log_has $NAME 'documenten: alleen-lezen'"
 check "share ongewijzigd (eigenaar, rechten, inhoud, tijden)" \
-  "[ \"\$(cd $WORK/share && find . -printf '%p %u %g %m %s %T@\n' | sort | sha256sum)\" = '$SHARE_BEFORE' ]"
+  "[ \"\$(share_state)\" = '$SHARE_BEFORE' ]"
 check "geen setuid/setgid-bestanden in de image" \
   "[ -z \"\$(docker exec $NAME sh -c 'find / -xdev -perm /6000 -type f 2>/dev/null')\" ]"
 SUM1="$(disk_sum root/secrets/vault.key)" || SUM1=""
@@ -232,7 +253,7 @@ check "databasegegevens behouden na harde kill" "marker_ok $NAME"
 docker rm -f "$NAME" >/dev/null
 
 echo "== 3b. nieuwe container op dezelfde /appdata (zoals TrueNAS bij een update doet)"
-run "$NAME" "$WORK/root" -v "$WORK/share:/bronnen/documenten:ro"
+run "$NAME" "$DATA/root" -v "$DATA/share:/bronnen/documenten:ro"
 check "nieuwe container healthy" "wait_healthy $NAME"
 check "databasegegevens behouden in een nieuwe container" "marker_ok $NAME"
 check "vault.key ongewijzigd in een nieuwe container" "[ -n '$SUM1' ] && [ \"\$(disk_sum root/secrets/vault.key)\" = '$SUM1' ]"
@@ -240,8 +261,8 @@ check "geen nieuwe database aangemaakt (geen 'eerste start' in de log)" "! log_h
 docker rm -f "$NAME" >/dev/null
 
 echo "== 4. start direct als 568 op een 568-map"
-docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c 'chown 568:568 /w/u568' >/dev/null
-run "$NAME-568" "$WORK/u568" --user 568:568
+docker run --rm --network none -v "$VOLUME:/w" --entrypoint sh "$IMAGE" -c 'chown 568:568 /w/u568' >/dev/null
+run "$NAME-568" "$DATA/u568" --user 568:568
 check "als 568 gestart ('Custom User' 568 in het formulier) en healthy" "wait_healthy $NAME-568"
 check "ook dan elk proces: Uid 568, CapEff/CapPrm/CapAmb 0, NoNewPrivs 1 (CapBnd mag de Docker-standaardset zijn)" \
   "privs_all_568 $NAME-568 custom-user"
@@ -250,21 +271,21 @@ check "healthcheck apart als Custom User 568: Uid 568, CapEff/CapPrm 0, NoNewPri
 docker rm -f "$NAME-568" >/dev/null
 
 echo "== 5. verkeerde rechten (568 op een root-dataset) geven een duidelijke Nederlandse fout"
-docker run -d --name "$NAME-bad" -v "$WORK/bad:/appdata" --user 568:568 "$IMAGE" >/dev/null
+docker run -d --network "$NETWORK" --name "$NAME-bad" -v "$DATA/bad:/appdata" --user 568:568 "$IMAGE" >/dev/null
 check "fout 'geen schrijfrechten' in de log" "wait_log $NAME-bad 'FOUT: geen schrijfrechten'"
-check "root-dataset niet aangeraakt" "[ \"\$(disk_mode bad)\" = '755 0' ] && [ -z \"\$(ls -A $WORK/bad)\" ]"
+check "root-dataset niet aangeraakt" "[ \"\$(disk_mode bad)\" = '755 0' ] && [ -z \"\$(on_disk ls -A /w/bad)\" ]"
 docker rm -f "$NAME-bad" >/dev/null
 
 echo "== 6. verkeerde gebruiker ('Custom User' 1000) geeft een duidelijke Nederlandse fout, geen initdb-fout"
-docker run -d --name "$NAME-uid" -v "$WORK/u1000:/appdata" --user 1000:1000 "$IMAGE" >/dev/null
+docker run -d --network "$NETWORK" --name "$NAME-uid" -v "$DATA/u1000:/appdata" --user 1000:1000 "$IMAGE" >/dev/null
 check "fout 'draait als gebruiker 1000:1000' in de log" "wait_log $NAME-uid 'FOUT: de app draait als gebruiker 1000:1000'"
 check "geen initdb gestart" "! log_has $NAME-uid 'initdb'"
 docker rm -f "$NAME-uid" >/dev/null
 
 echo "== 7. symbolische koppelingen: root volgt ze nooit (anders kan 568 root buiten /appdata laten chownen)"
-docker run --rm -v "$WORK:/w" --entrypoint sh "$IMAGE" -c \
+docker run --rm --network none -v "$VOLUME:/w" --entrypoint sh "$IMAGE" -c \
   'chown 0:0 /w/link && chmod 0755 /w/link && ln -s /usr/local/lib /w/link/backups' >/dev/null
-docker run -d --name "$NAME-link" -v "$WORK/link:/appdata" "$IMAGE" >/dev/null
+docker run -d --network "$NETWORK" --name "$NAME-link" -v "$DATA/link:/appdata" "$IMAGE" >/dev/null
 check "link als eigen submap van /appdata geeft een duidelijke Nederlandse fout" \
   "wait_log $NAME-link 'FOUT: /appdata/backups is een symbolische koppeling'"
 check "doel van die link niet aangeraakt (blijft van root)" \
@@ -273,7 +294,7 @@ check "geen database aangemaakt bij een geweigerde start" "! log_has $NAME-link 
 docker rm -f "$NAME-link" >/dev/null
 
 echo "== 7b. socketmap in /tmp door 568 vervangen door een link, daarna herstarten (root chownt het doel niet)"
-run "$NAME" "$WORK/root" -v "$WORK/share:/bronnen/documenten:ro"
+run "$NAME" "$DATA/root" -v "$DATA/share:/bronnen/documenten:ro"
 check "container healthy vóór de proef" "wait_healthy $NAME"
 docker exec -u 568 "$NAME" sh -c 'mv /tmp/search-ai-pg /tmp/search-ai-pg.oud && ln -s /usr/local/lib /tmp/search-ai-pg'
 docker restart -t 30 "$NAME" >/dev/null

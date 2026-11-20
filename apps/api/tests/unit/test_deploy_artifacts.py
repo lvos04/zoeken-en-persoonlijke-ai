@@ -22,7 +22,6 @@ MANIFEST = REPO_ROOT / "deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml"
 CUSTOM_APP = REPO_ROOT / "deploy/truenas/CUSTOM_APP.md"
 COMPOSE = REPO_ROOT / "deploy/dev/compose.yaml"
 ENV_EXAMPLE = REPO_ROOT / ".env.example"
-WORKFLOWS = REPO_ROOT / ".github/workflows"
 
 
 def test_base_images_pinned_by_digest_and_never_latest() -> None:
@@ -145,8 +144,11 @@ def test_env_example_has_no_secret_values() -> None:
             assert value == "", f"{key} heeft een waarde in .env.example"
 
 
-def test_workflow_actions_pinned_by_sha() -> None:
-    for wf in WORKFLOWS.glob("*.yml"):
+@pytest.mark.parametrize("platform", [".forgejo", ".github"])
+def test_workflow_actions_pinned_by_sha(platform: str) -> None:
+    workflows = sorted((REPO_ROOT / platform / "workflows").glob("*.yml"))
+    assert {"ci.yml", "release.yml"} <= {wf.name for wf in workflows}
+    for wf in workflows:
         for ref in re.findall(r"uses:\s*(\S+)", wf.read_text()):
             assert re.search(r"@[0-9a-f]{40}$", ref), f"{wf.name}: {ref} niet op SHA gepind"
         assert ":latest" not in wf.read_text()
