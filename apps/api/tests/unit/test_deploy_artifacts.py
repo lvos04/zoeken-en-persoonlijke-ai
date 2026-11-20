@@ -222,10 +222,10 @@ def test_doelgebruiker_root_via_omgeving_wordt_geweigerd(
 
 
 def test_smoke_test_inspects_secrets_via_container_not_as_host_user() -> None:
-    # /appdata/secrets is 0700/568: de niet-root host-gebruiker (bv. de GitHub-runner) mag er terecht niet in
+    # /appdata/secrets is 0700/568. De runner controleert de bestanden via een alleen-lezen volumemount.
     smoke = (REPO_ROOT / "deploy/allinone/smoke-test.sh").read_text()
-    assert "$WORK/root/secrets" not in smoke
-    assert 'on_disk() { docker run --rm --network none -v "$WORK:/w:ro"' in smoke
+    assert "$WORK/root/secrets" not in smoke and "$DATA/root/secrets" not in smoke
+    assert 'on_disk() { docker run --rm --network none -v "$VOLUME:/w:ro"' in smoke
 
 
 def test_supervisor_sets_no_new_privs_for_itself_and_children() -> None:

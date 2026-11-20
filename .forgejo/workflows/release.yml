@@ -62,6 +62,12 @@ jobs:
             {app_id: "zoeken-en-persoonlijke-ai", version: $v, image: $image, tag: $v, digest: $digest}
           ' > release/digests.json
           jq -e '.spdxVersion and .packages' release/sbom.spdx.json > /dev/null
+      - name: SPDX-bestand als runartefact bewaren
+        uses: https://code.forgejo.org/forgejo/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # Forgejo v4
+        with:
+          name: sbom-spdx
+          path: release/sbom.spdx.json
+          if-no-files-found: error
       - name: Bestanden toevoegen aan de Forgejo-release
         env:
           RELEASE_TOKEN: ${{ github.token }}
