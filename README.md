@@ -27,9 +27,9 @@ contract 1.3. **Niet** tegen een op een NAS geïnstalleerde Hub.
 
 **Statuspagina in Peil 1.1.1** ([`docs/adr/ADR-0013-statuspagina-in-peil.md`](docs/adr/ADR-0013-statuspagina-in-peil.md),
 ADR-0016): `GET /` rendert het framework-vrije statuspagina-sjabloon van de ontwerptaal Peil 1.1.1 (versie-gepinde
-kopie met herkomstkop in [`design/ontwerptaal/`](design/ontwerptaal/HERKOMST.md)). Bij elke push controleert CI de
-vastgelegde hashes. De handmatige Forgejo-workflow [broncontrole](.forgejo/workflows/broncontrole.yml) vergelijkt
-de kopie met de gepinde commit en de werkbranch van `ai-server-manager`. Geen JavaScript, CSP `default-src 'none'`,
+kopie met herkomstkop in [`design/ontwerptaal/`](design/ontwerptaal/HERKOMST.md)). De [Forgejo-CI](.forgejo/workflows/ci.yml)
+controleert bij elke push naar een branch en bij pull requests de vastgelegde hashes en vergelijkt de kopie met
+de gepinde commit en de werkbranch van `ai-server-manager`. Geen JavaScript, CSP `default-src 'none'`,
 `Referrer-Policy: same-origin`, eerste signaal nooit groen als de dienst niet gereed is. Het koppelformulier weigert een
 andere herkomst (`Origin`, `Sec-Fetch-Site`) en een domeinnaam die DNS-rebinding mogelijk maakt (`Host`).
 De POST krijgt direct de pagina met de melding en de echte
@@ -55,14 +55,15 @@ make image smoke     # alles-in-één image bouwen en de rooktest draaien
 ```
 `deploy/dev/compose.yaml` is alleen voor ontwikkeling.
 
-Start `broncontrole.yml` op de te toetsen branch voor de Peil-, contract- en manifestproeven tegen de bron.
-Het Forgejo-secret `CI_BRONNEN_LEZEN` heeft daarvoor `read:repository` nodig op `leon/ai-server-manager` en `leon/appstore-en-fork`.
+De Python-job leest Peil en het platformcontract uit `leon/ai-server-manager` en haalt de gepinde
+manifestvalidator uit `leon/appstore-en-fork`. Daarvoor gebruikt de job het Forgejo-secret `BRON_LEESTOKEN`
+met `read:repository` op beide bronrepo’s. Ontbreekt een bron, dan faalt de job.
 
 ## Documentatie
 - Keuzes: [`docs/adr/`](docs/adr/) · Testrapport: [`docs/TESTRAPPORT.md`](docs/TESTRAPPORT.md)
 - Pakketdocs, delta-matrix en bewijs: [`docs/platform-v2/`](docs/platform-v2/) (`EVIDENCE.json`, `DELTA_MATRIX.md`)
 - Manifest: [`deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml`](deploy/manifest/zoeken-en-persoonlijke-ai.manifest.yaml)
-  (contract 1.3 §9, monitorplan op `/readyz`). De handmatige broncontrole valideert het manifest met `jl-manifest validate --strict`.
+  (contract 1.3 §9, monitorplan op `/readyz`). De CI valideert het manifest met `jl-manifest validate --strict`.
 
 ## Licentie
 
