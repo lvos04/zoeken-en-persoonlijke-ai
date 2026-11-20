@@ -13,15 +13,6 @@ jobs:
   python:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    services:
-      postgres:
-        image: mirror.gcr.io/pgvector/pgvector:0.8.7-pg16-bookworm@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f
-        env:
-          POSTGRES_HOST_AUTH_METHOD: trust
-        options: >-
-          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
-    env:
-      SEARCH_AI_TEST_ADMIN_URL: postgresql+psycopg://postgres@postgres:5432/postgres
     steps:
       - uses: https://code.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -33,7 +24,7 @@ jobs:
           python3.12 -m venv "$RUNNER_TEMP/dienst"
           echo "$RUNNER_TEMP/dienst/bin" >> "$GITHUB_PATH"
           echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
-          psql -h postgres -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS vector'
+          bash .forgejo/testdatabase.sh
       - name: Installeren
         run: |
           python -m pip install --disable-pip-version-check -r apps/api/requirements.lock
@@ -45,6 +36,37 @@ jobs:
       - name: Mypy
         working-directory: apps/api
         run: mypy
+      - name: Unit- en integratietests
+        working-directory: apps/api
+        run: pytest -q
+      - name: Migraties op en neer
+        env:
+          SEARCH_AI_DATA_DIR: ${{ runner.temp }}/zoek-mig
+        run: |
+          export SEARCH_AI_DATABASE_URL="${SEARCH_AI_TEST_ADMIN_URL%/*}/zoek_ci_mig"
+          psql -d postgres -c 'CREATE DATABASE zoek_ci_mig'
+          python -m search_ai migrate
+          python -m search_ai migrate --down base
+          python -m search_ai migrate
+      - name: OpenAPI-drift
+        run: |
+          python -m search_ai openapi --out docs/openapi/zoeken-en-persoonlijke-ai.openapi.json
+          git diff --exit-code docs/openapi/
+      - name: Dienst-E2E (simulator)
+        run: pytest -q tests/e2e -p no:cacheprovider
+      - name: pip-audit (runtime-afhankelijkheden)
+        run: pip-audit -r apps/api/requirements.lock --progress-spinner off
+      - name: Eigen testdatabase en netwerk opruimen
+        if: always()
+        run: bash .forgejo/testdatabase.sh stop
+
+  bronnen:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Toegang tot beide privé-bronrepo's controleren
         env:
           BRON_TOKEN: ${{ github.token }}
@@ -57,6 +79,12 @@ jobs:
             if [ "$status" != 200 ]; then ontbreekt=1; fi
           done
           exit "$ontbreekt"
+      - name: Dienst en tests installeren
+        run: |
+          python3.12 -m venv "$RUNNER_TEMP/dienst"
+          "$RUNNER_TEMP/dienst/bin/pip" install --disable-pip-version-check -r apps/api/requirements.lock
+          "$RUNNER_TEMP/dienst/bin/pip" install --disable-pip-version-check -e 'apps/api[dev]'
+          echo "$RUNNER_TEMP/dienst/bin" >> "$GITHUB_PATH"
       - name: Peil-bron op de gepinde commit en de werkbranch ophalen (O-14, pinregel E08)
         env:
           BRON_TOKEN: ${{ github.token }}
@@ -118,39 +146,15 @@ jobs:
             echo "JL_MANIFEST=$RUNNER_TEMP/validator/bin/jl-manifest"
             echo "MANIFEST_VALIDATOR_VERPLICHT=1"
           } >> "$GITHUB_ENV"
-      - name: Unit- en integratietests
+      - name: Bytevergelijking met de referentierenderer en positieve en negatieve manifestproef
         working-directory: apps/api
-        run: pytest -q
-      - name: Migraties op en neer
-        env:
-          SEARCH_AI_DATA_DIR: ${{ runner.temp }}/zoek-mig
-          SEARCH_AI_DATABASE_URL: postgresql+psycopg://postgres@postgres:5432/zoek_ci_mig
-        run: |
-          psql -h postgres -U postgres -c 'CREATE DATABASE zoek_ci_mig'
-          python -m search_ai migrate
-          python -m search_ai migrate --down base
-          python -m search_ai migrate
-      - name: OpenAPI-drift
-        run: |
-          python -m search_ai openapi --out docs/openapi/zoeken-en-persoonlijke-ai.openapi.json
-          git diff --exit-code docs/openapi/
-      - name: Dienst-E2E (simulator)
-        run: pytest -q tests/e2e -p no:cacheprovider
-      - name: pip-audit (runtime-afhankelijkheden)
-        run: pip-audit -r apps/api/requirements.lock --progress-spinner off
+        run: >-
+          pytest -q tests/unit/test_statuspagina_peil.py::test_zelfde_uitkomst_als_de_referentie_renderer
+          tests/unit/test_deploy_artifacts.py::test_manifest_strict_geldig_met_de_validator_van_appstore_en_fork
 
   statuspagina-ui:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    services:
-      postgres:
-        image: mirror.gcr.io/pgvector/pgvector:0.8.7-pg16-bookworm@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f
-        env:
-          POSTGRES_HOST_AUTH_METHOD: trust
-        options: >-
-          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
-    env:
-      SEARCH_AI_TEST_ADMIN_URL: postgresql+psycopg://postgres@postgres:5432/postgres
     steps:
       - uses: https://code.forgejo.org/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -162,7 +166,7 @@ jobs:
           python3.12 -m venv "$RUNNER_TEMP/dienst"
           echo "$RUNNER_TEMP/dienst/bin" >> "$GITHUB_PATH"
           echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
-          psql -h postgres -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS vector'
+          bash .forgejo/testdatabase.sh
       - uses: https://code.forgejo.org/actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
@@ -192,6 +196,9 @@ jobs:
             ${{ runner.temp }}/echte-dienst/CONTROLE.json
             ${{ runner.temp }}/echte-dienst/schermafdrukken
           retention-days: 14
+      - name: Eigen testdatabase en netwerk opruimen
+        if: always()
+        run: bash .forgejo/testdatabase.sh stop
 
   image:
     runs-on: ubuntu-24.04
