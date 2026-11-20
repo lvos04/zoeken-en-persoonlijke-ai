@@ -61,7 +61,11 @@ jobs:
       - name: Dienst-E2E (simulator)
         run: pytest -q tests/e2e -p no:cacheprovider
       - name: pip-audit (runtime-afhankelijkheden)
-        run: pip-audit -r apps/api/requirements.lock --progress-spinner off
+        run: |
+          auditcache=$(mktemp -d "$RUNNER_TEMP/zoek-audit-XXXXXXXX")
+          trap 'rm -rf "$auditcache"' EXIT
+          XDG_CACHE_HOME="$auditcache" PIP_CACHE_DIR="$auditcache/pip" \
+            pip-audit -r apps/api/requirements.lock --progress-spinner off --cache-dir "$auditcache/adviezen"
       - name: Eigen testdatabase en netwerk opruimen
         if: always()
         run: bash .forgejo/testdatabase.sh stop
