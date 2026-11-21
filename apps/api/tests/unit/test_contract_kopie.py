@@ -25,9 +25,9 @@ from tests.conftest import REPO_ROOT
 DOCS = REPO_ROOT / "docs" / "platform-v2"
 BRON_REPO = "lvos04/ai-server-manager"
 #: commit in ai-server-manager (branch ccr-c133d7a0-kuz1cv) waarop beide bestanden de inhoud hieronder hebben
-BRON_COMMIT = "e88a290c9ad5fef4acf498d05ad3414395a4fcb5"
+BRON_COMMIT = "bc1746e88e7b742fa8dae270ef94c34cbbc3fc4a"
 KOPIEEN = {
-    "PLATFORM_CONTRACTEN.md": "4712dd62c837c2f2594fa4152a925464f6f7481e898473660f09607cc113c511",
+    "PLATFORM_CONTRACTEN.md": "e3a8f6cdd11e6460708fdfae5fd6c44da05f62a8670bfebce951824d6aa46c0a",
     "CONTRACT_1.3_CONFORMITEIT.md": "b5ebba073a8fe8beb715d58e6760feae38e33ad445956d107e64840133dd7924",
 }
 
