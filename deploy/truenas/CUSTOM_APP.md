@@ -48,17 +48,20 @@ en van zijn eigen submappen (`postgres`, `secrets`, `backups`). Shares onder `/b
 | Image Configuration | Repository | `ghcr.io/lvos04/zoeken-en-persoonlijke-ai` |
 | | Tag | `<versie>@sha256:<digest>` uit `release/digests.json` van de release (zie hieronder) |
 | | Pull Policy | *Pull the image if it is not already present on host* |
-| Container Configuration | Timezone | jouw tijdzone |
+| Container Configuration | Entrypoint / Command | beide leeg laten |
+| | Timezone | jouw tijdzone |
 | | Restart Policy | *Unless Stopped* |
-| | Environment Variables | leeg laten (zie *Optioneel*) |
+| | Environment Variables | leeg laten, of voor koppelen bij de eerste start `HUB_URL`, `HUB_ENROLLMENT_TOKEN` en `HUB_KEY_FINGERPRINT` uit de Hub invullen (stap 3) |
+| | Disable Builtin Healthcheck | **uit** (de image controleert zelf of `/readyz` HTTP 200 geeft) |
 | Security Context | Privileged | **uit** |
 | | Capabilities | geen toevoegen |
 | | Custom User | **uit** (aanbevolen: de app start als root alleen om de rechten van `/appdata` te regelen en draait daarna als 568, ook het hoofdproces) — of **aan met User ID en Group ID `568`** als de dataset al van 568 is |
 | Network Configuration | Host Network | **uit** |
-| | Ports → Add | Container Port `30450`, Host Port `30450`, Protocol TCP |
+| | Ports → Add | Container Port `30450`, Host Port `30450` (kies een vrije hostpoort als deze bezet is), Protocol TCP |
 | Storage Configuration | Add → Type | **Host Path** (of ixVolume) |
 | | Mount Path | `/appdata` |
 | | Host Path | het pad van de dataset uit stap 1 |
+| | Read Only / Enable ACL | beide **uit** voor `/appdata` |
 | Storage Configuration (optioneel, per share) | Add → Type | **Host Path** |
 | | Mount Path | `/bronnen/<naam>`, bv. `/bronnen/documenten` |
 | | Host Path | de share (dataset) die je doorzoekbaar wilt maken |
@@ -68,15 +71,16 @@ en van zijn eigen submappen (`postgres`, `secrets`, `backups`). Shares onder `/b
 
 ### Tag met digest
 
-Vul bij **Tag** de versie mét digest in, precies zoals in `release/digests.json` van de GitHub-release staat:
-`<versie>@sha256:<64 hex>` (bijvoorbeeld `0.1.0@sha256:` gevolgd door 64 tekens). Het formulier maakt daar
-`ghcr.io/lvos04/zoeken-en-persoonlijke-ai:<versie>@sha256:<digest>` van: TrueNAS haalt dan precies die image op, ook als
+Download de bijlage `digests.json` van de GitHub-release (in de bouw heet dit bestand `release/digests.json`).
+Vul bij **Tag** het veld `tag` in, direct gevolgd door `@` en het volledige veld `digest`.
+Voor deze versie wordt dat `0.1.0@sha256:` gevolgd door de 64 hexadecimale tekens uit de bijlage. Met de volledige
+referentie `ghcr.io/lvos04/zoeken-en-persoonlijke-ai:<versie>@sha256:<digest>` haalt TrueNAS precies die image op, ook als
 iemand de versietag later zou verplaatsen.
 
 > **NIET GEVALIDEERD (echte NAS):** of het TrueNAS-formulier een tag met `@` accepteert en of TrueNAS daarmee nog
-> updates herkent, is niet op een echte NAS getest (contract 1.3 §2.2). Weigert het formulier de tag, vul dan alleen
-> de versie in (`0.1.0`); het platform controleert na installatie de digest (readback via de TrueNAS-API) en stopt bij
-> een afwijking. Er is in deze bouwronde nog geen release gemaakt; tot dan bestaat er geen digest om in te vullen.
+> updates herkent, is niet op een echte NAS getest (contract 1.3 §2.2). Weigert het formulier de tag bij handmatige
+> installatie, stop dan en meld de weigering. De terugval op alleen de versie (`0.1.0`) vereist dat het platform de
+> digest na installatie via de TrueNAS-API terugleest en bij een afwijking stopt. De digest komt beschikbaar bij publicatie.
 
 ### Image ophalen (publiek; registry-login alleen als terugval)
 

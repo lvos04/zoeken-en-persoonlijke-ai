@@ -1,5 +1,4 @@
-# Release: tag vX.Y.Z → alles-in-één image naar GHCR (exacte versie, nooit 'latest'), SBOM en
-# release/digests.json met de digest (voor het manifest). Acties op commit-SHA gepind.
+# Een nieuwe tag v<VERSION> publiceert de alles-in-één image, release/digests.json en de SBOM.
 name: release
 on:
   push:
@@ -7,27 +6,64 @@ on:
 permissions:
   contents: write
   packages: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   image:
+    if: github.ref_type == 'tag' && github.event.created && !github.event.deleted
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/zoeken-en-persoonlijke-ai
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Versie controleren
         id: v
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          test "$VERSION" = "$(cat VERSION)" || { echo "Tag $GITHUB_REF_NAME past niet bij VERSION $(cat VERSION)"; exit 1; }
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
-      - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+          versie=$(cat VERSION)
+          if [[ ! $versie =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || $GITHUB_REF_NAME != "v$versie" ]]; then
+            echo "::error::De tag moet gelijk zijn aan v<VERSION> met een numerieke versie X.Y.Z."
+            exit 1
+          fi
+          echo "version=$versie" >> "$GITHUB_OUTPUT"
+      - name: Controleren of de release en de imageversie vrij zijn
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSIE: ${{ steps.v.outputs.version }}
+        run: |
+          vereis_afwezig() {
+            local naam=$1 status
+            shift
+            status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$@") || return 1
+            case "$status" in
+              404) return 0 ;;
+              200) echo "::error::$naam bestaat al." ;;
+              *) echo "::error::$naam kon niet worden gecontroleerd (HTTP $status)." ;;
+            esac
+            return 1
+          }
+          vereis_afwezig "Release $GITHUB_REF_NAME" --header "Authorization: Bearer $GH_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME"
+          pakket=${IMAGE#ghcr.io/}
+          toegang=$(curl --fail --silent --show-error --user "$GITHUB_ACTOR:$GH_TOKEN" \
+            --get --data-urlencode service=ghcr.io --data-urlencode "scope=repository:$pakket:pull,push" \
+            https://ghcr.io/token | jq -er '.token | strings | select(length > 0)')
+          vereis_afwezig "Image $IMAGE:$VERSIE" --head --header "Authorization: Bearer $toegang" \
+            --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "https://ghcr.io/v2/$pakket/manifests/$VERSIE"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Bouwen en pushen
         id: push
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: deploy/allinone/Dockerfile
@@ -35,26 +71,30 @@ jobs:
           provenance: true
           sbom: true
           build-args: VERSION=${{ steps.v.outputs.version }}
-          tags: ghcr.io/${{ github.repository_owner }}/zoeken-en-persoonlijke-ai:${{ steps.v.outputs.version }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          tags: ${{ env.IMAGE }}:${{ steps.v.outputs.version }}
+      - name: Releasemap aanmaken
+        run: mkdir -p release
       - name: SBOM (SPDX)
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
-          image: ghcr.io/${{ github.repository_owner }}/zoeken-en-persoonlijke-ai:${{ steps.v.outputs.version }}
+          image: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
           format: spdx-json
           output-file: release/sbom.spdx.json
+          upload-release-assets: false
       - name: Digest vastleggen
+        env:
+          VERSIE: ${{ steps.v.outputs.version }}
+          DIGEST: ${{ steps.push.outputs.digest }}
         run: |
-          mkdir -p release
-          cat > release/digests.json <<JSON
-          {"app_id": "zoeken-en-persoonlijke-ai", "version": "${{ steps.v.outputs.version }}",
-           "image": "ghcr.io/${{ github.repository_owner }}/zoeken-en-persoonlijke-ai",
-           "tag": "${{ steps.v.outputs.version }}", "digest": "${{ steps.push.outputs.digest }}"}
-          JSON
-          cat release/digests.json
+          jq -en --arg versie "$VERSIE" --arg image "$IMAGE" --arg digest "$DIGEST" '
+            select($digest | test("^sha256:[0-9a-f]{64}$")) |
+            {app_id: "zoeken-en-persoonlijke-ai", version: $versie, image: $image, tag: $versie, digest: $digest}
+          ' > release/digests.json
+          jq -e '.spdxVersion and (.packages | type == "array")' release/sbom.spdx.json > /dev/null
       - name: Releasebestanden toevoegen
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "zoeken-en-persoonlijke-ai $GITHUB_REF_NAME" \
-            --notes-file CHANGELOG.md release/digests.json release/sbom.spdx.json || \
-          gh release upload "$GITHUB_REF_NAME" release/digests.json release/sbom.spdx.json --clobber
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "zoeken-en-persoonlijke-ai $GITHUB_REF_NAME" \
+            --notes-file CHANGELOG.md release/digests.json release/sbom.spdx.json
