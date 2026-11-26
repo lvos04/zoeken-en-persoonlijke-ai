@@ -1,7 +1,7 @@
 # Manifest (manifeststandaard v1 van appstore-en-fork, platformcontract 1.3 §9) van zoeken-en-persoonlijke-ai.
 # Installatie uitsluitend als standaard TrueNAS Custom App (één image + formulierwaarden); nooit compose/YAML.
-# De digest van de eigen GHCR-image vult de release-CI in (release/digests.json); tot dan is installeren niet gereed
-# (digest_pending_release, met reden geaccepteerd tot de eerste release; de vertaling blokkeert met digest_not_pinned).
+# De digest van de eigen GHCR-image komt uit de release-bijlage release/digests.json van v0.1.0 (release-run
+# 45809727981); zonder digest blokkeert de vertaling met digest_not_pinned.
 # De vertaling naar het formulier zet de tag als '<tag>@<digest>' (§2.2; of het formulier '@' accepteert is NIET
 # GEVALIDEERD op een echte NAS). Geen HUB_* in parameters of env: HUB_URL, HUB_ENROLLMENT_TOKEN en HUB_KEY_FINGERPRINT
 # voegt de vertaling zelf toe als de Hub koppelt (contract 1.3 §3.2); dit manifest bevat geen omgevingsvariabelen en geen
@@ -28,7 +28,7 @@ install:
 image:
   repository: ghcr.io/lvos04/zoeken-en-persoonlijke-ai
   tag: "0.1.0"
-  digest: null
+  digest: "sha256:ad8aa1c9f08ece5b9a6873d426a94c7a01bb517024fb433afc3ec716bea9d067"
 custom_app:
   storage:
     - name: appdata
@@ -140,8 +140,4 @@ provenance:
   source_commit: null
   upstream_repo: null
   license: GPL-3.0
-accepted_findings:
-  - code: digest_pending_release
-    reden_nl: >-
-      Eigen image vóór de eerste release: de release-CI vult de digest in (release/digests.json). Tot dan blokkeert
-      de vertaling de installatie met digest_not_pinned.
+accepted_findings: []

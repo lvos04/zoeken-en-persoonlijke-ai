@@ -1,8 +1,13 @@
 # Wijzigingen
 
-## 0.1.0 — nog niet uitgebracht (fase P0)
+## 0.1.0 — uitgebracht 2026-11-26
 
 Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V2).
+
+- **Release (S-P6-06):** tag `v0.1.0`, image `ghcr.io/lvos04/zoeken-en-persoonlijke-ai:0.1.0` met digest
+  `sha256:ad8aa1c9f08ece5b9a6873d426a94c7a01bb517024fb433afc3ec716bea9d067` (bijlage `digests.json`). Het manifest
+  pint die digest; de geaccepteerde bevinding `digest_pending_release` is vervallen. Installatie op een echte NAS:
+  NIET GEVALIDEERD.
 
 - **Manifestvalidator (KLEIN-104):** CI gebruikt nu de vaste commit
   `a994c2a51f45b81b2c48c6533b0ccf51ba857f5a` van `appstore-en-fork` (ADR-0023, C1.3-ASF-15): `accounts`, de

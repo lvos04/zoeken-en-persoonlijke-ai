@@ -4,6 +4,7 @@ root-proces na de eigenaarschapsstap (ook PID 1 niet)."""
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -83,16 +84,17 @@ def test_manifest_follows_contract_1_3_section_9() -> None:
     # §9 (A32): monitorplan op /readyz (zonder auth; de koppeling telt daar niet mee, §5)
     assert m["healthcheck"]["monitor"] == {"pad": "/readyz", "verwachte_status": 200, "timeout_s": 10, "interval_s": 60}
     assert m["provenance"]["license"] == "GPL-3.0" and (REPO_ROOT / "LICENSE").read_text().find("GNU GENERAL") >= 0
-    # §9 (A30): alleen de bekende, tijdelijke bevinding is geaccepteerd, met een Nederlandse reden
-    assert [f["code"] for f in m["accepted_findings"]] == ["digest_pending_release"]
-    assert all(len(str(f["reden_nl"]).strip()) > 40 for f in m["accepted_findings"])
-    assert m["image"]["digest"] is None  # eerlijk: nog geen release, dus nog geen digest
+    # §9 (A30): na release v0.1.0 is geen bevinding meer geaccepteerd; de digest is gepind (sha256, 64 hex)
+    assert m["accepted_findings"] == []
+    assert re.fullmatch(r"sha256:[0-9a-f]{64}", m["image"]["digest"])
 
 
 def test_manifest_strict_geldig_met_de_validator_van_appstore_en_fork() -> None:
     """Draait ``jl-manifest validate --strict`` (validator van appstore-en-fork, contract 1.3) als die beschikbaar is
     (``JL_MANIFEST``). In CI is hij verplicht (``MANIFEST_VALIDATOR_VERPLICHT=1``); de workflow installeert hem op een
-    vaste commit. Negatief: met ``HUB_URL`` in de env faalt hetzelfde manifest met ``reserved_env``."""
+    vaste commit. Negatief: met ``HUB_URL`` in de env faalt hetzelfde manifest met ``reserved_env`` en met
+    ``digest: null`` (zonder geaccepteerde bevinding) faalt ``--strict`` en blokkeert de vertaling met
+    ``digest_not_pinned``."""
     tool = os.environ.get("JL_MANIFEST", "")
     if not tool:
         if os.environ.get("MANIFEST_VALIDATOR_VERPLICHT") == "1":
@@ -100,14 +102,28 @@ def test_manifest_strict_geldig_met_de_validator_van_appstore_en_fork() -> None:
         pytest.skip("validator van appstore-en-fork niet beschikbaar (JL_MANIFEST niet gezet)")
     ok = subprocess.run([tool, "validate", "--strict", str(MANIFEST)], capture_output=True, text=True, check=False)
     assert ok.returncode == 0, ok.stdout + ok.stderr
-    assert "GELDIG — 0 fout(en)" in ok.stdout and "GEACC. image.digest" in ok.stdout
+    assert "GELDIG — 0 fout(en)" in ok.stdout and "GEACC." not in ok.stdout
+    text = MANIFEST.read_text()
+    digest = yaml.safe_load(text)["image"]["digest"]
+    negatief = {
+        "reserved_env": text.replace("  env: []\n", "  env:\n    - {name: HUB_URL, value: x}\n"),
+        # zonder digest en zonder geaccepteerde bevinding faalt --strict (niet geaccepteerde digest_pending_release)
+        "digest_pending_release": text.replace(f'  digest: "{digest}"\n', "  digest: null\n"),
+    }
     bad = Path(os.environ.get("TMPDIR", "/tmp")) / f"zpa-manifest-neg-{os.getpid()}.yaml"
-    try:
-        bad.write_text(MANIFEST.read_text().replace("  env: []\n", "  env:\n    - {name: HUB_URL, value: x}\n"))
-        neg = subprocess.run([tool, "validate", "--strict", str(bad)], capture_output=True, text=True, check=False)
-    finally:
-        bad.unlink(missing_ok=True)
-    assert neg.returncode != 0 and "reserved_env" in neg.stdout, neg.stdout
+    for code, inhoud in negatief.items():
+        assert inhoud != text, code
+        try:
+            bad.write_text(inhoud)
+            neg = subprocess.run([tool, "validate", "--strict", str(bad)], capture_output=True, text=True, check=False)
+            vert = subprocess.run([tool, "translate", str(bad)], capture_output=True, text=True, check=False)
+        finally:
+            bad.unlink(missing_ok=True)
+        assert neg.returncode != 0 and code in neg.stdout, neg.stdout
+    # ... en de vertaling blokkeert dan met digest_not_pinned; met de gepinde digest niet
+    assert "digest_not_pinned" in {f["code"] for f in json.loads(vert.stdout)["findings"]}
+    goed = subprocess.run([tool, "translate", str(MANIFEST)], capture_output=True, text=True, check=False)
+    assert "digest_not_pinned" not in {f["code"] for f in json.loads(goed.stdout)["findings"]}
 
 
 def test_custom_app_doc_is_form_only() -> None:
