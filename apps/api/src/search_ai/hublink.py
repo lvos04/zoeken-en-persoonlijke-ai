@@ -14,6 +14,9 @@
   blijft het origineel bewaard als ``hub-link.json.onleesbaar-<UTC-tijd>`` (0600), daarna komt er een nieuw bestand met
   ``unreadable_replaced_at``. Zolang ``first_linked_at`` daarna leeg is, blijft de toestand voor de statuspagina
   "onleesbaar" (``is_unreadable``): geen formulier, geen vertrouwen (RV6).
+- Rechten (ook op een TrueNAS-dataset met NFSv4-ACL): zie :func:`search_ai.security.secrets.own_secret`. Een nieuw
+  bestand dat de dienst zelf niet zou kunnen teruglezen, vervangt het huidige **nooit** (:class:`HubLinkNotSaved`): de
+  vorige toestand blijft staan en er ontstaat geen lus van vervangen en opnieuw onleesbaar.
 - Lezers accepteren elke ``1.x`` en bewaren onbekende velden; deze dienst schrijft ``schema_version: "1.3"``.
 """
 
@@ -30,6 +33,8 @@ from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from .security.secrets import own_secret, owner_only
 
 SCHEMA_VERSION = "1.3"
 FILE_NAME = "hub-link.json"
@@ -91,6 +96,10 @@ PUBLIC_FIELDS = (
 
 class HubLinkCorrupt(RuntimeError):
     """``hub-link.json`` bestaat maar is geen geldig koppelbestand."""
+
+
+class HubLinkNotSaved(OSError):
+    """Het nieuwe koppelbestand zou na schrijven onleesbaar zijn (eigenaar of rechten); het huidige blijft staan."""
 
 
 def empty_doc(app_id: str) -> dict[str, Any]:
@@ -187,21 +196,17 @@ class HubLinkStore:
             self._sig, self._doc, self._corrupt = None, empty_doc(self.app_id), False
             return self._doc
         try:
-            self._check_owner_and_mode()
-            doc = _validate(json.loads(self.path.read_text(encoding="utf-8")), self.app_id)
+            # O_NOFOLLOW: een symlink is onleesbaar; eigenaar en rechten op hetzelfde geopende bestand (§3.5)
+            with os.fdopen(os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW), "rb") as fh:
+                if not own_secret(fh.fileno()):
+                    raise HubLinkCorrupt("koppelbestand heeft een andere eigenaar of te ruime rechten")
+                raw = fh.read()
+            doc = _validate(json.loads(raw.decode("utf-8")), self.app_id)
         except (OSError, ValueError, HubLinkCorrupt) as exc:
             self._sig, self._doc, self._corrupt = sig, empty_doc(self.app_id), True
             raise HubLinkCorrupt("koppelbestand onleesbaar") from exc
         self._sig, self._doc, self._corrupt = sig, doc, False
         return doc
-
-    def _check_owner_and_mode(self) -> None:
-        """Verkeerde eigenaar of rechten = onleesbaar (§3.5): het bestand hoort bij deze gebruiker en is 0600."""
-        st = self.path.stat()
-        if st.st_uid != os.geteuid():
-            raise HubLinkCorrupt("koppelbestand heeft een andere eigenaar")
-        if st.st_mode & 0o077:
-            raise HubLinkCorrupt("koppelbestand is leesbaar of schrijfbaar voor anderen")
 
     def read(self) -> dict[str, Any]:
         """Actuele toestand (kopie). ``HubLinkCorrupt`` als het bestand onleesbaar is (fail-closed)."""
@@ -229,17 +234,28 @@ class HubLinkStore:
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
 
-    def _write_locked(self, doc: dict[str, Any]) -> None:
+    def _write_locked(self, doc: dict[str, Any], backup: str | None = None) -> None:
+        """Atomair schrijven. Zou het nieuwe bestand onleesbaar zijn (:func:`own_secret`), dan gaat het weg vóór er iets
+        in staat en blijft het huidige ongewijzigd (:class:`HubLinkNotSaved`). ``backup``: bewaar eerst het onleesbare
+        origineel onder die naam (pas als vaststaat dat het nieuwe bestand leesbaar is)."""
         data = (json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=1) + "\n").encode("utf-8")
         tmp = self.dir / f".{FILE_NAME}.{os.getpid()}.{threading.get_ident()}.tmp"
         with contextlib.suppress(FileNotFoundError):
             tmp.unlink()  # restant van een eerdere crash van dit proces/deze thread
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
-            os.write(fd, data)
-            os.fsync(fd)
+            owner_only(fd)  # een ACL-dataset negeert de 0600 van open()
+            ok = own_secret(fd)
+            if ok:
+                os.write(fd, data)
+                os.fsync(fd)
         finally:
             os.close(fd)
+        if not ok:
+            tmp.unlink(missing_ok=True)
+            raise HubLinkNotSaved("het nieuwe koppelbestand zou onleesbaar zijn; het huidige blijft staan")
+        if backup is not None:
+            self._keep_unreadable_original(backup)
         os.replace(tmp, self.path)
         dfd = os.open(self.dir, os.O_RDONLY)
         try:
@@ -247,10 +263,10 @@ class HubLinkStore:
         finally:
             os.close(dfd)
 
-    def _keep_unreadable_original(self) -> str:
+    def _keep_unreadable_original(self, name: str) -> None:
         """Bewaart het onleesbare origineel als ``hub-link.json.onleesbaar-<UTC-tijd>`` (0600) vóór het vervangen.
         Een harde koppeling bewaart de bytes zonder ze te hoeven lezen (ook bij een verkeerde eigenaar)."""
-        backup = self.dir / f"{BACKUP_PREFIX}{_utc_stamp()}"
+        backup = self.dir / name
         try:
             os.link(self.path, backup)
         except OSError:
@@ -263,7 +279,6 @@ class HubLinkStore:
                 os.close(fd)
         with contextlib.suppress(OSError):
             os.chmod(backup, 0o600)
-        return backup.name
 
     def update(
         self, fn: Callable[[dict[str, Any]], dict[str, Any] | None], *, replace_unreadable: bool = False
@@ -293,10 +308,11 @@ class HubLinkStore:
             new["schema_version"] = SCHEMA_VERSION
             new["used_enrollment_token_sha256"] = list(new.get("used_enrollment_token_sha256") or [])[-MAX_USED_TOKENS:]
             _validate(new, self.app_id)
+            backup = None
             if current.get("corrupt") and self.path.exists():
-                kept = self._keep_unreadable_original()
-                new["unreadable_original"] = kept  # extra veld (niet in de witte lijst): waar het origineel staat
-            self._write_locked(new)
+                backup = f"{BACKUP_PREFIX}{_utc_stamp()}"
+                new["unreadable_original"] = backup  # extra veld (niet in de witte lijst): waar het origineel staat
+            self._write_locked(new, backup)
             self._sig = None  # volgende lezing haalt het nieuwe bestand op
             return copy.deepcopy(new)
 

@@ -2,6 +2,9 @@
 
 - Ontbrekende geheimen worden aangemaakt; bestaande worden **nooit** overschreven.
 - Bestanden 0600, map 0700, eigenaar de draaiende gebruiker (in de image 568; de procesbewaker regelt dat).
+- Een TrueNAS-dataset met de preset *Apps* heeft een NFSv4-ACL: ZFS negeert dan de 0600 van ``open()`` (de rechten van
+  een nieuw bestand komen uit de overerfbare ACE's) en kan ``chmod`` weigeren (``aclmode=restricted``). Daarom na het
+  aanmaken altijd ``fchmod(0600)`` (:func:`owner_only`) en bij het lezen :func:`own_secret`.
 - Inhoud komt nooit in logs.
 
 Bestanden:
@@ -29,8 +32,44 @@ VAULT_KEY = "vault.key"
 IDENTITY_KEY = "identity.ed25519"
 
 
+# TrueNAS (ZFS op Linux) toont de NFSv4-ACL als ``system.nfs4_acl_xdr``; de Linux-NFS-client als ``system.nfs4_acl``.
+NFS4_ACL_XATTRS = ("system.nfs4_acl_xdr", "system.nfs4_acl")
+
+
 class SecretsError(RuntimeError):
     pass
+
+
+def owner_only(fd: int) -> None:
+    """0600 na het aanmaken; een ACL-dataset mag weigeren (de leescontrole beslist dan, :func:`own_secret`)."""
+    with contextlib.suppress(OSError):
+        os.fchmod(fd, 0o600)
+
+
+def nfs4_acl(fd: int) -> bool:
+    for name in NFS4_ACL_XATTRS:
+        try:
+            os.getxattr(fd, name)
+            return True
+        except OSError:
+            continue
+    return False
+
+
+def own_secret(fd: int) -> bool:
+    """Of het geopende bestand een geheim van deze dienst mag zijn. Altijd geweigerd: geen gewoon bestand, een andere
+    eigenaar of schrijfbaar voor iedereen (een symlink weigert de aanroeper met ``O_NOFOLLOW``). 0600 is goed. Rechten
+    voor groep of anderen alleen als het bestand een NFSv4-ACL draagt: dan bepaalt de ACL van de dataset ze (eerst
+    aanscherpen waar dat kan). Op een gewoon bestandssysteem blijft alleen 0600 goed."""
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o002:
+        return False
+    if not st.st_mode & 0o077:
+        return True
+    if not nfs4_acl(fd):
+        return False
+    owner_only(fd)
+    return True
 
 
 def _write_new(path: Path, data: bytes) -> bool:
@@ -40,6 +79,7 @@ def _write_new(path: Path, data: bytes) -> bool:
     except FileExistsError:
         return False
     try:
+        owner_only(fd)  # een ACL-dataset negeert de 0600 van open()
         os.write(fd, data)
         os.fsync(fd)
     finally:
@@ -52,7 +92,7 @@ def _tighten(path: Path) -> None:
         mode = stat.S_IMODE(path.stat().st_mode)
         if mode & 0o077:
             os.chmod(path, 0o600)
-    except PermissionError:  # pragma: no cover - alleen als een andere gebruiker eigenaar is
+    except PermissionError:  # een andere eigenaar, of een NFSv4-ACL met aclmode=restricted: niet crashen
         pass
 
 

@@ -21,4 +21,4 @@ API_PREFIX = SEARCH_PREFIX
 try:
     __version__ = metadata.version("zoeken-en-persoonlijke-ai")
 except metadata.PackageNotFoundError:  # pragma: no cover - alleen bij draaien zonder installatie
-    __version__ = "0.1.0"
+    __version__ = "0.1.1"

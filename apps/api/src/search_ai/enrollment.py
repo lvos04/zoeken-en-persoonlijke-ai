@@ -272,7 +272,13 @@ class EnrollmentService:
                 age = 0.0
             if age > s.enroll_give_up_s:
                 return self._definitive("token", token_hash, Outcome(False, "token_verlopen_na_60_min"))
-        return self._attempt("token", token, token_hash, hub_url, expected)
+        try:
+            return self._attempt("token", token, token_hash, hub_url, expected)
+        except OSError:
+            # koppelbestand niet op te slaan (HubLinkNotSaved of de opslag): het huidige bestand staat ongewijzigd;
+            # later opnieuw met backoff, nooit als afgehandeld markeren (dat zou ook een schrijfactie zijn)
+            log.error("koppelen met het koppeltoken: koppelbestand niet opgeslagen in /appdata/secrets")
+            return Outcome(False, "koppelbestand_niet_opgeslagen", retryable=True)
 
     def enroll_with_code(self, hub_url: str, code: str, fingerprint: str) -> Outcome:
         """Statuspagina (§3.7). Invoer is al gecontroleerd door de aanroeper; hier nog één keer, voor de zekerheid.
@@ -289,6 +295,8 @@ class EnrollmentService:
             return Outcome(False, "koppelen_bezig")
         try:
             return self._attempt("koppelcode", normalized, sha256_hex(normalized), url, expected)
+        except OSError:  # koppelbestand niet op te slaan: het huidige staat ongewijzigd (zie HubLinkNotSaved)
+            return Outcome(False, "koppelbestand_niet_opgeslagen")
         finally:
             self._code_lock.release()
 

@@ -258,3 +258,136 @@ def test_redirect_is_never_followed(tmp_path: Path) -> None:
     assert out is not None and out.code == "hub_onbereikbaar" and out.retryable
     assert [r["path"] for r in hub.all_requests] == ["/api/v1/services/enroll"]
     assert svc.store.read()["pending"]["kind"] == "token"  # blijft staan: later opnieuw
+
+
+# ------------------------------------------------------------------ TrueNAS-dataset met preset Apps (NFSv4-ACL)
+def acl_dataset(monkeypatch: pytest.MonkeyPatch, *, chmod: str, herkend: bool) -> None:
+    """Bootst een ZFS-dataset met NFSv4-ACL na (lokaal niet beschikbaar): elk nieuw bestand krijgt 0770 uit de
+    overgeërfde ACE's (``aclinherit=passthrough`` negeert de 0600 van open()). ``chmod``: ``werkt`` (aclmode=passthrough),
+    ``geweigerd`` (aclmode=restricted) of ``genegeerd``. ``herkend``: of de ACL als xattr zichtbaar is."""
+    import errno
+
+    from search_ai.security import secrets as geheimen
+
+    echte_open, echte_fchmod, echte_chmod = os.open, os.fchmod, os.chmod
+
+    def open_acl(path: Any, flags: int, mode: int = 0o777, *args: Any, **kwargs: Any) -> int:
+        fd = echte_open(path, flags, mode, *args, **kwargs)
+        if flags & os.O_CREAT and stat.S_ISREG(os.fstat(fd).st_mode):
+            echte_fchmod(fd, 0o770)
+        return fd
+
+    def chmod_acl(echt: Any) -> Any:
+        def _chmod(target: Any, mode: int, *args: Any, **kwargs: Any) -> None:
+            if chmod == "geweigerd":
+                raise PermissionError(errno.EPERM, "Operation not permitted")
+            if chmod == "werkt":
+                echt(target, mode, *args, **kwargs)
+
+        return _chmod
+
+    monkeypatch.setattr(os, "open", open_acl)
+    monkeypatch.setattr(os, "fchmod", chmod_acl(echte_fchmod))
+    monkeypatch.setattr(os, "chmod", chmod_acl(echte_chmod))
+    monkeypatch.setattr(geheimen, "nfs4_acl", lambda fd: herkend)
+
+
+@pytest.mark.parametrize("chmod", ["werkt", "geweigerd", "genegeerd"])
+def test_koppelen_op_een_acl_dataset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, chmod: str) -> None:
+    """Op 0.1.0 las de dienst zijn net geschreven hub-link.json als onleesbaar terug (groepsbits uit de ACL). Nu:
+    fchmod 0600 na aanmaken; waar de ACL dat weigert of negeert, telt de ACL van de dataset. Koppelen slaagt, met een
+    env-token én met een koppelcode, en de toestand blijft daarna leesbaar (ook voor een tweede "proces")."""
+    acl_dataset(monkeypatch, chmod=chmod, herkend=True)
+    hub = FakeHub()
+    svc = _service(tmp_path, hub, hub_url=HUB_URL, enrollment_token=ENV_TOKEN)
+    out = svc.enroll_with_env_token()
+    assert out is not None and out.ok, out
+    doc = HubLinkStore(svc.store.dir, APP_ID).read()
+    assert doc["state"] == "gekoppeld" and doc["confirmed_at"] and "unreadable_original" not in doc
+    mode = stat.S_IMODE(svc.store.path.stat().st_mode)
+    assert mode == (0o600 if chmod == "werkt" else 0o770)
+    hub2 = FakeHub()
+    svc2 = _service(tmp_path / "b", hub2)
+    assert svc2.enroll_with_code(HUB_URL, PAIR_CODE, hub2.fingerprint()).ok
+    assert svc2.store.read()["state"] == "gekoppeld"
+
+
+def test_koppelen_laat_nooit_een_onleesbaar_bestand_achter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """chmod geweigerd en de ACL niet herkenbaar: het nieuwe bestand zou onleesbaar zijn. Dan gaat er niets naar de Hub,
+    ontstaat er geen bestand (ook geen tijdelijk) en blijft de toestand nooit_gekoppeld met het formulier open."""
+    hub = FakeHub()
+    svc = _service(tmp_path, hub)
+    acl_dataset(monkeypatch, chmod="geweigerd", herkend=False)
+    out = svc.enroll_with_code(HUB_URL, PAIR_CODE, hub.fingerprint())
+    assert not out.ok and out.code == "koppelbestand_niet_opgeslagen"
+    assert not svc.store.path.exists() and not hub.all_requests
+    assert [p.name for p in svc.store.dir.iterdir() if "hub-link.json" in p.name] == []
+    assert svc.store.read()["state"] == "nooit_gekoppeld"
+
+
+def test_onleesbaar_bestand_geen_lus_via_vervangen(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Een env-token vervangt een onleesbaar bestand alleen als het nieuwe leesbaar is: anders blijft het origineel
+    byte-gelijk staan, komt er geen kopie bij en probeert de worker het later opnieuw (geen lus van vervangen)."""
+    hub = FakeHub()
+    svc = _service(tmp_path, hub, hub_url=HUB_URL, enrollment_token=ENV_TOKEN)
+    svc.store.path.write_text("{kapot", encoding="utf-8")
+    svc.store.path.chmod(0o600)
+    acl_dataset(monkeypatch, chmod="geweigerd", herkend=False)
+    for _ in range(3):
+        out = svc.enroll_with_env_token()
+        assert out is not None and out.code == "koppelbestand_niet_opgeslagen" and out.retryable
+    assert svc.store.path.read_text(encoding="utf-8") == "{kapot" and not hub.all_requests
+    assert sorted(p.name for p in svc.store.dir.iterdir() if "hub-link.json" in p.name) == ["hub-link.json"]
+    # met een herkenbare ACL lukt het vervangen wel: origineel bewaard (0600 waar het kan), daarna gekoppeld
+    monkeypatch.undo()
+    acl_dataset(monkeypatch, chmod="werkt", herkend=True)
+    out = svc.enroll_with_env_token()
+    assert out is not None and out.ok, out
+    backups = [p for p in svc.store.dir.iterdir() if p.name.startswith("hub-link.json.onleesbaar-")]
+    assert len(backups) == 1 and backups[0].read_text(encoding="utf-8") == "{kapot"
+    assert stat.S_IMODE(backups[0].stat().st_mode) == 0o600
+
+
+def test_geheimbestand_regels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zonder ACL alleen 0600; met ACL ook groepsrechten (aangescherpt waar het kan); wereld-schrijfbaar, een symlink en
+    een andere eigenaar blijven altijd onleesbaar."""
+    from search_ai.security import secrets as geheimen
+
+    echte_acl = geheimen.nfs4_acl
+    pad = tmp_path / "geheim"
+    pad.write_text("x")
+
+    def oordeel(modus: int, *, acl: bool) -> bool:
+        os.chmod(pad, modus)
+        monkeypatch.setattr(geheimen, "nfs4_acl", lambda fd: acl)
+        fd = os.open(pad, os.O_RDONLY)
+        try:
+            return geheimen.own_secret(fd)
+        finally:
+            os.close(fd)
+
+    assert oordeel(0o600, acl=False) and not oordeel(0o640, acl=False) and not oordeel(0o660, acl=False)
+    assert oordeel(0o770, acl=True) and stat.S_IMODE(pad.stat().st_mode) == 0o600
+    assert not oordeel(0o666, acl=True) and not oordeel(0o602, acl=True)
+    monkeypatch.setattr(os, "geteuid", lambda: os.getuid() + 1)
+    assert not oordeel(0o600, acl=True)  # andere eigenaar
+    monkeypatch.undo()
+    fd = os.open(tmp_path, os.O_RDONLY)
+    try:
+        assert not echte_acl(fd)  # gewoon bestandssysteem: geen NFSv4-ACL
+    finally:
+        os.close(fd)
+    # symlink naar een eigen, geldig 0600-koppelbestand: onleesbaar
+    store = HubLinkStore(tmp_path / "s", APP_ID)
+    store.update(lambda d: {**d, "last_error": None})
+    echt = store.dir / "echt.json"
+    store.path.rename(echt)
+    store.path.symlink_to(echt)
+    assert store.read_safe()["corrupt"] is True
+
+
+def test_geheimen_aanmaken_op_een_acl_dataset_crasht_niet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    acl_dataset(monkeypatch, chmod="geweigerd", herkend=True)
+    assert sorted(ensure_secrets(tmp_path / "secrets")) == ["identity.ed25519", "vault.key"]
+    assert sorted(ensure_secrets(tmp_path / "secrets")) == []  # tweede start: chmod geweigerd, geen crash
+    load_identity(tmp_path / "secrets")

@@ -29,6 +29,7 @@ from search_ai import events
 from search_ai.models import AuditEvent, OutboxEvent
 from search_ai.worker import Worker
 from tests.conftest import HUB_URL, PAIR_CODE, REPO_ROOT, FakeHub
+from tests.unit.test_hublink import acl_dataset
 
 pytestmark = pytest.mark.integration
 
@@ -218,6 +219,33 @@ def test_poging_op_een_onleesbaar_koppelbestand_409_en_niets_vervangen(client: A
     assert r.status_code == 409 and _code(r.text) == "koppelstatus_onleesbaar" and 'role="alert"' in r.text
     assert r.headers["X-Trace-Id"] in r.text and "al eens gekoppeld" not in r.text
     assert _enroll_calls(fake_hub) == 0 and store.path.read_text(encoding="utf-8") == "{kapot"
+
+
+@pytest.mark.parametrize("chmod", ["werkt", "geweigerd", "genegeerd"])
+def test_koppelen_op_een_lege_appdata_met_acl_dataset(
+    client: Any, fake_hub: FakeHub, monkeypatch: pytest.MonkeyPatch, chmod: str
+) -> None:
+    """Volledige koppelflow op een lege /appdata van een TrueNAS-dataset met preset Apps (NFSv4-ACL nagebootst): de POST
+    koppelt, de pagina blijft daarna leesbaar (geen "Koppelstatus onleesbaar")."""
+    data = _data(client, fake_hub)
+    assert not client.app.state.hub_link.path.exists()
+    acl_dataset(monkeypatch, chmod=chmod, herkend=True)
+    r = _post(client, data)
+    assert r.status_code == 200 and _melding(r.text) == "Gekoppeld met de Hub", r.text
+    page = client.get("/").text
+    assert _melding(page) != "Koppelstatus onleesbaar" and fake_hub.fingerprint() in page
+
+
+def test_koppelbestand_niet_op_te_slaan_geeft_een_nette_melding(
+    client: Any, fake_hub: FakeHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _data(client, fake_hub)
+    acl_dataset(monkeypatch, chmod="geweigerd", herkend=False)
+    r = _post(client, data)
+    assert r.status_code == 503 and _code(r.text) == "koppelbestand_niet_opgeslagen" and 'role="alert"' in r.text
+    assert _enroll_calls(fake_hub) == 0 and not client.app.state.hub_link.path.exists()
+    monkeypatch.undo()
+    assert 'action="/koppelen"' in client.get("/").text  # formulier blijft: opnieuw proberen kan
 
 
 @pytest.mark.parametrize(

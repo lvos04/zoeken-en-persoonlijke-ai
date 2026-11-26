@@ -45,7 +45,7 @@ RUN --mount=type=secret,id=ca_bundle,required=false \
 
 # ---------------------------------------------------------------- runtime
 FROM ${PYTHON_IMAGE}
-ARG VERSION=0.1.0
+ARG VERSION=0.1.1
 LABEL org.opencontainers.image.title="zoeken-en-persoonlijke-ai" \
       org.opencontainers.image.description="Zoeken en persoonlijke AI — persoonlijke zoekmachine (PostgreSQL + pgvector) en spraak, alles-in-één" \
       org.opencontainers.image.source="https://git.medialeon.nl/leon/zoeken-en-persoonlijke-ai" \

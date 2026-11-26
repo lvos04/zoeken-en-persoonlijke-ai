@@ -155,6 +155,15 @@ NOTICES: dict[str, Notice] = {
         409,
         pad=LINK_FILE,
     ),
+    # Het nieuwe koppelbestand zou onleesbaar zijn (rechten van de opslag); het huidige bestand is ongewijzigd.
+    "koppelbestand_niet_opgeslagen": Notice(
+        "fout",
+        _FAILED,
+        "De dienst kon de koppeling niet opslaan; er is niets gewijzigd. Controleer de rechten van de opslag van "
+        "/appdata (eigenaar 568) en probeer het daarna met een nieuwe koppelcode opnieuw. Het bestand staat in:",
+        503,
+        pad=LINK_FILE,
+    ),
     "hub_adres_ongeldig": Notice(
         "fout",
         _FAILED,

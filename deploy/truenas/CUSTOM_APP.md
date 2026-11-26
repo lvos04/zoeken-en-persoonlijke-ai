@@ -73,13 +73,13 @@ en van zijn eigen submappen (`postgres`, `secrets`, `backups`). Shares onder `/b
 
 Download de bijlage `digests.json` van de GitHub-release (in de bouw heet dit bestand `release/digests.json`).
 Vul bij **Tag** het veld `tag` in, direct gevolgd door `@` en het volledige veld `digest`.
-Voor deze versie wordt dat `0.1.0@sha256:` gevolgd door de 64 hexadecimale tekens uit de bijlage. Met de volledige
+Voor deze versie wordt dat `0.1.1@sha256:` gevolgd door de 64 hexadecimale tekens uit de bijlage. Met de volledige
 referentie `ghcr.io/lvos04/zoeken-en-persoonlijke-ai:<versie>@sha256:<digest>` haalt TrueNAS precies die image op, ook als
 iemand de versietag later zou verplaatsen.
 
 > **NIET GEVALIDEERD (echte NAS):** of het TrueNAS-formulier een tag met `@` accepteert en of TrueNAS daarmee nog
 > updates herkent, is niet op een echte NAS getest (contract 1.3 §2.2). Weigert het formulier de tag bij handmatige
-> installatie, stop dan en meld de weigering. De terugval op alleen de versie (`0.1.0`) vereist dat het platform de
+> installatie, stop dan en meld de weigering. De terugval op alleen de versie (`0.1.1`) vereist dat het platform de
 > digest na installatie via de TrueNAS-API terugleest en bij een afwijking stopt. De digest komt beschikbaar bij publicatie.
 
 ### Image ophalen (publiek; registry-login alleen als terugval)
@@ -184,7 +184,8 @@ is **NIET GEVALIDEERD** (geen echte NAS in deze bouwomgeving).
 | `oude postmaster.pid ... verwijderd` | Geen fout: de vorige stop was onverwacht (stroom/kill). |
 | Poort bezet bij opslaan | Kies een andere vrije **Host Port**; de Container Port blijft `30450`. |
 | Statuspagina: *Het adres van de Hub is ongeldig* (bij het veld: *Gebruik http(s)://<NAS-adres>:<poort>, zonder pad en geen localhost*) | Vul het LAN-adres van de NAS met de poort van de Hub in, zonder pad. `localhost` en `127.0.0.1` wijzen naar deze container zelf. |
-| Statuspagina: *Koppelstatus onleesbaar* | Het koppelbestand `/appdata/secrets/hub-link.json` is beschadigd, of het heeft een verkeerde eigenaar of verkeerde rechten; de app weigert uit veiligheid elke Hub-aanvraag en toont geen formulier. Koppel opnieuw via de Hub: die geeft een nieuw koppeltoken mee (of vul het zelf in bij `HUB_ENROLLMENT_TOKEN` in dit formulier). Het onleesbare bestand blijft daarbij bewaard als `hub-link.json.onleesbaar-<tijd>`. |
+| Statuspagina: *Koppelen is mislukt*, code `koppelbestand_niet_opgeslagen` | De app kon `/appdata/secrets/hub-link.json` niet zo opslaan dat alleen zij het kan lezen; er is niets gewijzigd en niets naar de Hub gestuurd. Controleer dat de dataset van eigenaar 568 is (preset *Apps*) en probeer opnieuw met een nieuwe koppelcode. |
+| Statuspagina: *Koppelstatus onleesbaar* | Het koppelbestand `/appdata/secrets/hub-link.json` is beschadigd, of het heeft een verkeerde eigenaar of verkeerde rechten; de app weigert uit veiligheid elke Hub-aanvraag en toont geen formulier. Koppel opnieuw via de Hub: die geeft een nieuw koppeltoken mee (of vul het zelf in bij `HUB_ENROLLMENT_TOKEN` in dit formulier). Het onleesbare bestand blijft daarbij bewaard als `hub-link.json.onleesbaar-<tijd>`. Op een dataset met preset *Apps* (NFSv4-ACL) accepteert de app vanaf 0.1.1 de rechten uit de ACL; een symlink, een andere eigenaar en schrijfrechten voor iedereen blijven onleesbaar. |
 | Statuspagina: *Koppelen kan niet via dit adres* / code `host_niet_toegestaan` | Je opende de pagina via een domeinnaam die koppelen niet toelaat (bescherming tegen DNS-rebinding). Open hem via het IP-adres van de NAS, of koppel met een koppeltoken. |
 | Statuspagina: *Formulier geweigerd* / code `herkomst_geweigerd` | Het formulier kwam niet van deze pagina zelf (een andere app of website, of een browser die de herkomst niet meestuurt). Open `http://<NAS-adres>:30450` en vul het formulier daar in. |
 | Statuspagina: *Er loopt al een koppelpoging* / *Koppelen bezig* | Een koppeltoken uit de app-instellingen wordt nog afgehandeld (bijvoorbeeld omdat de Hub even niet bereikbaar is). Wacht tot die klaar is en laad de pagina opnieuw. |

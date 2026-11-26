@@ -1,5 +1,17 @@
 # Wijzigingen
 
+## 0.1.1 — 2026-11-26 (niet uitgebracht)
+
+- **Koppelen op een TrueNAS-dataset met preset Apps.** Op een dataset met NFSv4-ACL negeert ZFS de rechten `0600` van
+  een nieuw bestand; de dienst las zijn net geschreven `hub-link.json` daarna als onleesbaar terug en bleef op
+  *Koppelstatus onleesbaar* staan (met een env-token zelfs in een lus van vervangen). Nu zet hij `0600` na het
+  aanmaken (`fchmod`) en accepteert hij ruimere rechten alleen als het bestand een NFSv4-ACL draagt; een symlink, een
+  andere eigenaar en schrijfrechten voor iedereen blijven onleesbaar. Hetzelfde geldt voor `vault.key` en
+  `identity.ed25519`; een geweigerde `chmod` laat de start niet crashen.
+- Een nieuw koppelbestand dat de dienst niet zou kunnen teruglezen, vervangt het huidige nooit: de vorige toestand
+  blijft staan, er gaat niets naar de Hub en de statuspagina meldt `koppelbestand_niet_opgeslagen` (503).
+- Het manifest blijft op release 0.1.0 (gepinde digest); de digest van 0.1.1 volgt bij de release.
+
 ## 0.1.0 — uitgebracht 2026-11-26
 
 Eerste versie van de dienst *Zoeken en persoonlijke AI* (TrueNAS Home Platform V2).
