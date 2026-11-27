@@ -22,7 +22,7 @@ wachtwoorden. Alle schermen (bronnen kiezen, toestemming, zoeken) staan in de Hu
 | Wat | Waarde |
 |---|---|
 | Image | `ghcr.io/lvos04/zoeken-en-persoonlijke-ai` (publiek pakket; geen registry-login nodig, zie *Image ophalen*) |
-| Tag | versie **met digest** uit de release: `<versie>@sha256:<64 hex>` uit `release/digests.json`, bv. `0.1.0@sha256:…` (**nooit** `latest`) |
+| Tag | Neem de versie **met digest** over uit het veld **Tag** in stap 2. Gebruik nooit `latest`. |
 | Poort | container `30450` → host `30450` (voorstel; de Hub controleert vooraf op conflicten) |
 | Opslag | één dataset → `/appdata` (database, geheimen, back-ups, afgeleide index) |
 | Shares om te doorzoeken | optioneel: per share een extra Host Path **met Read Only** → `/bronnen/<naam>` |
@@ -46,7 +46,7 @@ en van zijn eigen submappen (`postgres`, `secrets`, `backups`). Shares onder `/b
 |---|---|---|
 | Application Name | | `zoeken-en-persoonlijke-ai` |
 | Image Configuration | Repository | `ghcr.io/lvos04/zoeken-en-persoonlijke-ai` |
-| | Tag | `<versie>@sha256:<digest>` uit `release/digests.json` van de release (zie hieronder) |
+| | Tag | `0.1.1@sha256:3c385eed778a0d09bdfab1f42ff4b9bca0bd0a4edf885f98f9789ea33f347892` |
 | | Pull Policy | *Pull the image if it is not already present on host* |
 | Container Configuration | Entrypoint / Command | beide leeg laten |
 | | Timezone | jouw tijdzone |
@@ -71,23 +71,20 @@ en van zijn eigen submappen (`postgres`, `secrets`, `backups`). Shares onder `/b
 
 ### Tag met digest
 
-Download de bijlage `digests.json` van de GitHub-release (in de bouw heet dit bestand `release/digests.json`).
-Vul bij **Tag** het veld `tag` in, direct gevolgd door `@` en het volledige veld `digest`.
-Voor deze versie wordt dat `0.1.1@sha256:` gevolgd door de 64 hexadecimale tekens uit de bijlage. Met de volledige
-referentie `ghcr.io/lvos04/zoeken-en-persoonlijke-ai:<versie>@sha256:<digest>` haalt TrueNAS precies die image op, ook als
-iemand de versietag later zou verplaatsen.
+De waarde in het formulier hierboven hoort bij release `0.1.1`. Voor een volgende release vind je de velden `tag`
+en `digest` in de releasebijlage `digests.json` (tijdens de bouw `release/digests.json`). Vul beide waarden in bij
+**Tag**, met een `@` ertussen. De digest verwijst naar dezelfde image, ook als de versietag later wordt verplaatst.
 
 > **NIET GEVALIDEERD (echte NAS):** of het TrueNAS-formulier een tag met `@` accepteert en of TrueNAS daarmee nog
 > updates herkent, is niet op een echte NAS getest (contract 1.3 §2.2). Weigert het formulier de tag bij handmatige
 > installatie, stop dan en meld de weigering. De terugval op alleen de versie (`0.1.1`) vereist dat het platform de
-> digest na installatie via de TrueNAS-API terugleest en bij een afwijking stopt. De digest komt beschikbaar bij publicatie.
+> digest na installatie via de TrueNAS-API terugleest en bij een afwijking stopt.
 
 ### Image ophalen (publiek; registry-login alleen als terugval)
 
-De GHCR-pakketten worden publiek (besluit 3 van de gebruiker, na een scan van de volledige historie). Dan is er
-**geen** registry-login nodig. Zolang het pakket nog privé is, lukt ophalen niet (`denied`). Alleen als terugval: stel in
-TrueNAS (**Apps** → **Configuration** → **Manage Container Image Registries**) een registry `ghcr.io` in met een token dat
-alleen pakketten mag **lezen**. Dat token is een geheim van jou in TrueNAS: nooit in dit formulier, een
+GHCR levert de image van release `0.1.1` zonder registry-login. Geeft GHCR bij een privépakket `denied`, stel dan
+als terugval in TrueNAS (**Apps** → **Configuration** → **Manage Container Image Registries**) een registry `ghcr.io`
+in met een token dat alleen pakketten mag **lezen**. Dat token is een geheim van jou in TrueNAS: nooit in dit formulier, een
 omgevingsvariabele, een manifest of een repo. Het gedrag van TrueNAS met GHCR-tokens is **NIET GEVALIDEERD**.
 
 Kies **Install**. De eerste start duurt ongeveer 10–30 seconden (database aanmaken, pgvector installeren, migraties).
@@ -155,8 +152,9 @@ is **NIET GEVALIDEERD** (geen echte NAS in deze bouwomgeving).
 
 ## Updaten en terugdraaien
 
-- **Updaten:** app → **Edit** → Tag naar de nieuwe versie → **Update**. Bij openstaande databasewijzigingen maakt de
-  app eerst een back-up (`/appdata/backups/voor-upgrade-*.dump`, de nieuwste 3 blijven) en voert dan de migraties uit.
+- Open bij de app **Edit**, vul bij **Tag** de versie met digest uit de nieuwe release in en kies **Update**.
+  Bij openstaande databasewijzigingen maakt de app eerst een back-up (`/appdata/backups/voor-upgrade-*.dump`,
+  de nieuwste 3 blijven) en voert dan de migraties uit.
   Mislukt een migratie, dan blijft de oude database ongewijzigd en meldt de log dat. Een ZFS-snapshot vooraf blijft
   verstandig.
 - **Wat staat er in die back-up?** Bronnen, toestemmingen, toegangslijsten, koppeling en auditspoor. **Niet** de inhoud

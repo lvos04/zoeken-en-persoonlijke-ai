@@ -84,7 +84,8 @@ def test_manifest_follows_contract_1_3_section_9() -> None:
     # §9 (A32): monitorplan op /readyz (zonder auth; de koppeling telt daar niet mee, §5)
     assert m["healthcheck"]["monitor"] == {"pad": "/readyz", "verwachte_status": 200, "timeout_s": 10, "interval_s": 60}
     assert m["provenance"]["license"] == "GPL-3.0" and (REPO_ROOT / "LICENSE").read_text().find("GNU GENERAL") >= 0
-    # §9 (A30): na release v0.1.0 is geen bevinding meer geaccepteerd; de digest is gepind (sha256, 64 hex)
+    # §9 (A30): de gepubliceerde versie heeft een gepinde digest en geen geaccepteerde bevindingen.
+    assert m["version"] == m["image"]["tag"]
     assert m["accepted_findings"] == []
     assert re.fullmatch(r"sha256:[0-9a-f]{64}", m["image"]["digest"])
 
@@ -137,7 +138,9 @@ def test_custom_app_doc_is_form_only() -> None:
 
 def test_custom_app_doc_contract_1_2() -> None:
     doc = CUSTOM_APP.read_text()
-    assert "@sha256:" in doc and "release/digests.json" in doc  # tag met digest (§2.2)
+    image = yaml.safe_load(MANIFEST.read_text())["image"]
+    assert f"`{image['tag']}@{image['digest']}`" in doc  # invulwaarde uit het manifest (§2.2)
+    assert "release/digests.json" in doc
     assert "HUB_KEY_FINGERPRINT" in doc and "HUB_ENROLLMENT_TOKEN" in doc and "HUB_URL" in doc
     assert "terugval" in doc and "registry" in doc.lower()  # publieke image, registry-login alleen als terugval (§2.1)
     assert "alleen via de Hub" in doc and "ontkoppelcode uit de app-log" not in doc  # §3.7

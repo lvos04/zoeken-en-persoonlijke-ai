@@ -1,6 +1,6 @@
 # Wijzigingen
 
-## 0.1.1 — 2026-11-26 (niet uitgebracht)
+## 0.1.1 — 2026-11-26
 
 - **Koppelen op een TrueNAS-dataset met preset Apps.** Op een dataset met NFSv4-ACL negeert ZFS de rechten `0600` van
   een nieuw bestand; de dienst las zijn net geschreven `hub-link.json` daarna als onleesbaar terug en bleef op
@@ -10,7 +10,8 @@
   `identity.ed25519`; een geweigerde `chmod` laat de start niet crashen.
 - Een nieuw koppelbestand dat de dienst niet zou kunnen teruglezen, vervangt het huidige nooit: de vorige toestand
   blijft staan, er gaat niets naar de Hub en de statuspagina meldt `koppelbestand_niet_opgeslagen` (503).
-- Het manifest blijft op release 0.1.0 (gepinde digest); de digest van 0.1.1 volgt bij de release.
+- Het manifest en de installatiehandleiding gebruiken `ghcr.io/lvos04/zoeken-en-persoonlijke-ai:0.1.1` met digest
+  `sha256:3c385eed778a0d09bdfab1f42ff4b9bca0bd0a4edf885f98f9789ea33f347892`, op 2026-11-27 anoniem gecontroleerd op GHCR.
 
 ## 0.1.0 — uitgebracht 2026-11-26
 
